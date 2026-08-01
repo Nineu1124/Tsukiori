@@ -13,6 +13,11 @@
     "check:checkpoints": "node scripts/verify-checkpoints.mjs",
     "check:secrets": "node scripts/secret-scan.mjs",
     "test:codex": "node --test spikes/codex/*.test.mjs",
-    "spike:codex": "node spikes/codex/harness.mjs"
+    "spike:codex": "node spikes/codex/harness.mjs",
+    "test:windows": "node --test spikes/windows/*.test.mjs",
+    "spike:windows": "node spikes/windows/harness.mjs"
+  },
+  "devDependencies": {
+    "node-pty": "1.1.0"
   }
 }

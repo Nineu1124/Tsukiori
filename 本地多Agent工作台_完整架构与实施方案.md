@@ -3217,15 +3217,15 @@ src/helpers/
 
 ### T0.3 Windows 本机控制面 Spike
 
-- [ ] 完成 Windows 进程、IPC、PTY 和 Git 基础能力验证
+- [x] 完成 Windows 进程、IPC、PTY 和 Git 基础能力验证
 - 前置依赖：无（可与 T0.1、T0.2 并行）
 - 交付物：Windows Spike 报告、最小验证程序、失败案例记录
 - Checkpoints：
-  - [ ] Named Pipe 使用当前用户 ACL，GUI 可重连常驻 Daemon
-  - [ ] Job Object 能终止目标进程树且不会终止已发生 PID 复用的无关进程
-  - [ ] node-pty 可随 Windows x64 应用打包并完成交互命令
-  - [ ] 短路径 Worktree 与 Windows 原生 Git 可完成创建、状态读取和清理
-  - [ ] GUI、Daemon、Runtime 分别强杀后的状态均有可解释结果
+  - [x] Named Pipe 使用当前用户 ACL，GUI 可重连常驻 Daemon
+  - [x] Job Object 能终止目标进程树且不会终止已发生 PID 复用的无关进程
+  - [x] node-pty 可随 Windows x64 应用打包并完成交互命令
+  - [x] 短路径 Worktree 与 Windows 原生 Git 可完成创建、状态读取和清理
+  - [x] GUI、Daemon、Runtime 分别强杀后的状态均有可解释结果
 
 ### T0.4 ADR 与 Adapter Contract 基线
 

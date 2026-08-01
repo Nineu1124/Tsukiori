@@ -24,5 +24,16 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install pnpm
+        run: npm install --global pnpm@11.9.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Verify checkpoints and secrets
         run: npm run check
+
+      - name: Run credential-free contract tests
+        run: |
+          npm run test:codex
+          npm run test:windows

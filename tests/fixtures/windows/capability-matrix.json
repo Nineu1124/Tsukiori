@@ -1,0 +1,53 @@
+{
+  "platform": "windows",
+  "architecture": "x64",
+  "capabilities": [
+    {
+      "name": "named_pipe_current_user_acl",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "CurrentUserOnly pipe reported one FullControl allow rule owned by the current SID"
+    },
+    {
+      "name": "daemon_pipe_reconnect",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "two separate clients connected sequentially while the same server process remained alive"
+    },
+    {
+      "name": "job_object_tree_termination",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "closing a kill-on-close Job Object terminated the observed parent and child"
+    },
+    {
+      "name": "pid_reuse_guard",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "same PID with stale creation time was rejected and the unrelated process survived"
+    },
+    {
+      "name": "node_pty_windows_x64",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "official 1.1.0 prebuild completed direct and independently staged interactive ConPTY probes"
+    },
+    {
+      "name": "short_path_git_worktree",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "native Git created, read status from, and removed an 18-character-base worktree fixture"
+    },
+    {
+      "name": "role_crash_reconciliation",
+      "supportLevel": "supported",
+      "enforcementLevel": "observable_only",
+      "evidence": "GUI, daemon, and runtime force-kill scenarios mapped to distinct expected host states"
+    }
+  ],
+  "knownIssues": [
+    "The explicit NamedPipeServerStreamAcl.Create path was denied in this host; CurrentUserOnly succeeded and its effective ACL was inspected.",
+    "Real OS PID reuse was not forced; the production guard tuple was exercised with a same-PID stale fingerprint.",
+    "node-pty must be tested interactively; a one-shot PowerShell -Command invocation did not exit reliably under ConPTY."
+  ]
+}

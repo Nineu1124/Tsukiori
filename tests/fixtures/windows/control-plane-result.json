@@ -1,0 +1,78 @@
+{
+  "generatedAt": "<timestamp>",
+  "platform": "win32",
+  "architecture": "x64",
+  "nodeVersion": "v24.16.0",
+  "pipe": {
+    "currentUserOnly": true,
+    "accessRuleCount": 1,
+    "reconnects": true,
+    "daemonPersistedBetweenClients": true,
+    "serverExitCode": 0
+  },
+  "job": {
+    "jobAssigned": true,
+    "parentPidObserved": true,
+    "childPidObserved": true,
+    "treeTerminatedOnJobClose": true,
+    "fingerprintFields": [
+      "pid",
+      "startedAtTicks",
+      "executable"
+    ],
+    "guardRejectedStaleIdentity": true,
+    "unrelatedSurvivedGuard": true
+  },
+  "pty": {
+    "package": "node-pty",
+    "version": "1.1.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "prebuiltRelativePath": "prebuilds/win32-x64/pty.node",
+    "prebuiltBytes": 303104,
+    "prebuiltSha256": "ae323edd0835ee7b9e18cc96a7b2bb4b8173ff768317d178af2788406feb71ff",
+    "directInteractive": true,
+    "packagedInteractive": true,
+    "sourcePackageLocated": true
+  },
+  "git": {
+    "basePathLength": 18,
+    "cleanStatusObserved": true,
+    "changeStatusObserved": true,
+    "removed": true,
+    "nativeGit": "git version 2.47.1.windows.1"
+  },
+  "crash": {
+    "scenarios": [
+      {
+        "target": "gui",
+        "state": "gui_down_control_and_runtime_alive",
+        "survivors": {
+          "gui": false,
+          "daemon": true,
+          "runtime": true
+        }
+      },
+      {
+        "target": "daemon",
+        "state": "daemon_down_runtime_orphaned",
+        "survivors": {
+          "gui": true,
+          "daemon": false,
+          "runtime": true
+        }
+      },
+      {
+        "target": "runtime",
+        "state": "runtime_exited_daemon_alive",
+        "survivors": {
+          "gui": true,
+          "daemon": true,
+          "runtime": false
+        }
+      }
+    ],
+    "expected": true
+  },
+  "allRequiredChecksPassed": true
+}
