@@ -1,0 +1,16 @@
+{
+  "name": "tsukiori",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local-first multi-agent desktop workspace",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "npm run check:checkpoints && npm run check:secrets",
+    "check:checkpoints": "node scripts/verify-checkpoints.mjs",
+    "check:secrets": "node scripts/secret-scan.mjs"
+  }
+}
