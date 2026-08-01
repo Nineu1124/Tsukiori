@@ -11,6 +11,8 @@
   "scripts": {
     "check": "npm run check:checkpoints && npm run check:secrets",
     "check:checkpoints": "node scripts/verify-checkpoints.mjs",
-    "check:secrets": "node scripts/secret-scan.mjs"
+    "check:secrets": "node scripts/secret-scan.mjs",
+    "test:codex": "node --test spikes/codex/*.test.mjs",
+    "spike:codex": "node spikes/codex/harness.mjs"
   }
 }

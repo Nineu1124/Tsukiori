@@ -1,0 +1,38 @@
+{
+  "codexVersion": "codex-cli 0.146.0",
+  "initialized": true,
+  "authenticated": true,
+  "handlesIndependent": true,
+  "lifecycle": {
+    "threadIdsDistinct": true,
+    "turnAStatus": "completed",
+    "turnBStatus": "completed",
+    "itemEventsObserved": true
+  },
+  "approvalMethods": [
+    "item/commandExecution/requestApproval",
+    "item/fileChange/requestApproval"
+  ],
+  "approvalCoverage": {
+    "command": true,
+    "file": true,
+    "networkScenarioIntercepted": true,
+    "networkStructured": false
+  },
+  "interruptStatus": "interrupted",
+  "resumedThreadMatches": true,
+  "resumedTurnStatus": "completed",
+  "schemaSha256": "776ab888b2e673311a4c53ed086d66b061dcfdc8ca595b4cf43220c2b3d04368",
+  "schemaBytes": 590325,
+  "observedMethods": [
+    "item/agentMessage/delta",
+    "item/completed",
+    "item/started",
+    "thread/goal/cleared",
+    "thread/started",
+    "thread/status/changed",
+    "thread/tokenUsage/updated",
+    "turn/completed",
+    "turn/started"
+  ]
+}

@@ -3205,15 +3205,15 @@ src/helpers/
 
 ### T0.2 Codex app-server Spike
 
-- [ ] 完成 Codex app-server 协议与审批能力验证
+- [x] 完成 Codex app-server 协议与审批能力验证
 - 前置依赖：无（可与 T0.1 并行）
 - 交付物：Spike 报告、版本锁定 Schema、JSON-RPC Fixture
 - Checkpoints：
-  - [ ] initialize/initialized 和认证状态探测可重复执行
-  - [ ] Thread、Turn、Item 生命周期能映射到宿主标识
-  - [ ] 每个 Runtime Handle 都有独立事件读取器，不发生跨 Session 争抢
-  - [ ] Command、File、Network Approval 的可拦截范围有实测记录
-  - [ ] Interrupt、Resume 以及安装版本对应 Schema Hash 均通过验证
+  - [x] initialize/initialized 和认证状态探测可重复执行
+  - [x] Thread、Turn、Item 生命周期能映射到宿主标识
+  - [x] 每个 Runtime Handle 都有独立事件读取器，不发生跨 Session 争抢
+  - [x] Command、File、Network Approval 的可拦截范围有实测记录
+  - [x] Interrupt、Resume 以及安装版本对应 Schema Hash 均通过验证
 
 ### T0.3 Windows 本机控制面 Spike
 
