@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "scope": "37.1-37.8",
+  "evidence": {
+    "T0.4": ["docs/adr/0001-runtime-adapter-contract-baseline.md"],
+    "T1.1": ["docs/spikes/T1.1-host-skeleton.md"],
+    "T1.2": ["docs/spikes/T1.2-local-ipc.md"],
+    "T1.3": ["docs/spikes/T1.3-database.md"],
+    "T1.4": ["docs/spikes/T1.4-fake-runtime.md"],
+    "T1.5": ["docs/spikes/T1.5-permission-attention.md"],
+    "T2.1": ["docs/spikes/T2.1-project-manager.md"],
+    "T2.2": ["docs/spikes/T2.2-worktree-durable-operation.md"],
+    "T2.3": ["docs/spikes/T2.3-workspace-binding.md"],
+    "T2.4": ["docs/spikes/T2.4-git-diff-service.md"],
+    "T3.1": ["docs/spikes/T3.1-opencode-lifecycle-provider.md"],
+    "T3.2": ["docs/spikes/T3.2-opencode-session-sse.md"],
+    "T3.3": ["docs/spikes/T3.3-opencode-permission-control-recovery.md"],
+    "T3.4": ["docs/spikes/T3.4-opencode-alpha-e2e.md"],
+    "T4.1": ["docs/spikes/T4.1-codex-lifecycle-auth.md"],
+    "T4.2": ["docs/spikes/T4.2-codex-thread-turn-approval.md"],
+    "T4.3": ["docs/spikes/T4.3-codex-native-capabilities.md"],
+    "T4.4": ["docs/spikes/T4.4-git-integration.md"],
+    "T4.5": ["docs/spikes/T4.5-dual-runtime-e2e.md"],
+    "T5.1": ["docs/spikes/T5.1-daemon-recovery.md"],
+    "T5.2": ["docs/spikes/T5.2-security-credentials.md"],
+    "T5.3": ["docs/spikes/T5.3-observability-performance.md"],
+    "T5.4": ["docs/spikes/T5.4-release-migration.md"],
+    "G2": ["docs/gates/G2-stage-2.md"],
+    "G4": ["docs/gates/G4-stage-4.md"]
+  }
+}

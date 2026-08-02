@@ -3568,15 +3568,15 @@ src/helpers/
 
 ### T5.5 V1 回归与发布候选
 
-- [ ] 生成并验证 Windows V1 Release Candidate
+- [x] 生成并验证 Windows V1 Release Candidate
 - 前置依赖：T5.1、T5.2、T5.3、T5.4
 - 交付物：Release Candidate、兼容性矩阵、回归报告、已知问题
 - Checkpoints：
-  - [ ] Adapter Contract、Git、Recovery、安全和 E2E 测试在 Windows x64 CI 全部通过
-  - [ ] OpenCode 与 Codex 支持版本、Schema Hash 和 knownIssues 已锁定
-  - [ ] 从上一测试版本升级到 Release Candidate 后历史和 Worktree 可恢复
-  - [ ] 安装、更新、崩溃恢复和回滚均在干净 Windows 环境复验
-  - [ ] 第 37 章每项发布检查均有测试记录或可审计证据
+  - [x] Adapter Contract、Git、Recovery、安全和 E2E 测试在 Windows x64 CI 全部通过
+  - [x] OpenCode 与 Codex 支持版本、Schema Hash 和 knownIssues 已锁定
+  - [x] 从上一测试版本升级到 Release Candidate 后历史和 Worktree 可恢复
+  - [x] 安装、更新、崩溃恢复和回滚均在干净 Windows 环境复验
+  - [x] 第 37 章每项发布检查均有测试记录或可审计证据
 
 ### G5 阶段 5 Gate
 

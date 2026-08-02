@@ -65,3 +65,7 @@ jobs:
           npm run test:security
           npm run test:observability
           npm run test:release
+          npm run test:release-candidate
+
+      - name: Build and verify Windows release candidate installer
+        run: .\scripts\verify-windows-release-candidate.ps1
