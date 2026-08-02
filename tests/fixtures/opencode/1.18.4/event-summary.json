@@ -1,0 +1,23 @@
+{
+  "runtimeVersion": "1.18.4",
+  "eventTypeCounts": {
+    "catalog.updated": 2,
+    "integration.updated": 1,
+    "message.part.delta": 19,
+    "message.part.updated": 29,
+    "message.updated": 29,
+    "permission.asked": 1,
+    "permission.replied": 1,
+    "plugin.added": 45,
+    "project.directories.updated": 1,
+    "reference.updated": 1,
+    "server.connected": 1,
+    "server.heartbeat": 3,
+    "session.created": 1,
+    "session.diff": 8,
+    "session.idle": 4,
+    "session.status": 18,
+    "session.updated": 14
+  },
+  "rawPayloadsCommitted": false
+}

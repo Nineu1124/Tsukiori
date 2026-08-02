@@ -3193,15 +3193,15 @@ src/helpers/
 
 ### T0.1 OpenCode 协议 Spike
 
-- [ ] 完成 OpenCode 协议与 Provider 可行性验证
+- [x] 完成 OpenCode 协议与 Provider 可行性验证
 - 前置依赖：无（项目起点）
 - 交付物：Spike 报告、协议 Fixture、Capability/Enforcement 快照
 - Checkpoints：
-  - [ ] Worktree Scope Server 能在指定 Windows Native 项目目录启动和停止
-  - [ ] SDK 控制命令与 SSE 事件可独立消费，并能关联 Session 与 Turn
-  - [ ] Permission、Cancel、Resume 的实际支持范围有可重复验证记录
-  - [ ] DeepSeek Provider 可完成一次真实请求，数据出口与认证来源可识别
-  - [ ] Server 崩溃后可枚举恢复信息，无法恢复的状态被明确记录
+  - [x] Worktree Scope Server 能在指定 Windows Native 项目目录启动和停止
+  - [x] SDK 控制命令与 SSE 事件可独立消费，并能关联 Session 与 Turn
+  - [x] Permission、Cancel、Resume 的实际支持范围有可重复验证记录
+  - [x] DeepSeek Provider 可完成一次真实请求，数据出口与认证来源可识别
+  - [x] Server 崩溃后可枚举恢复信息，无法恢复的状态被明确记录
 
 ### T0.2 Codex app-server Spike
 

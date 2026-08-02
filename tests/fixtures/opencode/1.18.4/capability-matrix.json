@@ -1,0 +1,54 @@
+{
+  "runtime": "opencode",
+  "runtimeVersion": "1.18.4",
+  "protocol": "HTTP SDK v2 and global SSE",
+  "capabilities": [
+    {
+      "name": "worktree_server_lifecycle",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "password-protected server started in an isolated Windows-native worktree and stopped cleanly"
+    },
+    {
+      "name": "sdk_control_and_independent_sse",
+      "supportLevel": "supported",
+      "enforcementLevel": "observable_only",
+      "evidence": "SDK commands and one independently consumed global SSE stream correlated session lifecycle events"
+    },
+    {
+      "name": "permission_reply",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "permission.asked was observed and the host reply controlled whether the safe command executed"
+    },
+    {
+      "name": "turn_abort_and_session_resume",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "an active turn was aborted and the same session completed a later turn"
+    },
+    {
+      "name": "deepseek_provider_request",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "dpsk/deepseek-v4-flash completed a real request to api.deepseek.com using config-managed credentials"
+    },
+    {
+      "name": "idle_server_crash_recovery",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "a restarted server enumerated the persisted session and its messages"
+    },
+    {
+      "name": "in_flight_turn_crash_recovery",
+      "supportLevel": "unknown",
+      "enforcementLevel": "unknown",
+      "evidence": "the spike crashed the server only after the session returned to idle"
+    }
+  ],
+  "knownIssues": [
+    "In-flight turn recovery was not exercised and must remain unknown.",
+    "The provider configuration exposes key-like option field names; fixtures never retain their values.",
+    "The global SSE stream must be explicitly closed before server shutdown."
+  ]
+}

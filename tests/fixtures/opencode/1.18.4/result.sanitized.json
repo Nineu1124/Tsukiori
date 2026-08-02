@@ -1,0 +1,65 @@
+{
+  "taskId": "T0.1",
+  "startedAt": "<timestamp>",
+  "completedAt": "<timestamp>",
+  "runtime": {
+    "type": "opencode",
+    "version": "1.18.4",
+    "executableSha256": "59b66e1983b2665b498f234a17bf92e78e0e9e3f8c77406edf8dcf3e6239ee5c"
+  },
+  "sdkVersion": "1.18.4",
+  "executionEnvironment": "windows-native",
+  "model": {
+    "providerID": "dpsk",
+    "modelID": "deepseek-v4-flash",
+    "requiredProvider": "dpsk",
+    "connectedProviderIDs": [
+      "opencode-go",
+      "opencode",
+      "opencode-go-local",
+      "dpsk"
+    ],
+    "evidence": {
+      "id": "dpsk",
+      "name": "dpsk",
+      "source": "config",
+      "credentialPresent": true,
+      "credentialLocation": "provider.options.apiKey",
+      "environmentVariableNames": [],
+      "endpointHost": "api.deepseek.com",
+      "modelListed": true
+    }
+  },
+  "checks": {
+    "health": true,
+    "worktreePathMatched": true,
+    "vcsDetected": true,
+    "documentationContentType": "application/json",
+    "documentationSha256": "f5cb443f0d160fc4b17190f64c2401f199160eb2137ce4e00ca319b99aa34005",
+    "sessionCreated": true,
+    "permissionObserved": "bash",
+    "permissionPatternCount": 1,
+    "permissionFileCreated": true,
+    "abortAndResume": true,
+    "crashRecovery": true
+  },
+  "eventTypeCounts": {
+    "catalog.updated": 2,
+    "integration.updated": 1,
+    "message.part.delta": 19,
+    "message.part.updated": 29,
+    "message.updated": 29,
+    "permission.asked": 1,
+    "permission.replied": 1,
+    "plugin.added": 45,
+    "project.directories.updated": 1,
+    "reference.updated": 1,
+    "server.connected": 1,
+    "server.heartbeat": 3,
+    "session.created": 1,
+    "session.diff": 8,
+    "session.idle": 4,
+    "session.status": 18,
+    "session.updated": 14
+  }
+}

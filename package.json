@@ -15,9 +15,12 @@
     "test:codex": "node --test spikes/codex/*.test.mjs",
     "spike:codex": "node spikes/codex/harness.mjs",
     "test:windows": "node --test spikes/windows/*.test.mjs",
-    "spike:windows": "node spikes/windows/harness.mjs"
+    "spike:windows": "node spikes/windows/harness.mjs",
+    "test:opencode": "node --test spikes/opencode/*.test.mjs",
+    "spike:opencode": "node spikes/opencode/harness.mjs"
   },
   "devDependencies": {
+    "@opencode-ai/sdk": "1.18.4",
     "node-pty": "1.1.0"
   }
 }
