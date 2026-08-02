@@ -3506,15 +3506,15 @@ src/helpers/
 
 ### G4 阶段 4 Gate
 
-- [ ] 功能完整度达到可发布 V1 候选
+- [x] 功能完整度达到可发布 V1 候选
 - 前置依赖：T4.1、T4.2、T4.3、T4.4、T4.5
 - 交付物：V1 功能 Gate 报告
 - Checkpoints：
-  - [ ] T4.1 至 T4.5 全部完成
-  - [ ] OpenCode 与 Codex Adapter Contract Tests 全部通过
-  - [ ] 双 Runtime E2E、Git 集成和权限测试全部通过
-  - [ ] Claude、ACP、WSL、macOS 和 Linux 均未成为 V1 阻塞项
-  - [ ] 所有实验、降级和未知能力在 UI 中表达准确
+  - [x] T4.1 至 T4.5 全部完成
+  - [x] OpenCode 与 Codex Adapter Contract Tests 全部通过
+  - [x] 双 Runtime E2E、Git 集成和权限测试全部通过
+  - [x] Claude、ACP、WSL、macOS 和 Linux 均未成为 V1 阻塞项
+  - [x] 所有实验、降级和未知能力在 UI 中表达准确
 
 ## 阶段 5：Windows V1 稳定性
 

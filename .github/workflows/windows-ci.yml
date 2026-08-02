@@ -60,3 +60,4 @@ jobs:
           npm run test:alpha
           npm run test:dual-runtime
           npm run test:gate3
+          npm run test:gate4

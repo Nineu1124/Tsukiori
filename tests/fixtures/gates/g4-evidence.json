@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "gate": "G4",
+  "evaluatedAt": "2026-08-02T11:13:00Z",
+  "taskCommits": {
+    "T4.1": "dc0844d7be28a8ccc720d8cfe0f4863a629e8c78",
+    "T4.2": "23bc6f500ac1712532cc2c657cbdf4560a5bebd9",
+    "T4.3": "78d105c616fe8017883a5313be6223c957d64da8",
+    "T4.4": "58d28fd995b853fc1497e65e0ed160ac5a998260",
+    "T4.5": "eb371637479ac270dc2c9d59c809a9bb83165096"
+  },
+  "windowsCi": {
+    "T4.1": { "runId": 30737300161, "conclusion": "success" },
+    "T4.2": { "runId": 30738211668, "conclusion": "success" },
+    "T4.3": { "runId": 30738914336, "conclusion": "success" },
+    "T4.4": { "runId": 30744733940, "conclusion": "success" },
+    "T4.5": { "runId": 30745162905, "conclusion": "success" }
+  },
+  "adapterContracts": {
+    "opencode": "v1",
+    "codex": "v1",
+    "credentialFreeCi": true
+  },
+  "integration": {
+    "dualRuntimeE2e": true,
+    "parallelSessions": 3,
+    "gitV1Integration": true,
+    "permissionTests": true,
+    "eventCrossTalkObserved": false,
+    "codeCrossContaminationObserved": false
+  },
+  "nonBlockingBacklog": ["claude", "acp", "wsl", "macos", "linux"],
+  "supportLevelsVisible": ["supported", "experimental", "degraded", "unsupported", "unknown"],
+  "containsCredentials": false,
+  "containsSourceOrPrompt": false
+}

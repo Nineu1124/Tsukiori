@@ -17,6 +17,7 @@
     "test:gate1": "pnpm run build && node --test tests/gates/g1.test.mjs",
     "test:gate2": "pnpm run build && node --test tests/gates/g2.test.mjs",
     "test:gate3": "pnpm run build && node --test tests/gates/g3.test.mjs",
+    "test:gate4": "pnpm run build && node --test tests/gates/g4.test.mjs",
     "test:codex": "node --test spikes/codex/*.test.mjs",
     "test:codex-adapter": "pnpm run build && node --test tests/codex-adapter/*.test.mjs",
     "spike:codex": "node spikes/codex/harness.mjs",
