@@ -84,7 +84,8 @@ const workspaceSnapshot = smokeMode ? {
     promotion: 'explicit-required',
     conflictOperationId: 'operation:smoke-conflict',
   },
-} : { permissions: [], attention: [], tools: [], runtimes: [], workflow: null, v1Git: null };
+  diagnostics: { available: true, defaultEstimatedBytes: 8192, sensitiveEstimatedBytes: 12288 },
+} : { permissions: [], attention: [], tools: [], runtimes: [], workflow: null, v1Git: null, diagnostics: null };
 let quitting = false;
 let smokeCommandCount = 0;
 
@@ -246,7 +247,7 @@ ipcMain.handle('workspace:command', (_event, value: unknown) => {
   const command = value as Record<string, unknown>;
   const allowed = new Set([
     'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
-    'integrate', 'continue_integration', 'open_external_editor',
+    'integrate', 'continue_integration', 'open_external_editor', 'export_diagnostic',
   ]);
   if (typeof command.type !== 'string' || !allowed.has(command.type)
     || Buffer.byteLength(JSON.stringify(command)) > 8192) {

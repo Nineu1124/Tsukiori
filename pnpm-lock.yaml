@@ -147,6 +147,12 @@ importers:
         specifier: workspace:*
         version: link:../project-manager
 
+  packages/observability:
+    dependencies:
+      '@tsukiori/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
+
   packages/permission-broker:
     dependencies:
       '@tsukiori/database':

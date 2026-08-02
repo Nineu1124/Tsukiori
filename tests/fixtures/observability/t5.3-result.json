@@ -1,0 +1,23 @@
+{
+  "task": "T5.3",
+  "schemaVersion": 1,
+  "limits": {
+    "runtimeConcurrent": 3,
+    "ptyConcurrent": 8,
+    "eventBytes": 65536,
+    "eventQueue": 1024,
+    "blobBytes": 10485760,
+    "diffBytes": 2097152,
+    "logBytes": 16384,
+    "logEntries": 256
+  },
+  "diagnosticDefaultExcludes": ["source", "complete_prompt", "raw_payload", "credentials", "auth_store"],
+  "sensitivePreviewRequiresOptIn": true,
+  "performanceThresholdMs": {
+    "threeSessionStartup": 500,
+    "threeSessionStreaming3000Events": 2000,
+    "threeSessionDiff": 3000
+  },
+  "containsCredentials": false,
+  "containsPromptOrSource": false
+}

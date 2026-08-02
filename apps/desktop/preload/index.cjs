@@ -26,6 +26,9 @@ const api = Object.freeze({
     decidePermission: (requestId, connectionEpoch, decision) => ipcRenderer.invoke(
       'workspace:command', { type: 'permission', requestId, connectionEpoch, decision },
     ),
+    exportDiagnostic: (includeSensitivePreviews) => ipcRenderer.invoke(
+      'workspace:command', { type: 'export_diagnostic', includeSensitivePreviews: includeSensitivePreviews === true },
+    ),
     answerInput: (requestId, answers) => ipcRenderer.invoke(
       'workspace:command', { type: 'answer_input', requestId, answers },
     ),

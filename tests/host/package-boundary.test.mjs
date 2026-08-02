@@ -11,12 +11,13 @@ async function manifest(path) {
 }
 
 test('workspace package dependency direction follows the architecture boundary', async () => {
-  const [protocol, domain, credentialBroker, database, runtimeCore, fakeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop] = await Promise.all([
+  const [protocol, domain, credentialBroker, database, runtimeCore, observability, fakeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop] = await Promise.all([
     manifest('packages/protocol'),
     manifest('packages/domain'),
     manifest('packages/credential-broker'),
     manifest('packages/database'),
     manifest('packages/runtime-core'),
+    manifest('packages/observability'),
     manifest('packages/adapter-fake'),
     manifest('packages/adapter-codex'),
     manifest('packages/adapter-opencode'),
@@ -38,6 +39,7 @@ test('workspace package dependency direction follows the architecture boundary',
   assert.equal(database.dependencies['better-sqlite3'], '12.8.0');
   assert.equal(database.dependencies['drizzle-orm'], '0.45.2');
   assert.deepEqual(runtimeCore.dependencies, { '@tsukiori/domain': 'workspace:*' });
+  assert.deepEqual(observability.dependencies, { '@tsukiori/runtime-core': 'workspace:*' });
   assert.deepEqual(fakeAdapter.dependencies, { '@tsukiori/runtime-core': 'workspace:*' });
   assert.deepEqual(codexAdapter.dependencies, {
     '@tsukiori/database': 'workspace:*',
@@ -90,7 +92,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/protocol': 'workspace:*',
   });
 
-  const manifests = [protocol, domain, credentialBroker, database, runtimeCore, fakeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop];
+  const manifests = [protocol, domain, credentialBroker, database, runtimeCore, observability, fakeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop];
   for (const packageJson of manifests) {
     const dependencies = {
       ...packageJson.dependencies,

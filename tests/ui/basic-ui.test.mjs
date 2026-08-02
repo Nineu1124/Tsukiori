@@ -74,3 +74,19 @@ test('V1 Git UI exposes audited operations and Integration Worktree boundaries',
   }
   assert.doesNotMatch(script, /child_process|node:fs|spawn\(|exec\(/);
 });
+test('Diagnostic UI defaults safe and shows re-sanitized opt-in size before export', async () => {
+  const [html, script, preload] = await Promise.all([
+    readFile(join(rendererRoot, 'index.html'), 'utf8'),
+    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
+    readFile(join(root, 'apps/desktop/preload/index.cjs'), 'utf8'),
+  ]);
+  assert.match(html, /id="diagnostic-bundle"/);
+  assert.match(html, /默认排除源码、完整 Prompt、Raw Payload、凭据和认证存储/);
+  assert.match(html, /包含再次脱敏的敏感预览/);
+  assert.match(html, /diagnosticEstimatedBytes/);
+  assert.match(script, /sensitiveEstimatedBytes/);
+  assert.match(script, /defaultEstimatedBytes/);
+  assert.match(script, /exportDiagnostic\(checkbox\.checked\)/);
+  assert.match(preload, /type: 'export_diagnostic'/);
+  assert.doesNotMatch(script + preload, /child_process|node:fs|spawn\(|exec\(|innerHTML/);
+});

@@ -44,7 +44,8 @@
     "test:workspace": "pnpm run build && node --test tests/workspace/*.test.mjs",
     "test:git": "pnpm run build && node --test tests/git/*.test.mjs",
     "test:recovery": "pnpm run build && node --test tests/recovery/*.test.mjs",
-    "test:security": "pnpm run build && node --test tests/security/*.test.mjs"
+    "test:security": "pnpm run build && node --test tests/security/*.test.mjs",
+    "test:observability": "pnpm run build && node --test tests/observability/*.test.mjs"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "1.18.4",

@@ -8,6 +8,7 @@ const toolList = document.querySelector('#tool-list');
 const runtimeList = document.querySelector('#runtime-list');
 const alphaWorkflow = document.querySelector('#alpha-workflow');
 const v1GitWorkflow = document.querySelector('#v1-git-workflow');
+const diagnosticBundle = document.querySelector('#diagnostic-bundle');
 
 function setField(root, name, value) {
   const target = root.querySelector('[data-field="' + name + '"]');
@@ -238,6 +239,32 @@ function renderAttention(item) {
   attentionList.append(card);
 }
 
+function renderDiagnosticBundle(diagnostics) {
+  if (!diagnostics?.available) return;
+  diagnosticBundle.hidden = false;
+  const checkbox = diagnosticBundle.querySelector('[data-field="includeSensitivePreviews"]');
+  const estimated = diagnosticBundle.querySelector('[data-field="diagnosticEstimatedBytes"]');
+  const button = diagnosticBundle.querySelector('[data-action="exportDiagnostic"]');
+  const output = diagnosticBundle.querySelector('[data-field="diagnosticStatus"]');
+  const update = () => {
+    estimated.textContent = String(checkbox.checked
+      ? diagnostics.sensitiveEstimatedBytes
+      : diagnostics.defaultEstimatedBytes);
+  };
+  checkbox.addEventListener('change', update);
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+      const result = await window.tsukiori.workspace.exportDiagnostic(checkbox.checked);
+      output.textContent = result?.ok === false ? '导出不可用' : '诊断包已生成';
+    } catch {
+      output.textContent = '诊断包导出失败';
+    } finally {
+      button.disabled = false;
+    }
+  });
+  update();
+}
 try {
   const [daemon, versions, snapshot] = await Promise.all([
     window.tsukiori.daemon.status(),
@@ -249,6 +276,7 @@ try {
   version.textContent = 'Protocol ' + versions.protocol;
   renderAlphaWorkflow(snapshot.workflow);
   renderV1GitWorkflow(snapshot.v1Git);
+  renderDiagnosticBundle(snapshot.diagnostics);
   for (const tool of snapshot.tools) renderTool(tool);
   for (const runtime of snapshot.runtimes) renderRuntime(runtime);
   for (const permission of snapshot.permissions) renderPermission(permission);

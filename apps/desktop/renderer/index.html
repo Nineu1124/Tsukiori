@@ -77,7 +77,15 @@
               <span data-field="v1ActionStatus" aria-live="polite"></span>
             </div>
           </section>
-          <section class="runtime-section" aria-label="Runtime status">
+          <section id="diagnostic-bundle" class="runtime-section" aria-label="Diagnostic bundle" hidden>
+            <p class="section-label">DIAGNOSTIC BUNDLE</p>
+            <h2>导出脱敏诊断包</h2>
+            <p>默认排除源码、完整 Prompt、Raw Payload、凭据和认证存储。</p>
+            <label><input type="checkbox" data-field="includeSensitivePreviews" />包含再次脱敏的敏感预览</label>
+            <p>预计未压缩大小：<strong data-field="diagnosticEstimatedBytes">0</strong> bytes</p>
+            <button type="button" data-action="exportDiagnostic">导出 .json.gz</button>
+            <span data-field="diagnosticStatus" aria-live="polite"></span>
+          </section>          <section class="runtime-section" aria-label="Runtime status">
             <p class="section-label">RUNTIMES</p>
             <div id="runtime-list"></div>
           </section>

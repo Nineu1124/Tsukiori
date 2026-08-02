@@ -63,3 +63,4 @@ jobs:
           npm run test:gate4
           npm run test:recovery
           npm run test:security
+          npm run test:observability
