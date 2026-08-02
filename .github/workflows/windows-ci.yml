@@ -54,3 +54,6 @@ jobs:
           npm run test:codex-adapter
           npm run test:windows
           npm run test:opencode
+          npm run test:opencode-adapter
+          npm run test:alpha
+          npm run test:gate3

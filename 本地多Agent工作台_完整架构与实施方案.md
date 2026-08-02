@@ -3432,15 +3432,15 @@ src/helpers/
 
 ### G3 阶段 3 Gate
 
-- [ ] OpenCode Windows Alpha 可以交付试用
+- [x] OpenCode Windows Alpha 可以交付试用
 - 前置依赖：T3.1、T3.2、T3.3、T3.4
 - 交付物：Alpha Gate 报告、已知问题列表
 - Checkpoints：
-  - [ ] T3.1 至 T3.4 全部完成
-  - [ ] DeepSeek 真实请求、权限处理、Diff、Commit 和归档闭环通过
-  - [ ] Runtime、Daemon、GUI 分别崩溃后的恢复行为通过
-  - [ ] API Key、Native Event 和日志脱敏测试通过
-  - [ ] 未验证能力均保持 unknown 或不可操作状态
+  - [x] T3.1 至 T3.4 全部完成
+  - [x] DeepSeek 真实请求、权限处理、Diff、Commit 和归档闭环通过
+  - [x] Runtime、Daemon、GUI 分别崩溃后的恢复行为通过
+  - [x] API Key、Native Event 和日志脱敏测试通过
+  - [x] 未验证能力均保持 unknown 或不可操作状态
 
 ## 阶段 4：Codex 与可发布 V1
 

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "gate": "G3",
+  "evaluatedAt": "2026-08-02T10:18:00Z",
+  "taskCommits": {
+    "T3.1": "da6253bacedd68dc116f84f7dcdf11369c50082f",
+    "T3.2": "9ebf9981902a21adc247b88342ec108add467b55",
+    "T3.3": "c7d2f77e44d8ececc0ff0df5e03d5fa53ad847ba",
+    "T3.4": "b6bd5888db14778fb3704195aed6c850357629fe"
+  },
+  "windowsCi": {
+    "T3.1": { "runId": 30740203032, "conclusion": "success" },
+    "T3.2": { "runId": 30741049721, "conclusion": "success" },
+    "T3.3": { "runId": 30742068920, "conclusion": "success" },
+    "T3.4": { "runId": 30743349404, "conclusion": "success" }
+  },
+  "realDeepSeekClosure": {
+    "runtimeVersion": "1.18.4",
+    "compatibility": "supported",
+    "providerId": "dpsk",
+    "modelId": "deepseek-v4-flash",
+    "destinationHost": "api.deepseek.com",
+    "providerRequestCompleted": true,
+    "permissionDecisionCount": 1,
+    "runtimeModifiedBoundWorktree": true,
+    "mainWorkspaceChanged": false,
+    "diffReviewed": true,
+    "commitCreated": true,
+    "archiveCompleted": true,
+    "cleanupState": "succeeded",
+    "persistedPromptOrSource": false
+  },
+  "recovery": {
+    "runtimeCrashIsolated": true,
+    "runtimeUnavailableShownAsRunning": false,
+    "daemonCrashDataDestructionObserved": false,
+    "daemonRecoveryRequiresFingerprintReconciliation": true,
+    "rendererCrashInjected": true,
+    "daemonAliveAfterRendererCrash": true,
+    "runtimeAliveAfterRendererCrash": true
+  },
+  "security": {
+    "apiKeyPersisted": false,
+    "rawNativeEventsCommitted": false,
+    "rawRuntimeLogsCommitted": false,
+    "rendererSandbox": true,
+    "structuredGitOnly": true,
+    "publicCiRequiresProviderCredentials": false
+  },
+  "unknownsPreserved": [
+    "in_flight_turn_crash_recovery",
+    "event_replay",
+    "provider_internal_transport_enforcement"
+  ],
+  "hiddenEntryPoints": ["merge", "claude", "acp", "wsl", "macos", "linux"],
+  "containsCredentials": false
+}
