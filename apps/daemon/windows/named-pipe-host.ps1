@@ -11,7 +11,12 @@ param(
   [int]$ProtocolVersion,
 
   [Parameter(Mandatory = $true)]
+  [ValidateRange(1, 2147483647)]
   [int]$DaemonPid,
+
+  [Parameter(Mandatory = $true)]
+  [ValidateRange(1, 9223372036854775807)]
+  [long]$DaemonStartTimeUtcTicks,
 
   [int]$MaxConnections = 32
 )
@@ -25,8 +30,10 @@ if ([string]::IsNullOrWhiteSpace($token) -or $token.Length -lt 32) {
 if (-not ('Tsukiori.Windows.PipePeer' -as [type])) {
   Add-Type -TypeDefinition @'
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Threading;
 
 namespace Tsukiori.Windows {
   public static class PipePeer {
@@ -73,9 +80,39 @@ namespace Tsukiori.Windows {
       }
     }
   }
+
+  public static class ParentWatchdog {
+    public static void Start(int parentPid, long expectedStartTicks, long toleranceTicks) {
+      Thread thread = new Thread(() => {
+        try {
+          using (Process parent = Process.GetProcessById(parentPid)) {
+            long actualStartTicks = parent.StartTime.ToUniversalTime().Ticks;
+            if (Math.Abs(actualStartTicks - expectedStartTicks) > toleranceTicks) {
+              Environment.Exit(0);
+            }
+            parent.WaitForExit();
+            Environment.Exit(0);
+          }
+        } catch (ArgumentException) {
+          Environment.Exit(0);
+        } catch (InvalidOperationException) {
+          Environment.Exit(0);
+        }
+      });
+      thread.IsBackground = true;
+      thread.Name = "TsukioriDaemonParentWatchdog";
+      thread.Start();
+    }
+  }
 }
 '@
 }
+
+[Tsukiori.Windows.ParentWatchdog]::Start(
+  $DaemonPid,
+  $DaemonStartTimeUtcTicks,
+  [TimeSpan]::FromSeconds(5).Ticks
+)
 
 $currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $utf8 = [System.Text.UTF8Encoding]::new($false)

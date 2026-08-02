@@ -10,6 +10,7 @@ coverage/
 temp/
 worktrees/
 artifacts/private/
+artifacts/local-v1-test-*/
 /apps/desktop/release/
 spike-results/raw/
 

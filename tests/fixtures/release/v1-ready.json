@@ -4,9 +4,9 @@
   "releaseCandidate": "1.0.0-rc.1",
   "platform": "windows-x64",
   "completion": {
-    "tasks": 27,
+    "tasks": 28,
     "gates": 6,
-    "acceptanceItems": 67,
+    "acceptanceItems": 75,
     "readyChecks": 5,
     "allChecked": true
   },
@@ -22,8 +22,10 @@
     "tests/fixtures/release/t5.5-result.json",
     "tests/fixtures/release/v1.0.0-rc.1-compatibility.json",
     "tests/fixtures/release/v1-acceptance-evidence.json",
+    "tests/fixtures/release/t5.6-interactive-result.json",
     "docs/releases/V1.0.0-rc.1-known-issues.md",
     "docs/releases/Local-V1-Ready.md",
+    "docs/spikes/T5.6-interactive-product.md",
     "docs/gates/G5-stage-5.md"
   ],
   "publication": {

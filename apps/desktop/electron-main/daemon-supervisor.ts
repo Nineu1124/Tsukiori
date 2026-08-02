@@ -48,6 +48,7 @@ type DaemonLease = {
   ipcProtocolVersion: number;
   instanceId: string;
   pid: number;
+  pipeHostPid: number;
   pipeName: string;
   bootstrapSecretRef: SecretReference;
   createdAt: number;
@@ -119,6 +120,7 @@ export class DaemonSupervisor {
       ...process.env,
       ...this.#options.environment,
       TSUKIORI_IPC_BOOTSTRAP_TOKEN: this.#bootstrapToken,
+      TSUKIORI_DAEMON_STDIN_POLICY: this.#options.exitPolicy,
       ...(this.#options.leaseFile ? {
         TSUKIORI_DAEMON_LEASE_FILE: this.#options.leaseFile,
         TSUKIORI_IPC_BOOTSTRAP_REF: this.#bootstrapSecretRef ?? '',
@@ -409,6 +411,7 @@ export class DaemonSupervisor {
       daemonVersion: DAEMON_VERSION,
       instanceId: lease.instanceId,
       pid: lease.pid,
+      pipeHostPid: lease.pipeHostPid,
       pipeName: lease.pipeName,
       ipcProtocolVersion: IPC_PROTOCOL_VERSION,
     };
@@ -423,6 +426,7 @@ export class DaemonSupervisor {
       || typeof item.protocolVersion !== 'number' || typeof item.ipcProtocolVersion !== 'number'
       || typeof item.instanceId !== 'string' || typeof item.pid !== 'number'
       || !Number.isInteger(item.pid) || item.pid <= 0 || typeof item.pipeName !== 'string'
+      || typeof item.pipeHostPid !== 'number' || !Number.isInteger(item.pipeHostPid) || item.pipeHostPid <= 0
       || typeof item.bootstrapSecretRef !== 'string'
       || !/^secretref:[a-f0-9-]{36}$/.test(item.bootstrapSecretRef)
       || typeof item.createdAt !== 'number') {

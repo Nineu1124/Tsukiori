@@ -9,7 +9,7 @@
 
 ## 决策摘要
 
-T0.1 至 T5.5 的全部顶层任务、G0 至 G4 和第 37.1–37.8 分类验收均已完成。最终 Windows CI `30750424400` 在干净 runner 上通过全部无凭据回归，并实际生成 `1.0.0-rc.1` NSIS，完成安装、packaged Smoke、更新覆盖、卸载与重装。
+T0.1 至 T5.6 的全部顶层任务、G0 至 G4 和第 37.1–37.9 分类验收均已完成。原始 Windows CI `30750424400` 在干净 runner 上通过当时的无凭据回归和 NSIS 生命周期；T5.6 可交互产品纠正将在完成提交后以新的 Windows CI 重新签字。
 
 根据 ADR 0003，Local V1 采用与 `cc-haha` Windows 发布相同的可选 Authenticode 策略。未签名 NSIS 不显示为已验证发布者，必须明确提示 SmartScreen 风险；Artifact 完整性继续由 SHA-256、Ed25519 Release Manifest、HTTPS Origin、Channel、文件名和数据库 Schema 验证。未来 Verified Publisher 通道继续启用 `forceCodeSigning`，不计入 Local V1 完成率。
 
@@ -21,6 +21,7 @@ T0.1 至 T5.5 的全部顶层任务、G0 至 G4 和第 37.1–37.8 分类验收�
 - T3.1–T3.4：完成；
 - T4.1–T4.5：完成；
 - T5.1–T5.5：完成。
+- T5.6：完成；真实 Codex Thread/Turn 与无凭据交互测试均通过。
 
 结果：通过。
 
@@ -33,9 +34,9 @@ T0.1 至 T5.5 的全部顶层任务、G0 至 G4 和第 37.1–37.8 分类验收�
 
 结果：通过。
 
-## G5-C3 第 37.1–37.8 验收
+## G5-C3 第 37.1–37.9 验收
 
-8 个分类共 67 项全部勾选。每一项的 T/G 映射都能在 `v1-acceptance-evidence.json` 找到至少一个实际存在的 ADR、Spike 或 Gate 报告。37.0 总门槛必须等待本 Gate 提交及 CI 成功后单独勾选，避免 G5 与 V1 Ready 自引用。
+9 个分类共 75 项全部勾选。每一项的 T/G 映射都能在 `v1-acceptance-evidence.json` 找到至少一个实际存在的 ADR、Spike 或 Gate 报告。T5.6 新增的产品闭环由真实本机 Probe、UI 像素检查、退出回收测试和公开 CI 无凭据替身测试共同验证。
 
 结果：通过。
 

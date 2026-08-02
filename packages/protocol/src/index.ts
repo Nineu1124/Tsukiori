@@ -10,6 +10,7 @@ export type DaemonReadyMessage = {
   daemonVersion: typeof DAEMON_VERSION;
   instanceId: string;
   pid: number;
+  pipeHostPid: number;
   pipeName: string;
   ipcProtocolVersion: typeof IPC_PROTOCOL_VERSION;
 };
@@ -97,6 +98,7 @@ export function isDaemonMessage(value: unknown): value is DaemonMessage {
       candidate.daemonVersion === DAEMON_VERSION &&
       typeof candidate.instanceId === 'string' &&
       typeof candidate.pid === 'number' &&
+      typeof candidate.pipeHostPid === 'number' &&
       typeof candidate.pipeName === 'string' &&
       candidate.ipcProtocolVersion === IPC_PROTOCOL_VERSION
     );

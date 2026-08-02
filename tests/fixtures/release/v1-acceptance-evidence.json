@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "scope": "37.1-37.8",
+  "scope": "37.1-37.9",
   "evidence": {
     "T0.4": ["docs/adr/0001-runtime-adapter-contract-baseline.md"],
     "T1.1": ["docs/spikes/T1.1-host-skeleton.md"],
@@ -25,6 +25,7 @@
     "T5.2": ["docs/spikes/T5.2-security-credentials.md"],
     "T5.3": ["docs/spikes/T5.3-observability-performance.md"],
     "T5.4": ["docs/spikes/T5.4-release-migration.md"],
+    "T5.6": ["docs/spikes/T5.6-interactive-product.md"],
     "G2": ["docs/gates/G2-stage-2.md"],
     "G4": ["docs/gates/G4-stage-4.md"]
   }

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "task": "T5.6",
+  "platform": "windows-x64",
+  "runtime": {
+    "type": "codex",
+    "version": "0.146.0",
+    "threadCreated": true,
+    "turnCompleted": true,
+    "streamedMarkerObserved": true
+  },
+  "workspace": {
+    "projectAdded": true,
+    "isolatedWorktree": true,
+    "worktreeCleanAfterProbe": true,
+    "stageUnstageCommitTested": true
+  },
+  "interaction": {
+    "projectPicker": true,
+    "sessionCreation": true,
+    "promptComposer": true,
+    "interrupt": true,
+    "permissionDecision": true,
+    "gitReview": true,
+    "specificationAlignedLayout": true,
+    "collapsiblePanels": true,
+    "toolCategories": ["read", "modify", "execute"],
+    "readOnlyRuntimeLog": true
+  },
+  "processLifecycle": {
+    "forcedParentExitIterations": 3,
+    "stdinCloseCleanup": true,
+    "keepPolicyReconnect": true,
+    "visualCloseExitCode": 0,
+    "namedPipeHostCountAfterClose": 0
+  },
+  "persistence": {
+    "projectAndSessionMetadataLocal": true,
+    "promptPersisted": false,
+    "credentialsPersisted": false
+  },
+  "publicCiRequiresCredentials": false,
+  "containsCredentials": false,
+  "containsUserSource": false
+}

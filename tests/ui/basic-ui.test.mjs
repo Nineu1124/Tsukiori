@@ -37,6 +37,57 @@ test('Session workspace includes Attention, Tool, Permission, and Runtime auth p
   assert.match(script, /textContent/);
   assert.doesNotMatch(script, /innerHTML|insertAdjacentHTML|eval\(/);
 });
+
+test('interactive workspace exposes real project, Codex turn, Worktree review, and commit controls', async () => {
+  const [html, script, preload] = await Promise.all([
+    readFile(join(rendererRoot, 'index.html'), 'utf8'),
+    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
+    readFile(join(root, 'apps', 'desktop', 'preload', 'index.cjs'), 'utf8'),
+  ]);
+  for (const id of [
+    'add-project', 'project-list', 'session-list', 'new-session', 'conversation',
+    'prompt-input', 'send-prompt', 'interrupt-turn', 'git-files', 'git-diff',
+    'stage-files', 'unstage-files', 'commit-files',
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  for (const method of [
+    'pickProject', 'createSession', 'sendPrompt', 'interruptTurn', 'gitStatus',
+    'gitDiff', 'stage', 'unstage', 'commit', 'pollEvents',
+  ]) assert.match(script + preload, new RegExp(`workspace\\.${method}`));
+  assert.match(script, /snapshot\?\.mode === 'interactive'/);
+  assert.match(html, /独立 Git Worktree/);
+});
+
+test('interactive workspace follows the V1.0 four-region layout and light design tokens', async () => {
+  const [html, styles, script] = await Promise.all([
+    readFile(join(rendererRoot, 'index.html'), 'utf8'),
+    readFile(join(rendererRoot, 'styles.css'), 'utf8'),
+    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
+  ]);
+  for (const id of [
+    'toggle-left-panel', 'toggle-right-panel', 'toggle-terminal', 'terminal-panel',
+    'terminal-output', 'runtime-select', 'model-select', 'environment-select',
+    'permission-select', 'session-context-path',
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  for (const view of ['permissions', 'changes']) {
+    assert.match(html, new RegExp(`data-panel-tab="${view}"`));
+    assert.match(html, new RegExp(`data-panel-view="${view}"`));
+  }
+  for (const token of [
+    '--tsukiori-bg: #f5fbff', '--tsukiori-primary: #258fe8',
+    '--tsukiori-primary-300: #4bb9ef', '--tsukiori-text: #20364b',
+    '--tsukiori-success: #45c995', '--tsukiori-warning: #f3c94f',
+    '--tsukiori-danger: #ef6b7c', '--tsukiori-special: #8e7bef',
+  ]) assert.ok(styles.toLowerCase().includes(token));
+  assert.match(styles, /grid-template:\s*40px minmax\(0,1fr\) \/ 300px minmax\(480px,1fr\) 300px/);
+  assert.match(styles, /grid-template-rows:\s*38px minmax\(140px,1fr\) auto 220px/);
+  assert.match(styles, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  assert.match(styles, /\.chat-message\.user[\s\S]*justify-self:\s*end/);
+  assert.match(styles, /\.chat-message\.assistant[\s\S]*background:\s*transparent/);
+  assert.match(styles, /prefers-reduced-motion/);
+  assert.match(script, /classifyToolEvent/);
+  assert.match(script, /activateWorkPanel/);
+  assert.match(script, /terminal-collapsed/);
+});
 test('Windows Alpha UI exposes only implemented OpenCode workflow actions', async () => {
   const [html, script] = await Promise.all([
     readFile(join(rendererRoot, 'index.html'), 'utf8'),

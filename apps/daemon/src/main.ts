@@ -18,6 +18,7 @@ const pipeName = 'tsukiori-' + instanceId;
 const bootstrapToken = process.env.TSUKIORI_IPC_BOOTSTRAP_TOKEN;
 const leaseFile = process.env.TSUKIORI_DAEMON_LEASE_FILE;
 const bootstrapSecretRef = process.env.TSUKIORI_IPC_BOOTSTRAP_REF;
+const stdinExitPolicy = process.env.TSUKIORI_DAEMON_STDIN_POLICY === 'keep' ? 'keep' : 'stop';
 if (!bootstrapToken || bootstrapToken.length < 32) {
   throw new Error('Daemon requires a parent-provided IPC bootstrap token');
 }
@@ -26,6 +27,10 @@ if (leaseFile && (!bootstrapSecretRef || !/^secretref:[a-f0-9-]{36}$/.test(boots
 }
 let stopping = false;
 let pipeHost: ChildProcess | null = null;
+let pipeHostProcessId = 0;
+const unixEpochTicks = 621355968000000000n;
+const daemonStartUnixMs = Date.now() - Math.floor(process.uptime() * 1000);
+const daemonStartTimeUtcTicks = unixEpochTicks + BigInt(daemonStartUnixMs) * 10_000n;
 
 function removeLease(): void {
   if (!leaseFile || !existsSync(leaseFile)) return;
@@ -48,6 +53,7 @@ function publishLease(): void {
     ipcProtocolVersion: IPC_PROTOCOL_VERSION,
     instanceId,
     pid: process.pid,
+    pipeHostPid: pipeHostProcessId,
     pipeName,
     bootstrapSecretRef,
     createdAt: Date.now(),
@@ -84,6 +90,8 @@ async function startPipeHost(): Promise<void> {
       String(IPC_PROTOCOL_VERSION),
       '-DaemonPid',
       String(process.pid),
+      '-DaemonStartTimeUtcTicks',
+      daemonStartTimeUtcTicks.toString(),
       '-MaxConnections',
       '256',
     ],
@@ -101,6 +109,7 @@ async function startPipeHost(): Promise<void> {
     throw new Error('Named Pipe host stdio was not created');
   }
   pipeHost = child;
+  pipeHostProcessId = child.pid ?? 0;
   let stderr = '';
   child.stderr.on('data', (chunk: Buffer) => {
     stderr = (stderr + chunk.toString('utf8')).slice(-4096);
@@ -142,23 +151,33 @@ async function startPipeHost(): Promise<void> {
   });
 }
 
-function stop(requestId: string): void {
+async function stop(requestId: string, respond = true): Promise<void> {
   if (stopping) return;
   stopping = true;
   input.close();
   process.stdin.pause();
   if (pipeHost?.exitCode === null) {
+    const host = pipeHost;
+    const exited = new Promise<void>((resolveExit) => host.once('exit', () => resolveExit()));
     pipeHost.kill('SIGTERM');
+    await Promise.race([
+      exited,
+      new Promise<void>((resolveTimeout) => setTimeout(resolveTimeout, 3_000)),
+    ]);
+    if (host.exitCode === null) host.kill('SIGKILL');
   }
-  send({
-    type: 'daemon.stopping',
-    requestId,
-    daemonVersion: DAEMON_VERSION,
-    instanceId,
-  }, () => {
-    removeLease();
+  removeLease();
+  if (respond && process.stdout.writable) {
+    send({
+      type: 'daemon.stopping',
+      requestId,
+      daemonVersion: DAEMON_VERSION,
+      instanceId,
+    }, () => process.exit(0));
+    setTimeout(() => process.exit(0), 250).unref();
+  } else {
     process.exit(0);
-  });
+  }
 }
 
 process.title = 'tsukiori-daemon';
@@ -211,15 +230,18 @@ input.on('line', (line) => {
     });
     return;
   }
-  stop(message.requestId);
+  void stop(message.requestId);
 });
 
 input.on('close', () => {
-  if (!stopping) process.exitCode = 0;
+  if (!stopping && stdinExitPolicy === 'stop') void stop('stdin_closed', false);
 });
-process.on('SIGTERM', () => stop('signal'));
-process.on('SIGINT', () => stop('signal'));
-process.on('exit', removeLease);
+process.on('SIGTERM', () => { void stop('signal', false); });
+process.on('SIGINT', () => { void stop('signal', false); });
+process.on('exit', () => {
+  removeLease();
+  if (pipeHost?.exitCode === null) pipeHost.kill('SIGKILL');
+});
 
 await startPipeHost();
 publishLease();
@@ -229,6 +251,7 @@ send({
   daemonVersion: DAEMON_VERSION,
   instanceId,
   pid: process.pid,
+  pipeHostPid: pipeHostProcessId,
   pipeName,
   ipcProtocolVersion: IPC_PROTOCOL_VERSION,
 });

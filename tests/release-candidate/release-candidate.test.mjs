@@ -114,7 +114,7 @@ test('upgrade from the previous database preserves Session history and Workspace
   database.close();
 });
 
-test('every mapped V1 acceptance item in sections 37.1-37.8 has existing auditable evidence', () => {
+test('every mapped V1 acceptance item in sections 37.1-37.9 has existing auditable evidence', () => {
   const architecture = readFileSync(join(root, '本地多Agent工作台_完整架构与实施方案.md'), 'utf8');
   const start = architecture.indexOf('## 37.1');
   const end = architecture.indexOf('# 38.', start);

@@ -1,9 +1,11 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, type OpenDialogOptions } from 'electron';
+import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DAEMON_VERSION, HOST_PROTOCOL_VERSION } from '@tsukiori/protocol';
 import { FakeRuntimeAdapter } from '@tsukiori/adapter-fake';
 import { DaemonSupervisor } from './daemon-supervisor.js';
+import { InteractiveWorkspace } from './interactive-workspace.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const daemonEntry = app.isPackaged
@@ -12,6 +14,7 @@ const daemonEntry = app.isPackaged
 const preloadEntry = resolve(currentDirectory, '..', 'preload', 'index.cjs');
 const rendererEntry = resolve(currentDirectory, '..', 'renderer', 'index.html');
 const smokeMode = process.env.TSUKIORI_DESKTOP_SMOKE === '1';
+const captureDesktopPath = process.env.TSUKIORI_DESKTOP_CAPTURE_PATH;
 const daemonExitPolicy = process.env.TSUKIORI_DAEMON_EXIT_POLICY === 'keep' ? 'keep' : 'stop';
 const daemonLeaseFile = resolve(app.getPath('userData'), 'daemon-lease-v1.json');
 
@@ -90,13 +93,20 @@ const workspaceSnapshot = smokeMode ? {
 } : { permissions: [], attention: [], tools: [], runtimes: [], workflow: null, v1Git: null, diagnostics: null };
 let quitting = false;
 let smokeCommandCount = 0;
+let interactiveWorkspace: InteractiveWorkspace | null = null;
 
 function createWindow(): BrowserWindow {
+  const workArea = screen.getPrimaryDisplay().workAreaSize;
+  const width = Math.min(1440, Math.max(960, workArea.width - 32));
+  const height = Math.min(900, Math.max(680, workArea.height - 32));
   const window = new BrowserWindow({
-    width: 1100,
-    height: 720,
-    show: !smokeMode,
-    backgroundColor: '#10131a',
+    width,
+    height,
+    minWidth: 960,
+    minHeight: 680,
+    show: !smokeMode && !captureDesktopPath,
+    backgroundColor: '#f5fbff',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: preloadEntry,
       nodeIntegration: false,
@@ -106,6 +116,7 @@ function createWindow(): BrowserWindow {
       devTools: false,
     },
   });
+  window.center();
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => {
@@ -241,22 +252,83 @@ ipcMain.handle('host:versions', () => ({
   protocol: HOST_PROTOCOL_VERSION,
 }));
 
-ipcMain.handle('workspace:snapshot', () => workspaceSnapshot);
-ipcMain.handle('workspace:command', (_event, value: unknown) => {
-  if (!smokeMode || !value || typeof value !== 'object' || Array.isArray(value)) {
-    return { ok: false, code: 'workflow_unavailable' };
+ipcMain.handle('workspace:snapshot', () => smokeMode ? workspaceSnapshot : interactiveWorkspace?.snapshot());
+ipcMain.handle('workspace:command', async (event, value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, code: 'invalid_command', message: '命令格式无效' };
   }
   const command = value as Record<string, unknown>;
-  const allowed = new Set([
-    'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
-    'integrate', 'continue_integration', 'open_external_editor', 'export_diagnostic',
-  ]);
-  if (typeof command.type !== 'string' || !allowed.has(command.type)
-    || Buffer.byteLength(JSON.stringify(command)) > 8192) {
-    return { ok: false, code: 'invalid_command' };
+  if (typeof command.type !== 'string' || Buffer.byteLength(JSON.stringify(command)) > 128 * 1024) {
+    return { ok: false, code: 'invalid_command', message: '命令过大或缺少类型' };
   }
-  smokeCommandCount += 1;
-  return { ok: true, command: command.type, sequence: smokeCommandCount };
+  if (smokeMode) {
+    const allowed = new Set([
+      'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
+      'integrate', 'continue_integration', 'open_external_editor', 'export_diagnostic',
+    ]);
+    if (!allowed.has(command.type)) return { ok: false, code: 'invalid_command' };
+    smokeCommandCount += 1;
+    return { ok: true, command: command.type, sequence: smokeCommandCount };
+  }
+  const workspace = interactiveWorkspace;
+  if (!workspace) return { ok: false, code: 'workspace_unavailable', message: 'Workspace 尚未初始化' };
+  try {
+    if (command.type === 'pick_project') {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const options: OpenDialogOptions = { title: '选择本地 Git 项目', properties: ['openDirectory'] };
+      const selection = owner
+        ? await dialog.showOpenDialog(owner, options)
+        : await dialog.showOpenDialog(options);
+      if (selection.canceled || !selection.filePaths[0]) return { ok: true, canceled: true };
+      return { ok: true, project: workspace.addProject(selection.filePaths[0]) };
+    }
+    if (command.type === 'refresh_runtimes') return { ok: true, runtime: workspace.refreshRuntimes() };
+    if (command.type === 'poll_events') return {
+      ok: true,
+      ...workspace.pollEvents(Number(command.afterSequence ?? 0)),
+    };
+    if (command.type === 'create_session') {
+      return { ok: true, session: await workspace.createSession(String(command.projectId ?? '')) };
+    }
+    if (command.type === 'send_prompt') {
+      return { ok: true, ...(await workspace.sendPrompt(
+        String(command.sessionId ?? ''), String(command.text ?? ''),
+      )) };
+    }
+    if (command.type === 'interrupt_turn') {
+      await workspace.interrupt(String(command.sessionId ?? ''));
+      return { ok: true };
+    }
+    if (command.type === 'permission') {
+      const decision = String(command.decision ?? '');
+      if (!['allow_once', 'deny_once', 'cancel_turn'].includes(decision)) throw new Error('权限决策无效');
+      workspace.decidePermission(
+        String(command.requestId ?? ''),
+        decision as 'allow_once' | 'deny_once' | 'cancel_turn',
+      );
+      return { ok: true };
+    }
+    if (command.type === 'git_status') return { ok: true, git: workspace.gitStatus(String(command.sessionId ?? '')) };
+    if (command.type === 'git_diff') return {
+      ok: true,
+      diff: workspace.gitDiff(
+        String(command.sessionId ?? ''),
+        typeof command.path === 'string' ? command.path : undefined,
+      ),
+    };
+    if (command.type === 'stage' || command.type === 'unstage') {
+      const paths = Array.isArray(command.paths) ? command.paths.map(String) : [];
+      if (command.type === 'stage') workspace.stage(String(command.sessionId ?? ''), paths);
+      else workspace.unstage(String(command.sessionId ?? ''), paths);
+      return { ok: true };
+    }
+    if (command.type === 'commit') {
+      return { ok: true, sha: workspace.commit(String(command.sessionId ?? ''), String(command.subject ?? '')) };
+    }
+    return { ok: false, code: 'unsupported_command', message: '该操作尚未接入真实 Workspace' };
+  } catch (error) {
+    return { ok: false, code: 'command_failed', message: error instanceof Error ? error.message : String(error) };
+  }
 });
 ipcMain.handle('daemon:status', async () => {
   const status = await supervisor.probe();
@@ -269,18 +341,41 @@ ipcMain.handle('daemon:status', async () => {
 });
 
 app.on('before-quit', (event) => {
-  if (quitting || supervisor.snapshot().state === 'stopped') {
-    return;
-  }
+  if (quitting) return;
   event.preventDefault();
   quitting = true;
-  void supervisor.release().finally(() => app.quit());
+  void Promise.allSettled([
+    supervisor.release(),
+    interactiveWorkspace?.shutdown() ?? Promise.resolve(),
+  ]).finally(() => app.quit());
 });
 
 app.whenReady()
   .then(async () => {
     await supervisor.start();
     const window = createWindow();
+    if (!smokeMode) {
+      interactiveWorkspace = new InteractiveWorkspace({
+        userDataPath: app.getPath('userData'),
+        emit: () => undefined,
+      });
+    }
+    if (captureDesktopPath) {
+      window.webContents.once('did-finish-load', () => {
+        setTimeout(() => {
+          void (async () => {
+            const image = await window.webContents.capturePage();
+            writeFileSync(captureDesktopPath, image.toPNG());
+            await Promise.allSettled([
+              supervisor.release('stop'),
+              interactiveWorkspace?.shutdown() ?? Promise.resolve(),
+            ]);
+            quitting = true;
+            app.quit();
+          })();
+        }, 2_000).unref();
+      });
+    }
     if (smokeMode) {
       await runSmoke(window);
     }

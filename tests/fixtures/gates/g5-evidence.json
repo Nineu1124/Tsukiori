@@ -28,8 +28,8 @@
     "wrongProcessTermination": 0
   },
   "acceptance": {
-    "sections": "37.1-37.8",
-    "items": 67,
+    "sections": "37.1-37.9",
+    "items": 75,
     "allChecked": true,
     "allMappedToEvidence": true
   },

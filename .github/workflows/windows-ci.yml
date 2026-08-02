@@ -46,6 +46,7 @@ jobs:
           npm run test:runtime
           npm run test:permission
           npm run test:ui
+          npm run test:interactive
           npm run test:gate1
           npm run test:project
           npm run test:worktree

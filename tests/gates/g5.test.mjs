@@ -22,8 +22,8 @@ function taskBlock(id) {
   return architecture.slice(start, next < 0 ? architecture.length : next);
 }
 
-test('T0.1 through T5.5 and G0 through G5 are complete', () => {
-  const counts = [4, 5, 4, 4, 5, 5];
+test('T0.1 through T5.6 and G0 through G5 are complete', () => {
+  const counts = [4, 5, 4, 4, 5, 6];
   for (let stage = 0; stage < counts.length; stage += 1) {
     const count = counts[stage];
     assert.ok(count !== undefined);
@@ -36,7 +36,7 @@ test('T0.1 through T5.5 and G0 through G5 are complete', () => {
   }
 });
 
-test('all Local V1 acceptance items in sections 37.1 through 37.8 are checked and evidenced', () => {
+test('all Local V1 acceptance items in sections 37.1 through 37.9 are checked and evidenced', () => {
   const start = architecture.indexOf('## 37.1');
   const end = architecture.indexOf('# 38.', start);
   assert.ok(start > 0 && end > start);

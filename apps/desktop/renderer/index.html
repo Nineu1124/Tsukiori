@@ -9,16 +9,85 @@
   </head>
   <body>
     <div class="app-shell">
+      <header class="titlebar" aria-label="应用标题栏">
+        <div class="titlebar-brand"><span class="brand-mark compact">月</span><strong>Tsukiori</strong><span>本地多 Agent 开发工作台</span></div>
+        <div class="titlebar-actions">
+          <button id="toggle-left-panel" type="button" aria-label="折叠项目与会话栏" title="折叠项目与会话栏">☰</button>
+          <button id="toggle-terminal" type="button" aria-label="显示或隐藏运行日志" title="显示或隐藏运行日志">⌁</button>
+          <button id="toggle-right-panel" type="button" aria-label="显示或隐藏工作面板" title="显示或隐藏工作面板">◫</button>
+        </div>
+      </header>
       <aside class="session-rail" aria-label="Sessions">
         <div class="brand"><span class="brand-mark">月</span><strong>Tsukiori</strong></div>
-        <p class="section-label">SESSIONS</p>
-        <button class="session-row active" type="button">
+        <p class="section-label">项目与会话</p>
+        <button id="legacy-session" class="session-row active" type="button">
           <span class="presence running"></span><span><strong>Local workspace</strong><small>Fake Runtime · active</small></span>
         </button>
+        <div id="interactive-navigation" hidden>
+          <button id="add-project" class="rail-action primary" type="button">＋ 添加本地项目</button>
+          <div id="project-list" class="rail-list" aria-label="Projects"></div>
+          <p class="section-label rail-subheading">AGENT 会话</p>
+          <button id="rail-new-session" class="rail-action rail-new-session" type="button">＋ 新建会话</button>
+          <div id="session-list" class="rail-list" aria-label="Agent Sessions"></div>
+        </div>
         <div class="daemon-pill"><span class="presence" id="daemon-dot"></span><span id="status">连接 Daemon…</span></div>
       </aside>
 
       <main class="workspace">
+        <section id="interactive-workspace" hidden>
+          <header class="workspace-header interactive-header">
+            <div><p id="interactive-eyebrow" class="eyebrow">LOCAL-FIRST / WINDOWS</p><h1 id="interactive-title">选择一个本地 Git 项目</h1></div>
+            <div class="workspace-meta"><span id="runtime-badge">Codex —</span><span id="interactive-version">Protocol —</span><span class="local-data-badge">文件留在本机</span></div>
+          </header>
+
+          <section id="onboarding" class="onboarding-card">
+            <div><p class="card-kicker">GET STARTED</p><h2>连接真实项目和 Runtime</h2></div>
+            <p>项目文件保留在本机。每个 Agent Session 默认创建独立 Git Worktree；Prompt 发送到你选择的模型服务。</p>
+            <div class="onboarding-actions">
+              <button id="onboarding-add-project" class="primary" type="button">选择 Git 项目</button>
+              <button id="refresh-runtimes" type="button">重新探测 Runtime</button>
+            </div>
+            <div id="runtime-overview" class="runtime-overview"></div>
+            <p id="onboarding-status" class="operation-status" aria-live="polite"></p>
+          </section>
+
+          <section id="project-home" class="project-home" hidden>
+            <div class="project-summary">
+              <div><p class="card-kicker">PROJECT</p><h2 id="project-name"></h2><p id="project-path"></p></div>
+              <button id="new-session" class="primary" type="button">＋ 新建 Codex Session</button>
+            </div>
+            <p class="boundary-note">新 Session 会从当前 HEAD 创建独立 Worktree，不直接修改主工作区。</p>
+          </section>
+
+          <section id="active-session" hidden>
+            <div class="session-context" aria-label="会话执行环境">
+              <span class="status-dot"></span><strong>隔离 Worktree</strong><span id="session-context-path" class="mono"></span>
+            </div>
+            <div id="conversation" class="conversation" aria-label="Conversation">
+              <article class="welcome-message"><p class="card-kicker">SESSION</p><h2>开始一个真实任务</h2><p>输入任务后，Codex app-server 会在该 Session 的隔离 Worktree 中执行。</p></article>
+            </div>
+            <form id="prompt-form" class="composer">
+              <textarea id="prompt-input" maxlength="64000" rows="3" placeholder="交给 Codex 一个任务。Enter 发送，Shift+Enter 换行。"></textarea>
+              <div class="composer-selectors" aria-label="运行参数">
+                <label>Runtime<select id="runtime-select" disabled><option>Codex</option></select></label>
+                <label>Model<select id="model-select" disabled><option>Auto</option></select></label>
+                <label>Environment<select id="environment-select" disabled><option>Session Worktree</option></select></label>
+                <label>Permission<select id="permission-select" disabled><option>每次询问</option></select></label>
+              </div>
+              <div class="composer-actions">
+                <span id="turn-status" class="operation-status" aria-live="polite">Ready</span>
+                <button id="interrupt-turn" class="danger-quiet" type="button" disabled>中断当前回合</button>
+                <button id="send-prompt" class="primary" type="submit">发送</button>
+              </div>
+            </form>
+            <section id="terminal-panel" class="terminal-panel" aria-label="运行日志">
+              <header><div><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span><strong>运行日志</strong><small>只读 · Runtime 与工具事件</small></div><button id="clear-terminal" type="button">清空显示</button></header>
+              <pre id="terminal-output" tabindex="0">Tsukiori runtime log ready. Prompt 与源码不会写入此面板。 </pre>
+            </section>
+          </section>
+        </section>
+
+        <div id="legacy-workspace">
         <header class="workspace-header">
           <div><p class="eyebrow">SESSION / LOCAL WORKSPACE</p><h1>多 Agent 工作台</h1></div>
           <div class="workspace-meta"><span>isolated-worktree</span><span id="version">Protocol —</span></div>
@@ -92,16 +161,39 @@
           <div id="tool-list"></div>
           <div id="permission-list"></div>
         </section>
+        </div>
       </main>
 
-      <aside id="attention-center" class="attention-panel" aria-label="Attention Center">
-        <header><p class="eyebrow">ATTENTION CENTER</p><h2>需要关注</h2><span id="attention-count" class="count">0</span></header>
-        <nav class="attention-filters" aria-label="Attention 类型">
-          <span>等待权限</span><span>等待输入</span><span>已完成</span><span>失败</span><span>冲突</span><span>恢复不确定</span>
+      <aside id="attention-center" class="attention-panel" aria-label="工作面板">
+        <header><p class="eyebrow">WORK PANEL</p><h2>工作面板</h2><span id="attention-count" class="count">0</span></header>
+        <nav class="work-panel-tabs" aria-label="工作面板视图">
+          <button type="button" data-panel-tab="permissions" class="active">权限</button>
+          <button type="button" data-panel-tab="changes">全部变更</button>
         </nav>
-        <div id="attention-list" class="attention-list">
-          <p class="empty-state">暂无待处理事项</p>
-        </div>
+        <section data-panel-view="permissions">
+          <p class="panel-description">命令、文件和网络请求会在执行前显示具体范围。</p>
+          <div id="attention-list" class="attention-list"><p class="empty-state">暂无待处理事项</p></div>
+        </section>
+        <section data-panel-view="changes" hidden>
+          <section class="git-panel" aria-label="Session Git changes">
+            <div class="panel-heading">
+              <div><p class="card-kicker">WORKTREE CHANGES</p><h2>审查与提交</h2></div>
+              <button id="refresh-git" type="button">刷新</button>
+            </div>
+            <p id="worktree-path" class="mono boundary-note">选择会话后查看变更</p>
+            <div class="git-layout">
+              <div><p class="section-label">文件</p><div id="git-files" class="git-files"><p class="empty-state">暂无改动</p></div></div>
+              <div><p class="section-label">DIFF</p><pre id="git-diff" class="diff-preview">选择文件查看 Diff</pre></div>
+            </div>
+            <div class="git-actions">
+              <button id="stage-files" type="button">暂存所选</button>
+              <button id="unstage-files" type="button">撤销暂存</button>
+              <input id="commit-subject" maxlength="200" placeholder="提交说明" aria-label="提交说明" />
+              <button id="commit-files" class="primary" type="button">提交</button>
+              <span id="git-status" class="operation-status" aria-live="polite"></span>
+            </div>
+          </section>
+        </section>
       </aside>
     </div>
 

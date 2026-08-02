@@ -29,7 +29,7 @@ if (ids.length !== idSet.size) {
   errors.push('Task, Gate, or backlog identifiers are duplicated');
 }
 
-const expected = { task: 27, gate: 6, backlog: 3 };
+const expected = { task: 28, gate: 6, backlog: 3 };
 const counts = {
   task: ids.filter((id) => id.startsWith('T')).length,
   gate: ids.filter((id) => id.startsWith('G')).length,

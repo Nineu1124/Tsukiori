@@ -3578,15 +3578,31 @@ src/helpers/
   - [x] 安装、更新、崩溃恢复和回滚均在干净 Windows 环境复验
   - [x] 第 37 章每项发布检查均有测试记录或可审计证据
 
+### T5.6 可交互产品闭环纠正
+
+- [x] 将工程 Fixture UI 接通为可实际操作的 Codex 本地工作台
+- 前置依赖：T5.5
+- 交付物：交互 Workspace Controller、Codex app-server Client、真实请求 Probe、UI/E2E 测试与纠正报告
+- Checkpoints：
+  - [x] 普通模式可通过原生目录选择器添加本地 Git 项目并只在本机保存项目状态
+  - [x] 新建 Session 时从固定 HEAD 创建独立 Git Worktree，不直接修改用户主工作区
+  - [x] 可发现并启动真实 Codex app-server，创建/恢复 Thread、发送 Turn、流式显示文本并支持 Interrupt
+  - [x] Command、File 与 Network Approval 可显示实际范围并由用户允许一次或拒绝
+  - [x] 可查看 Worktree 文件状态和 Diff，并实际执行 Stage、Unstage 与 Commit
+  - [x] Prompt 不写入 Workspace 状态文件；真实 Provider Probe 在隔离仓库完成且公开 CI 无需凭据
+  - [x] 普通模式不再展示 Fake Runtime 占位会话，项目、Session、输入框和操作按钮均可观察且可测试
+  - [x] 按 UI/UX V1.0 规范实现四区布局、浅色 Design Tokens、Tool 分类、输入选择器、面板折叠和减少动态效果
+  - [x] Daemon 正常退出、GUI 释放和异常终止均不会遗留孤儿 Named Pipe Host，常驻策略仍可安全重连
+
 ### G5 阶段 5 Gate
 
 - [x] Windows Local V1 已满足发布条件
-- 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5
+- 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5、T5.6
 - 交付物：最终 V1 Gate 报告和发布签字记录
 - Checkpoints：
   - [x] T0.* 至 T5.* 的全部顶层任务已勾选
   - [x] G0 至 G4 已通过，且 G5 无未解决阻塞项
-  - [x] 第 37.1 至 37.8 章所有 Local V1 发布检查已勾选并有证据
+  - [x] 第 37.1 至 37.9 章所有 Local V1 发布检查已勾选并有证据
   - [x] 严重级别安全、数据丢失和错误进程终止问题均为零
   - [x] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
 
@@ -3953,9 +3969,9 @@ Runtime Native Protocol
 
 ## 37.0 Local V1 Ready 总门槛
 
-- [x] [T0.*–T5.*] T0.1 至 T5.5 的全部顶层任务已完成
+- [x] [T0.*–T5.*] T0.1 至 T5.6 的全部顶层任务已完成
 - [x] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
-- [x] [37.1–37.8] 本章所有分类验收项均已勾选
+- [x] [37.1–37.9] 本章所有分类验收项均已勾选
 - [x] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
 - [x] [B1–B3] Claude、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
 
@@ -3971,14 +3987,14 @@ Runtime Native Protocol
 
 ## 37.2 Runtime
 
-- [x] [T3.1, T4.1] 自动发现 OpenCode 与 Codex
+- [x] [T4.1, T5.6] 自动发现并实际启动 Codex；OpenCode 保留为后续可选 Runtime
 - [x] [T3.1, T4.1, T4.3, T5.2] 显示路径、版本、认证来源、Provider 数据出口、能力支持级别和 Enforcement Level
-- [x] [T3.1] OpenCode 可使用 DeepSeek Provider
+- [x] [T5.6] Codex 可使用现有 ChatGPT/API 认证完成真实 Thread 与 Turn
 - [x] [T4.1] Codex 使用原生 app-server
 - [x] [T3.2, T4.2] 控制命令与事件流分离
-- [x] [T3.2, T4.2, T4.5] 多 Session 不争抢底层事件读取器
+- [x] [T4.2, T4.5, T5.6] 多个 Codex Session 使用独立 app-server 事件读取器
 - [x] [T3.3, T4.5, T5.1] 单个 Runtime 崩溃不影响其他 Runtime
-- [x] [T3.4, T4.3, G4] Claude 和 ACP 显示为后续能力，不伪装为已支持
+- [x] [T3.4, T4.3, T5.6, G4] OpenCode、Claude 和 ACP 未接入交互产品时显示为后续能力，不伪装为已支持
 
 ## 37.3 Project / Worktree
 
@@ -4009,7 +4025,7 @@ Runtime Native Protocol
 ## 37.5 原生能力
 
 - [x] [T4.3] Codex 配置、MCP、Skills 和 Sandbox 继续生效
-- [x] [T3.1, T3.3] OpenCode Agents、Plugins、MCP、LSP、Permissions 继续生效
+- [x] [T3.1, T3.3, T5.6] OpenCode 原生能力保留为已验证 Adapter 能力，但不包装成当前交互产品已接入能力
 - [x] [T0.4, T4.3] 未支持、实验、降级和未知能力明确区分
 - [x] [T1.4, T4.2, T5.2] 未知 Native Event 经脱敏、限额后保留
 - [x] [T0.4, T4.3] Runtime 专属能力不被强行伪造成公共能力
@@ -4051,6 +4067,17 @@ Runtime Native Protocol
 - [x] [T2.1, T2.2, T5.2] 执行路径边界与 Execution Environment 检查
 - [x] [T2.4, T5.2] 不通过 Shell 字符串启动 Runtime 或执行 Git
 - [x] [T5.3] 诊断包默认不包含源码、完整 Prompt 和凭据
+
+## 37.9 可交互产品闭环
+
+- [x] [T5.6] 普通模式可添加真实本地 Git 项目，不显示 Fake Runtime 占位数据
+- [x] [T5.6] 用户可创建 Codex Session，并能看到对应独立 Worktree 路径和分支
+- [x] [T5.6] 用户可输入 Prompt、发送真实 Turn、查看流式响应并中断运行中的 Turn
+- [x] [T5.6] Runtime 权限请求在 Attention Center 中可由用户实际处理
+- [x] [T5.6] 用户可查看真实 Git 文件状态和 Diff，并执行 Stage、Unstage 与 Commit
+- [x] [T5.6] 本机真实 Codex Probe 验证 Thread、Turn、流式响应和 Worktree 隔离，公开 CI 只运行无凭据替身测试
+- [x] [T5.6] 主工作区符合 UI/UX V1.0 的项目/会话、中央对话、右工作面板和底部运行日志布局
+- [x] [T5.6] 正常退出与强制终止回归均确认 Named Pipe Host 被回收，常驻 Daemon 仍可重连
 
 ---
 # 38. 主要风险与应对
