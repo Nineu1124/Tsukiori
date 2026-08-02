@@ -2,7 +2,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import type { LocalDatabase } from '@tsukiori/database';
-import type { HostSession, HostTurn, JsonValue, RuntimeHandleRecord } from '@tsukiori/domain';
+import type {
+  HostSession, HostTurn, JsonValue, PermissionAuditRecord, PermissionDecision,
+  PermissionCategory, PermissionRisk, RuntimeHandleRecord,
+} from '@tsukiori/domain';
+import { PermissionBroker } from '@tsukiori/permission-broker';
 import { EventNormalizer, toSessionEventRecord, type EventEnvelope, type IngestResult } from '@tsukiori/runtime-core';
 import type { OpenCodeProviderSelection } from './provider.js';
 
@@ -17,6 +21,7 @@ export type OpenCodeRecoveryResult = {
   recoveredSessionCount: number;
   eventReaderCount: 1;
   snapshotRecovery: true;
+  invalidatedPermissionCount: number;
 };
 
 export class OpenCodeBridgeError extends Error {
@@ -29,6 +34,7 @@ export class OpenCodeBridgeError extends Error {
 export class OpenCodeSessionBridge {
   readonly eventReaderCount = 1 as const;
   readonly #database: LocalDatabase;
+  readonly #permissions: PermissionBroker;
   readonly #client: Client;
   readonly #handleId: string;
   readonly #profileId: string;
@@ -39,6 +45,12 @@ export class OpenCodeSessionBridge {
   readonly #runtimeToHost = new Map<string, string>();
   readonly #activeTurns = new Map<string, string>();
   readonly #buffered = new Map<string, unknown[]>();
+  readonly #pendingPermissions = new Map<string, {
+    runtimeRequestId: string;
+    runtimeSessionId: string;
+    connectionEpoch: string;
+  }>();
+  readonly #cancellingSessions = new Set<string>();
   #connectionEpoch: string;
   #streamState: StreamState = 'stopped';
   #subscription: EventSubscription | null = null;
@@ -48,12 +60,14 @@ export class OpenCodeSessionBridge {
 
   constructor(
     database: LocalDatabase,
+    permissions: PermissionBroker,
     client: Client,
     handle: RuntimeHandleRecord,
     directory: string,
     options: { now?: () => number; id?: () => string; maxPayloadBytes?: number } = {},
   ) {
     this.#database = database;
+    this.#permissions = permissions;
     this.#client = client;
     this.#handleId = handle.id;
     this.#profileId = handle.profileId;
@@ -153,6 +167,65 @@ export class OpenCodeSessionBridge {
     return host.runtimeSessionId;
   }
 
+  async decidePermission(
+    permissionId: string,
+    connectionEpoch: string,
+    decision: PermissionDecision,
+  ): Promise<PermissionAuditRecord> {
+    const pending = this.#pendingPermissions.get(permissionId);
+    if (!pending) throw new OpenCodeBridgeError('Pending OpenCode Permission not found');
+    if (pending.connectionEpoch !== connectionEpoch || connectionEpoch !== this.#connectionEpoch) {
+      throw new OpenCodeBridgeError('Stale OpenCode Permission Connection Epoch');
+    }
+    const row = this.#database.sqlite.prepare(
+      'SELECT status, connection_epoch FROM permission_requests WHERE id=?',
+    ).get(permissionId) as { status: string; connection_epoch: string } | undefined;
+    if (!row || row.status !== 'pending' || row.connection_epoch !== connectionEpoch) {
+      throw new OpenCodeBridgeError('OpenCode Permission is no longer pending');
+    }
+    const reply = decision === 'allow_once' ? 'once' : decision === 'deny_once' ? 'reject' : null;
+    if (!reply) throw new OpenCodeBridgeError('Unsupported OpenCode Permission decision');
+    const result = unwrap(await this.#client.permission.reply({
+      directory: this.#directory,
+      requestID: pending.runtimeRequestId,
+      reply,
+    }), 'permission.reply');
+    if (result !== true) throw new OpenCodeBridgeError('OpenCode Permission reply was not accepted');
+    const audit = this.#permissions.decide(permissionId, connectionEpoch, decision);
+    this.#pendingPermissions.delete(permissionId);
+    return audit;
+  }
+
+  async cancelTurn(hostSessionId: string): Promise<void> {
+    const host = this.#session(hostSessionId);
+    if (!host.runtimeSessionId) throw new OpenCodeBridgeError('Host Session is not bound to OpenCode');
+    const hostTurnId = this.#activeTurns.get(host.runtimeSessionId);
+    if (!hostTurnId) throw new OpenCodeBridgeError('OpenCode Session has no active Turn');
+    this.#cancellingSessions.add(host.runtimeSessionId);
+    this.#database.saveSession({ ...host, activity: 'interrupting', updatedAt: this.#now() });
+    try {
+      const result = unwrap(await this.#client.session.abort({
+        directory: this.#directory,
+        sessionID: host.runtimeSessionId,
+      }), 'session.abort');
+      if (result !== true) throw new Error('abort rejected');
+      this.#setTurn(hostTurnId, 'interrupted', true);
+      this.#activeTurns.delete(host.runtimeSessionId);
+      this.#database.saveSession({
+        ...this.#session(host.id), activity: 'idle', health: 'healthy', updatedAt: this.#now(),
+      });
+    } catch {
+      this.#setTurn(hostTurnId, 'interrupted', true);
+      this.#activeTurns.delete(host.runtimeSessionId);
+      this.#database.saveSession({
+        ...this.#session(host.id), activity: 'stopped', health: 'recovery_required', updatedAt: this.#now(),
+      });
+      throw new OpenCodeBridgeError('OpenCode Turn cancel failed');
+    } finally {
+      this.#cancellingSessions.delete(host.runtimeSessionId);
+    }
+  }
+
   async startTurn(hostSessionId: string, text: string): Promise<HostTurn> {
     const host = this.#session(hostSessionId);
     if (!host.runtimeSessionId) throw new OpenCodeBridgeError('Host Session is not bound to OpenCode');
@@ -182,7 +255,9 @@ export class OpenCodeSessionBridge {
       }));
       if (response.error) throw new Error('prompt_async failed');
       const observed = this.#readTurn(id);
-      if (observed && isTerminal(observed.status)) return observed;
+      if (observed && (isTerminal(observed.status)
+        || observed.status === 'waiting_permission'
+        || observed.status === 'waiting_user_input')) return observed;
       const running: HostTurn = { ...turn, status: 'running', startedAt: this.#now() };
       this.#database.saveTurn(running);
       this.#database.saveSession({ ...this.#session(host.id), activity: 'running', updatedAt: this.#now() });
@@ -191,9 +266,42 @@ export class OpenCodeSessionBridge {
       const failed: HostTurn = { ...turn, status: 'failed', completedAt: this.#now() };
       this.#database.saveTurn(failed);
       this.#activeTurns.delete(host.runtimeSessionId);
-      this.#database.saveSession({ ...this.#session(host.id), activity: 'idle', health: 'error', updatedAt: this.#now() });
+      const runtime = this.#database.readRuntimeHandle(this.#handleId);
+      const unavailable = runtime !== null && runtime.state !== 'ready';
+      this.#database.saveSession({
+        ...this.#session(host.id),
+        activity: unavailable ? 'stopped' : 'idle',
+        health: unavailable ? 'interrupted_runtime' : 'error',
+        updatedAt: this.#now(),
+      });
       throw new OpenCodeBridgeError('OpenCode Turn failed to start');
     }
+  }
+
+  runtimeExited(expected: boolean): void {
+    this.#streamState = 'disconnected';
+    this.#abort?.abort();
+    if (this.#subscription?.stream.return) {
+      void this.#subscription.stream.return().catch(() => undefined);
+    }
+    this.#permissions.invalidateEpoch(
+      this.#handleId,
+      this.#connectionEpoch,
+      expected ? 'runtime_stopped' : 'runtime_exited',
+    );
+    this.#pendingPermissions.clear();
+    for (const [runtimeSessionId, hostSessionId] of this.#runtimeToHost.entries()) {
+      const host = this.#session(hostSessionId);
+      const hostTurnId = this.#activeTurns.get(runtimeSessionId);
+      if (hostTurnId) this.#setTurn(hostTurnId, 'interrupted', true);
+      this.#database.saveSession({
+        ...host,
+        activity: 'stopped',
+        health: expected ? host.health : 'interrupted_runtime',
+        updatedAt: this.#now(),
+      });
+    }
+    this.#activeTurns.clear();
   }
 
   async recoverConnection(newConnectionEpoch: string): Promise<OpenCodeRecoveryResult> {
@@ -202,6 +310,12 @@ export class OpenCodeSessionBridge {
     }
     await this.stopEventReader();
     const previousConnectionEpoch = this.#connectionEpoch;
+    const invalidatedPermissionCount = this.#permissions.invalidateEpoch(
+      this.#handleId,
+      previousConnectionEpoch,
+      'runtime_reconnected',
+    );
+    this.#pendingPermissions.clear();
     this.#connectionEpoch = newConnectionEpoch;
     for (const event of this.#normalizer.changeConnectionEpoch(newConnectionEpoch)) this.#persist(event);
     const health = object(unwrap(await this.#client.global.health(), 'global.health(recovery)'));
@@ -244,6 +358,7 @@ export class OpenCodeSessionBridge {
       recoveredSessionCount: recovered.length,
       eventReaderCount: 1,
       snapshotRecovery: true,
+      invalidatedPermissionCount,
     };
   }
 
@@ -399,6 +514,46 @@ export class OpenCodeSessionBridge {
     return { ...base, runtimeScope: !runtimeSessionId };
   }
 
+  #submitPermission(
+    properties: Record<string, unknown>,
+    hostSessionId: string,
+    runtimeSessionId: string,
+    hostTurnId?: string,
+  ): void {
+    const runtimeRequestId = String(properties.id ?? properties.requestID ?? '');
+    if (!runtimeRequestId) return;
+    const permissionId = 'permission:opencode:' + createHash('sha256')
+      .update(this.#handleId + '\0' + runtimeRequestId).digest('hex').slice(0, 24);
+    if (this.#pendingPermissions.has(permissionId)) return;
+    const permission = String(properties.permission ?? 'unknown');
+    const [category, risk] = permissionKind(permission);
+    const patternCount = Array.isArray(properties.patterns) ? properties.patterns.length : 0;
+    const host = this.#session(hostSessionId);
+    this.#permissions.submit({
+      id: permissionId,
+      projectId: host.projectId,
+      sessionId: hostSessionId,
+      ...(hostTurnId ? { turnId: hostTurnId } : {}),
+      runtimeHandleId: this.#handleId,
+      runtimeRequestId,
+      connectionEpoch: this.#connectionEpoch,
+      category,
+      risk,
+      enforcementLevel: 'interceptable',
+      title: 'OpenCode 请求 ' + permission,
+      description: 'Runtime 已暂停并等待 Host 决策',
+      scope: permission + ' (' + patternCount + ' patterns)',
+      availableDecisions: ['allow_once', 'deny_once'],
+      matcher: { permission, patternCount },
+      requestedAt: this.#now(),
+    });
+    this.#pendingPermissions.set(permissionId, {
+      runtimeRequestId,
+      runtimeSessionId,
+      connectionEpoch: this.#connectionEpoch,
+    });
+  }
+
   #applyState(
     type: string,
     properties: Record<string, unknown>,
@@ -417,8 +572,14 @@ export class OpenCodeSessionBridge {
       return;
     }
     if (type === 'permission.asked' || type === 'permission.v2.asked') {
+      this.#submitPermission(properties, hostSessionId, runtimeSessionId, hostTurnId);
       this.#database.saveSession({ ...host, activity: 'waiting_permission', updatedAt: this.#now() });
       if (hostTurnId) this.#setTurn(hostTurnId, 'waiting_permission');
+      return;
+    }
+    if (type === 'permission.replied' || type === 'permission.v2.replied') {
+      this.#database.saveSession({ ...host, activity: 'running', updatedAt: this.#now() });
+      if (hostTurnId) this.#setTurn(hostTurnId, 'running');
       return;
     }
     if (type === 'question.asked' || type === 'question.v2.asked') {
@@ -427,14 +588,18 @@ export class OpenCodeSessionBridge {
       return;
     }
     if (type === 'session.error') {
-      this.#database.saveSession({ ...host, activity: 'idle', health: 'error', updatedAt: this.#now() });
-      if (hostTurnId) this.#setTurn(hostTurnId, 'failed', true);
+      const cancelling = this.#cancellingSessions.has(runtimeSessionId);
+      this.#database.saveSession({
+        ...host, activity: 'idle', health: cancelling ? 'healthy' : 'error', updatedAt: this.#now(),
+      });
+      if (hostTurnId) this.#setTurn(hostTurnId, cancelling ? 'interrupted' : 'failed', true);
       this.#activeTurns.delete(runtimeSessionId);
       return;
     }
     if (type === 'session.idle') {
+      const cancelling = this.#cancellingSessions.has(runtimeSessionId);
       this.#database.saveSession({ ...host, activity: 'idle', health: 'healthy', updatedAt: this.#now() });
-      if (hostTurnId) this.#setTurn(hostTurnId, 'completed', true);
+      if (hostTurnId) this.#setTurn(hostTurnId, cancelling ? 'interrupted' : 'completed', true);
       this.#activeTurns.delete(runtimeSessionId);
       return;
     }
@@ -521,6 +686,15 @@ function object(value: unknown): Record<string, unknown> {
 function samePath(left: string, right: string): boolean {
   const normalize = (value: string) => resolve(value).replaceAll('/', '\\').toLowerCase();
   return normalize(left) === normalize(right);
+}
+
+function permissionKind(permission: string): [PermissionCategory, PermissionRisk] {
+  if (permission === 'bash') return ['shell', 'high'];
+  if (permission === 'edit') return ['file_write', 'high'];
+  if (permission === 'read') return ['file_read', 'medium'];
+  if (permission === 'external_directory') return ['external_directory', 'high'];
+  if (permission === 'network') return ['network', 'high'];
+  return ['other', 'high'];
 }
 
 function isTerminal(status: HostTurn['status'] | undefined): boolean {

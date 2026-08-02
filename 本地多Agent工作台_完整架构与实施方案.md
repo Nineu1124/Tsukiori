@@ -3408,15 +3408,15 @@ src/helpers/
 
 ### T3.3 OpenCode 权限、控制与恢复
 
-- [ ] 实现权限透传、Cancel、Resume 和崩溃恢复
+- [x] 实现权限透传、Cancel、Resume 和崩溃恢复
 - 前置依赖：T3.2、T1.5
 - 交付物：权限映射、控制命令、恢复策略和合同测试
 - Checkpoints：
-  - [ ] 每项权限请求显示 Runtime 实际 Enforcement Level
-  - [ ] Cancel 和 Resume 不依赖重放原始 Prompt
-  - [ ] 旧 Epoch 权限请求无法在恢复后被响应
-  - [ ] OpenCode Server 崩溃不会影响其他 Runtime Handle
-  - [ ] 不可恢复状态会显示失败或 uncertain，而不是伪装为运行中
+  - [x] 每项权限请求显示 Runtime 实际 Enforcement Level
+  - [x] Cancel 和 Resume 不依赖重放原始 Prompt
+  - [x] 旧 Epoch 权限请求无法在恢复后被响应
+  - [x] OpenCode Server 崩溃不会影响其他 Runtime Handle
+  - [x] 不可恢复状态会显示失败或 uncertain，而不是伪装为运行中
 
 ### T3.4 OpenCode Alpha 用户闭环
 

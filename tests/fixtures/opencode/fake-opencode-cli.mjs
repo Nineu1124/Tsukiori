@@ -43,6 +43,21 @@ function publish(payload) {
   const envelope = JSON.stringify({ directory: process.cwd(), payload });
   for (const response of eventStreams) response.write('data: ' + envelope + '\n\n');
 }
+function completeSession(session) {
+  session.messages = [
+    { info: { id: 'message-user', role: 'user' }, parts: [] },
+    { info: { id: 'message-assistant', role: 'assistant' }, parts: [] },
+  ];
+  publish(event('message.updated', {
+    sessionID: session.id,
+    info: {
+      id: 'message-assistant', sessionID: session.id, role: 'assistant', finish: 'stop',
+      time: { created: Date.now(), completed: Date.now() },
+    },
+  }));
+  session.status = 'idle';
+  publish(event('session.idle', { sessionID: session.id }));
+}
 function openEventStream(request, response) {
   response.writeHead(200, {
     'content-type': 'text/event-stream',
@@ -124,7 +139,10 @@ const server = createServer(async (request, response) => {
   if (request.method === 'POST' && url.pathname === '/session') {
     const input = await body(request);
     const id = 'session-fixture-' + (sessions.size + 1);
-    const session = { id, title: input.title, input, messages: [], status: 'idle' };
+    const session = {
+      id, title: input.title, input, messages: [], status: 'idle',
+      promptCount: 0, pendingPermission: null,
+    };
     sessions.set(id, session);
     publish(event('session.created', { sessionID: id, info: { id, title: input.title } }));
     send(response, 200, { id, title: input.title });
@@ -146,6 +164,39 @@ const server = createServer(async (request, response) => {
     send(response, 200, existed);
     return;
   }
+  const abortMatch = url.pathname.match(/^\/session\/([^/]+)\/abort$/);
+  if (request.method === 'POST' && abortMatch) {
+    const session = sessions.get(abortMatch[1]);
+    if (!session) {
+      send(response, 404, { error: 'missing' });
+      return;
+    }
+    session.status = 'idle';
+    session.pendingPermission = null;
+    publish(event('session.idle', { sessionID: session.id }));
+    send(response, 200, true);
+    return;
+  }
+  const permissionReplyMatch = url.pathname.match(/^\/permission\/([^/]+)\/reply$/);
+  if (request.method === 'POST' && permissionReplyMatch) {
+    const input = await body(request);
+    const session = [...sessions.values()].find(
+      (item) => item.pendingPermission === permissionReplyMatch[1],
+    );
+    if (!session) {
+      send(response, 404, { error: 'missing' });
+      return;
+    }
+    publish(event('permission.replied', {
+      sessionID: session.id,
+      requestID: permissionReplyMatch[1],
+      reply: input.reply ?? 'reject',
+    }));
+    session.pendingPermission = null;
+    completeSession(session);
+    send(response, 200, true);
+    return;
+  }
   const promptMatch = url.pathname.match(/^\/session\/([^/]+)\/prompt_async$/);
   if (request.method === 'POST' && promptMatch) {
     const input = await body(request);
@@ -154,8 +205,13 @@ const server = createServer(async (request, response) => {
       send(response, 404, { error: 'missing' });
       return;
     }
+    session.promptCount += 1;
     session.status = 'busy';
     publish(event('session.status', { sessionID: session.id, status: { type: 'busy' } }));
+    if (config.crashOnMarkedSession && String(session.title).includes('CRASH')) {
+      setImmediate(() => process.exit(23));
+      return;
+    }
     if (config.emitSessionError) {
       session.status = 'idle';
       publish(event('session.error', {
@@ -180,28 +236,37 @@ const server = createServer(async (request, response) => {
       sessionID: session.id, time: Date.now(),
       part: { id: 'part-tool', sessionID: session.id, messageID: 'message-assistant', type: 'tool', tool: 'fixture', state: { status: 'completed' } },
     }));
-    publish(event('permission.asked', {
-      id: 'permission-fixture', sessionID: session.id, permission: 'bash', patterns: ['<sanitized>'], metadata: {}, always: [],
-    }));
-    publish(event('permission.replied', { sessionID: session.id, requestID: 'permission-fixture', reply: 'once' }));
-    session.messages = [
-      { info: { id: 'message-user', role: 'user' }, parts: [] },
-      { info: { id: 'message-assistant', role: 'assistant' }, parts: [] },
-    ];
+    if (config.holdFirstTurn && session.promptCount === 1) {
+      send(response, 204, '');
+      return;
+    }
+    if (config.emitPermissionFlow || config.holdPermission) {
+      session.pendingPermission = 'permission-fixture-' + session.id;
+      publish(event('permission.asked', {
+        id: session.pendingPermission,
+        sessionID: session.id,
+        permission: 'bash',
+        patterns: ['<sanitized>'],
+        metadata: {},
+        always: [],
+      }));
+      if (config.holdPermission) {
+        send(response, 204, '');
+        return;
+      }
+      publish(event('permission.replied', {
+        sessionID: session.id,
+        requestID: session.pendingPermission,
+        reply: 'once',
+      }));
+      session.pendingPermission = null;
+    }
     session.lastPromptShape = {
       providerID: input.model?.providerID,
       modelID: input.model?.modelID,
       partCount: Array.isArray(input.parts) ? input.parts.length : 0,
     };
-    publish(event('message.updated', {
-      sessionID: session.id,
-      info: {
-        id: 'message-assistant', sessionID: session.id, role: 'assistant', finish: 'stop',
-        time: { created: Date.now(), completed: Date.now() },
-      },
-    }));
-    session.status = 'idle';
-    publish(event('session.idle', { sessionID: session.id }));
+    completeSession(session);
     send(response, 204, '');
     return;
   }

@@ -1,0 +1,13 @@
+{
+  "task": "T3.3",
+  "runtimeVersion": "1.18.4",
+  "permissionEnforcementLevel": "interceptable",
+  "cancelWithoutPromptReplay": true,
+  "resumeWithoutPromptReplay": true,
+  "oldEpochPermissionRejected": true,
+  "isolatedRuntimeHandles": 2,
+  "unexpectedExitState": "interrupted_runtime",
+  "unavailableSessionShownAsRunning": false,
+  "rawPromptsCommitted": false,
+  "containsCredentials": false
+}

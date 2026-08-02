@@ -37,7 +37,8 @@ function fixture(t, overrides = {}) {
   const docBody = JSON.stringify({ openapi: '3.1.0', info: { title: 'OpenCode fixture', version: '1.18.4' } });
   const configPath = join(directory, 'fake-opencode.json');
   writeFileSync(configPath, JSON.stringify({
-    version: '1.18.4', credentialCount: 1, docBody, docContentType: 'application/json', ...overrides,
+    version: '1.18.4', credentialCount: 1, docBody, docContentType: 'application/json',
+    emitPermissionFlow: true, ...overrides,
   }));
   const manifestPath = join(directory, 'openapi-manifest.json');
   writeFileSync(manifestPath, JSON.stringify({

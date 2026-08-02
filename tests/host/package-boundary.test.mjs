@@ -47,6 +47,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@opencode-ai/sdk': '1.18.4',
     '@tsukiori/database': 'workspace:*',
     '@tsukiori/domain': 'workspace:*',
+    '@tsukiori/permission-broker': 'workspace:*',
     '@tsukiori/project-manager': 'workspace:*',
     '@tsukiori/runtime-core': 'workspace:*',
   });

@@ -5,9 +5,10 @@ import { join, resolve } from 'node:path';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import type { LocalDatabase } from '@tsukiori/database';
 import type {
-  HostTurn, JsonValue, ProcessRecord, RuntimeAuditRecord, RuntimeCompatibility,
+  HostTurn, JsonValue, PermissionAuditRecord, PermissionDecision, ProcessRecord, RuntimeAuditRecord, RuntimeCompatibility,
   RuntimeHandleRecord, RuntimeProfileRecord,
 } from '@tsukiori/domain';
+import { PermissionBroker } from '@tsukiori/permission-broker';
 import { ExecutionEnvironmentRegistry } from '@tsukiori/project-manager';
 import {
   buildProviderCatalog, data, selectProvider, verifyProvider,
@@ -83,6 +84,18 @@ export class OpenCodeRuntimeHandle {
     return this.adapter.resumeSession(this.id, hostSessionId);
   }
 
+  decidePermission(
+    permissionId: string,
+    connectionEpoch: string,
+    decision: PermissionDecision,
+  ): Promise<PermissionAuditRecord> {
+    return this.adapter.decidePermission(this.id, permissionId, connectionEpoch, decision);
+  }
+
+  cancelTurn(hostSessionId: string): Promise<void> {
+    return this.adapter.cancelTurn(this.id, hostSessionId);
+  }
+
   startTurn(hostSessionId: string, text: string): Promise<HostTurn> {
     return this.adapter.startTurn(this.id, hostSessionId, text);
   }
@@ -100,6 +113,7 @@ export class OpenCodeRuntimeAdapter {
   readonly #database: LocalDatabase;
   readonly #environments: ExecutionEnvironmentRegistry;
   readonly #environmentId: string;
+  readonly #permissions: PermissionBroker;
   readonly #manifest: Manifest;
   readonly #minimumSupportedVersion: string;
   readonly #maximumTestedVersion: string;
@@ -121,6 +135,7 @@ export class OpenCodeRuntimeAdapter {
       now?: () => number;
       id?: () => string;
       daemonBootId?: string;
+      permissionBroker?: PermissionBroker;
     },
   ) {
     this.#database = database;
@@ -135,6 +150,10 @@ export class OpenCodeRuntimeAdapter {
     this.#candidates = options.candidates ?? defaultOpenCodeCandidates;
     this.#now = options.now ?? Date.now;
     this.#id = options.id ?? randomUUID;
+    this.#permissions = options.permissionBroker ?? new PermissionBroker(database, {
+      now: this.#now,
+      id: this.#id,
+    });
     this.#daemonBootId = options.daemonBootId ?? 'daemon:' + randomUUID();
   }
 
@@ -279,6 +298,7 @@ export class OpenCodeRuntimeAdapter {
       this.#database.saveProcess(internal.process);
       internal.bridge = new OpenCodeSessionBridge(
         this.#database,
+        this.#permissions,
         internal.client,
         internal.record,
         internal.cwd,
@@ -369,6 +389,19 @@ export class OpenCodeRuntimeAdapter {
 
   resumeSession(handleId: string, hostSessionId: string): Promise<string> {
     return this.#bridge(handleId).resumeSession(hostSessionId);
+  }
+
+  decidePermission(
+    handleId: string,
+    permissionId: string,
+    connectionEpoch: string,
+    decision: PermissionDecision,
+  ): Promise<PermissionAuditRecord> {
+    return this.#bridge(handleId).decidePermission(permissionId, connectionEpoch, decision);
+  }
+
+  cancelTurn(handleId: string, hostSessionId: string): Promise<void> {
+    return this.#bridge(handleId).cancelTurn(hostSessionId);
   }
 
   startTurn(handleId: string, hostSessionId: string, text: string): Promise<HostTurn> {
@@ -568,6 +601,7 @@ export class OpenCodeRuntimeAdapter {
       };
       this.#database.saveRuntimeHandle(internal.record);
       this.#database.saveProcess(internal.process);
+      internal.bridge?.runtimeExited(internal.expectedExit);
       this.#audit('exit', internal.expectedExit ? 'succeeded' : 'failed', {
         expected: internal.expectedExit,
         exitCode: code,
