@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": [
+    "tests/fixtures/adapter-contract/v1/opencode.contract.json",
+    "tests/fixtures/adapter-contract/v1/codex.contract.json",
+    "tests/fixtures/windows/capability-matrix.json"
+  ],
+  "runtimes": [
+    {
+      "runtime": "opencode",
+      "version": "1.18.4",
+      "recommendedScope": "worktree",
+      "controlChannel": "authenticated HTTP SDK v2 requests",
+      "eventChannel": "global SSE",
+      "providerBaseline": "dpsk/deepseek-v4-flash",
+      "status": "stage0_validated"
+    },
+    {
+      "runtime": "codex",
+      "version": "0.146.0",
+      "recommendedScope": "project",
+      "controlChannel": "app-server JSON-RPC request/response",
+      "eventChannel": "one JSONL stdout reader per Handle",
+      "providerBaseline": "ChatGPT login",
+      "status": "stage0_validated"
+    }
+  ],
+  "permissionAndVisibility": [
+    {
+      "runtime": "opencode",
+      "category": "shell",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "permission.asked and permission.replied controlled a safe command"
+    },
+    {
+      "runtime": "opencode",
+      "category": "provider_api_transport",
+      "supportLevel": "supported",
+      "enforcementLevel": "opaque",
+      "evidence": "the endpoint was identifiable from provider configuration, but no host approval event exposed the provider-internal API transport"
+    },
+    {
+      "runtime": "opencode",
+      "category": "file_write",
+      "supportLevel": "unknown",
+      "enforcementLevel": "unknown",
+      "evidence": "edit was configured to ask but a distinct edit permission request was not exercised"
+    },
+    {
+      "runtime": "codex",
+      "category": "command",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "command approval was observed and declined"
+    },
+    {
+      "runtime": "codex",
+      "category": "file_write",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "evidence": "file-change approval was observed and declined"
+    },
+    {
+      "runtime": "codex",
+      "category": "lifecycle_events",
+      "supportLevel": "supported",
+      "enforcementLevel": "observable_only",
+      "evidence": "Thread, Turn, and Item events were correlated but are not execution barriers"
+    },
+    {
+      "runtime": "codex",
+      "category": "structured_network",
+      "supportLevel": "unknown",
+      "enforcementLevel": "unknown",
+      "evidence": "a network scenario stopped at command approval without structured network context"
+    }
+  ],
+  "enforcementCoverage": {
+    "interceptable": [
+      "opencode:shell",
+      "codex:command",
+      "codex:file_write"
+    ],
+    "observable_only": [
+      "codex:lifecycle_events"
+    ],
+    "opaque": [
+      "opencode:provider_api_transport"
+    ],
+    "unknown": [
+      "opencode:file_write",
+      "codex:structured_network"
+    ]
+  },
+  "platform": {
+    "windowsNativeX64": "supported",
+    "namedPipeCurrentUserOnly": "supported",
+    "jobObjectProcessTree": "supported",
+    "nodePty": "supported",
+    "shortPathWorktree": "supported"
+  },
+  "v1Commitment": "none; Stage 0 evidence does not itself promote a capability into Alpha or V1"
+}

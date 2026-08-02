@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "runtime": {
+    "type": "codex",
+    "version": "0.146.0",
+    "protocol": "app-server stdio JSONL",
+    "recommendedScope": "project"
+  },
+  "evidence": {
+    "capabilityMatrix": "tests/fixtures/codex/0.146.0/capability-matrix.json",
+    "capabilityMatrixSha256": "7b6739f1b883650a0ef80f8a68b58b8cf4013e8872507c9604ff820d9d2ee3e1",
+    "report": "docs/spikes/T0.2-codex.md"
+  },
+  "boundaries": {
+    "controlChannel": "JSON-RPC requests and responses over app-server stdin/stdout",
+    "eventChannel": "one JSONL stdout reader per Runtime Handle dispatching notifications and server requests",
+    "oneReaderPerHandle": true,
+    "runtimeScopeEvents": {
+      "name": "runtime_scope_events",
+      "supportLevel": "unknown",
+      "enforcementLevel": "unknown",
+      "commitment": "not_committed",
+      "evidence": "the Spike correlated Thread events but did not inject an unscoped auth or provider event"
+    },
+    "connectionEpoch": {
+      "name": "connection_epoch",
+      "supportLevel": "unknown",
+      "enforcementLevel": "unknown",
+      "commitment": "not_committed",
+      "evidence": "process replacement was tested but stale approval invalidation was not exercised"
+    },
+    "eventReplay": {
+      "name": "event_replay",
+      "supportLevel": "unknown",
+      "enforcementLevel": "unknown",
+      "commitment": "not_committed",
+      "evidence": "native notification cursor replay was not observed"
+    }
+  },
+  "capabilities": [
+    {
+      "name": "initialize_and_account_read",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "commitment": "stage0_evidence",
+      "evidence": "two independent handles initialized and reported an authenticated account"
+    },
+    {
+      "name": "thread_turn_item_lifecycle",
+      "supportLevel": "supported",
+      "enforcementLevel": "observable_only",
+      "commitment": "stage0_evidence",
+      "evidence": "thread, turn, and item events observed with correlated native identifiers"
+    },
+    {
+      "name": "independent_handle_event_reader",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "commitment": "stage0_evidence",
+      "evidence": "two concurrent app-server processes emitted no cross-handle thread identifiers"
+    },
+    {
+      "name": "command_approval",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "commitment": "stage0_evidence",
+      "evidence": "item/commandExecution/requestApproval observed and declined"
+    },
+    {
+      "name": "file_change_approval",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "commitment": "stage0_evidence",
+      "evidence": "item/fileChange/requestApproval observed and declined"
+    },
+    {
+      "name": "structured_network_approval",
+      "supportLevel": "unknown",
+      "enforcementLevel": "unknown",
+      "commitment": "not_committed",
+      "evidence": "network scenario was stopped by command approval without structured network context"
+    },
+    {
+      "name": "turn_interrupt",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "commitment": "stage0_evidence",
+      "evidence": "turn/interrupt completed with interrupted status"
+    },
+    {
+      "name": "thread_resume_across_process",
+      "supportLevel": "supported",
+      "enforcementLevel": "interceptable",
+      "commitment": "stage0_evidence",
+      "evidence": "a new app-server process resumed the same thread and completed a new turn"
+    }
+  ],
+  "unknowns": [
+    "runtime_scope_events",
+    "connection_epoch",
+    "event_replay",
+    "structured_network_approval",
+    "mcp_approval"
+  ],
+  "knownIssues": [
+    "Codex 0.142.5 was rejected by the current model service; 0.146.0 is the evidence baseline.",
+    "WebSocket sampling fell back to HTTPS on this host.",
+    "No structured network approval context was observed."
+  ]
+}

@@ -3229,15 +3229,15 @@ src/helpers/
 
 ### T0.4 ADR 与 Adapter Contract 基线
 
-- [ ] 固化 Spike 结论和首版 Adapter 合同
+- [x] 固化 Spike 结论和首版 Adapter 合同
 - 前置依赖：T0.1、T0.2、T0.3
 - 交付物：ADR、Adapter Contract、兼容性矩阵、Contract Fixture
 - Checkpoints：
-  - [ ] 控制命令、Handle 事件流和 Runtime Scope 事件边界已写入 ADR
-  - [ ] interceptable、observable_only、opaque 和 unknown 的判定规则已固化
-  - [ ] OpenCode 与 Codex Fixture 均能被同一 Contract Test Harness 读取
-  - [ ] 未验证能力均标为 unknown，未进入 Alpha 或 V1 承诺
-  - [ ] 任何会推翻当前架构的 Spike 失败都有明确决策结论
+  - [x] 控制命令、Handle 事件流和 Runtime Scope 事件边界已写入 ADR
+  - [x] interceptable、observable_only、opaque 和 unknown 的判定规则已固化
+  - [x] OpenCode 与 Codex Fixture 均能被同一 Contract Test Harness 读取
+  - [x] 未验证能力均标为 unknown，未进入 Alpha 或 V1 承诺
+  - [x] 任何会推翻当前架构的 Spike 失败都有明确决策结论
 
 ### G0 阶段 0 Gate
 

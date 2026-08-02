@@ -35,6 +35,7 @@ jobs:
 
       - name: Run credential-free contract tests
         run: |
+          npm run test:contract
           npm run test:codex
           npm run test:windows
           npm run test:opencode
