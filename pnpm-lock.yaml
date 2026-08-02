@@ -99,6 +99,18 @@ importers:
         specifier: workspace:*
         version: link:../protocol
 
+  packages/worktree-manager:
+    dependencies:
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@tsukiori/project-manager':
+        specifier: workspace:*
+        version: link:../project-manager
+
 packages:
 
   '@electron-internal/extract-zip@1.0.5':

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "task": "T2.2",
+  "worktreeRoot": {
+    "configurable": true,
+    "canonicalBoundaryChecked": true,
+    "junctionEscapeRejected": true,
+    "maxPathLength": 220
+  },
+  "creation": {
+    "fixedBaseCommit": true,
+    "branchRecorded": true,
+    "executionEnvironmentRecorded": true,
+    "operationStates": ["prepared", "running", "committed"]
+  },
+  "recovery": {
+    "terminalStates": ["committed", "failed", "uncertain"],
+    "facts": ["filesystem", "git-worktree-list", "git-branch"],
+    "replaysExternalAction": false
+  },
+  "cleanup": {
+    "dirtyRejected": true,
+    "untrackedRejected": true,
+    "activeProcessRejected": true,
+    "forceByDefault": false
+  },
+  "processIdentity": ["pid", "daemonBootId", "processStartTime", "spawnNonce", "executable", "fingerprint"],
+  "containsCredentials": false
+}

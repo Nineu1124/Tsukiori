@@ -3338,15 +3338,15 @@ src/helpers/
 
 ### T2.2 Worktree 生命周期与 Durable Operation
 
-- [ ] 实现安全、可恢复的 Worktree 创建和清理
+- [x] 实现安全、可恢复的 Worktree 创建和清理
 - 前置依赖：T2.1、T1.3
 - 交付物：Worktree Manager、Durable Operation 状态机、恢复 Fixture
 - Checkpoints：
-  - [ ] Worktree Root 可配置并经过路径边界校验
-  - [ ] 创建流程记录 base commit、分支、环境和 Operation 状态
-  - [ ] 创建或清理过程中强杀 Daemon 后进入 committed、failed 或 uncertain
-  - [ ] 存在未提交或未跟踪文件时默认拒绝自动删除
-  - [ ] 错误 PID 或失效 ProcessRecord 不会触发无关进程终止
+  - [x] Worktree Root 可配置并经过路径边界校验
+  - [x] 创建流程记录 base commit、分支、环境和 Operation 状态
+  - [x] 创建或清理过程中强杀 Daemon 后进入 committed、failed 或 uncertain
+  - [x] 存在未提交或未跟踪文件时默认拒绝自动删除
+  - [x] 错误 PID 或失效 ProcessRecord 不会触发无关进程终止
 
 ### T2.3 Setup、Cleanup 与 Workspace Binding
 

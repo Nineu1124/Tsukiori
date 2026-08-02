@@ -46,6 +46,7 @@ jobs:
           npm run test:ui
           npm run test:gate1
           npm run test:project
+          npm run test:worktree
           npm run test:codex
           npm run test:windows
           npm run test:opencode

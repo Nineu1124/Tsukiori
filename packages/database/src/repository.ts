@@ -216,6 +216,29 @@ export class LocalDatabase {
     }}).run();
   }
 
+  readOperation(id: string): OperationRecord | null {
+    const row = this.sqlite.prepare('SELECT * FROM operations WHERE id=? OR operation_id=?').get(id, id) as Record<string, unknown> | undefined;
+    return row ? this.#operation(row) : null;
+  }
+
+  listOperations(statuses?: readonly OperationRecord['status'][]): OperationRecord[] {
+    const rows = this.sqlite.prepare('SELECT * FROM operations ORDER BY created_at, id').all() as Record<string, unknown>[];
+    const allowed = statuses ? new Set(statuses) : null;
+    return rows.map((row) => this.#operation(row)).filter((operation) => !allowed || allowed.has(operation.status));
+  }
+
+  readWorktree(id: string): WorktreeRecord | null {
+    const row = this.sqlite.prepare('SELECT * FROM worktrees WHERE id=?').get(id) as Record<string, unknown> | undefined;
+    return row ? this.#worktree(row) : null;
+  }
+
+  listWorktrees(projectId?: string): WorktreeRecord[] {
+    const rows = (projectId === undefined
+      ? this.sqlite.prepare('SELECT * FROM worktrees ORDER BY created_at, id').all()
+      : this.sqlite.prepare('SELECT * FROM worktrees WHERE project_id=? ORDER BY created_at, id').all(projectId)
+    ) as Record<string, unknown>[];
+    return rows.map((row) => this.#worktree(row));
+  }
   appendSessionEvent(value: SessionEventRecord): void {
     this.#validate(value);
     this.orm.insert(schema.sessionEvents).values({
@@ -312,6 +335,29 @@ export class LocalDatabase {
     return row.count;
   }
 
+  #operation(row: Record<string, unknown>): OperationRecord {
+    return {
+      id: String(row.id), operationId: String(row.operation_id),
+      type: String(row.type) as OperationRecord['type'],
+      ...(row.session_id === null ? {} : { sessionId: String(row.session_id) }),
+      status: String(row.status) as OperationRecord['status'],
+      requestPayload: JSON.parse(String(row.request_payload_json)) as JsonValue,
+      ...(row.result_payload_json === null ? {} : { resultPayload: JSON.parse(String(row.result_payload_json)) as JsonValue }),
+      ...(row.error_json === null ? {} : { error: JSON.parse(String(row.error_json)) as JsonValue }),
+      createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+    };
+  }
+
+  #worktree(row: Record<string, unknown>): WorktreeRecord {
+    return {
+      id: String(row.id), projectId: String(row.project_id),
+      ...(row.owner_session_id === null ? {} : { ownerSessionId: String(row.owner_session_id) }),
+      executionEnvironmentId: String(row.execution_environment_id), path: String(row.path),
+      branchName: String(row.branch_name), baseRef: String(row.base_ref), baseCommit: String(row.base_commit),
+      status: String(row.status) as WorktreeRecord['status'], createdAt: Number(row.created_at),
+      ...(row.removed_at === null ? {} : { removedAt: Number(row.removed_at) }),
+    };
+  }
   #executionEnvironment(row: Record<string, unknown>): ExecutionEnvironment {
     return {
       id: String(row.id), type: String(row.type) as ExecutionEnvironment['type'],
