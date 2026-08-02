@@ -22,7 +22,8 @@
     "spike:opencode": "node spikes/opencode/harness.mjs",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "test:host": "pnpm run build && node --test tests/host/*.test.mjs"
+    "test:host": "pnpm run build && node --test tests/host/*.test.mjs",
+    "test:ipc": "pnpm run build && node --test tests/ipc/*.test.mjs"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "1.18.4",

@@ -1,3 +1,6 @@
+import { IPC_PROTOCOL_VERSION } from './ipc.js';
+
+export * from './ipc.js';
 export const HOST_PROTOCOL_VERSION = 1 as const;
 export const DAEMON_VERSION = '0.1.0' as const;
 
@@ -7,6 +10,8 @@ export type DaemonReadyMessage = {
   daemonVersion: typeof DAEMON_VERSION;
   instanceId: string;
   pid: number;
+  pipeName: string;
+  ipcProtocolVersion: typeof IPC_PROTOCOL_VERSION;
 };
 
 export type DaemonStatusMessage = {
@@ -91,7 +96,9 @@ export function isDaemonMessage(value: unknown): value is DaemonMessage {
       candidate.protocolVersion === HOST_PROTOCOL_VERSION &&
       candidate.daemonVersion === DAEMON_VERSION &&
       typeof candidate.instanceId === 'string' &&
-      typeof candidate.pid === 'number'
+      typeof candidate.pid === 'number' &&
+      typeof candidate.pipeName === 'string' &&
+      candidate.ipcProtocolVersion === IPC_PROTOCOL_VERSION
     );
   }
   if (candidate.type === 'daemon.status') {

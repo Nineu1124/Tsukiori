@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "task": "T1.2",
+  "platform": "windows-x64",
+  "transport": {
+    "kind": "named-pipe",
+    "aclMode": "current_user_only",
+    "peerProcessIdVerified": true,
+    "peerUserSidVerified": true,
+    "peerIdentity": "<current-user>"
+  },
+  "handshake": {
+    "protocolVersion": 1,
+    "daemonInstanceId": "<uuid>",
+    "challengeBytes": 32,
+    "proofAlgorithm": "HMAC-SHA256",
+    "connectionEpoch": "<random-per-connection>",
+    "credentialMaterialPersisted": false
+  },
+  "recovery": {
+    "snapshotVersion": 1,
+    "snapshotOnUnknownVersion": true,
+    "incrementalAfterSequence": true,
+    "oldTransportClosed": true
+  },
+  "rejections": [
+    "incompatible_protocol",
+    "stale_instance",
+    "invalid_proof",
+    "invalid_params",
+    "method_not_found",
+    "invalid_json",
+    "message_too_large"
+  ],
+  "audit": {
+    "sanitized": true,
+    "containsCredentials": false,
+    "timestamp": "<timestamp>"
+  }
+}

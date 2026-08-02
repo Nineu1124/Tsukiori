@@ -33,6 +33,16 @@ test('Desktop supervisor starts, detects, probes, and stops the specified Daemon
   assert.equal(status.pid, started.pid);
   assert.equal(status.instanceId, started.instanceId);
 
+  const initial = await supervisor.reconnectIpc(0, 0);
+  assert.equal(initial.mode, 'snapshot');
+  assert.equal(initial.snapshot.version, 1);
+  assert.deepEqual(initial.events.map(({ streamSequence }) => streamSequence), [1, 2]);
+
+  const resumed = await supervisor.reconnectIpc(1, 1);
+  assert.equal(resumed.mode, 'incremental');
+  assert.equal(resumed.snapshot, null);
+  assert.deepEqual(resumed.events.map(({ streamSequence }) => streamSequence), [2]);
+
   await supervisor.stop();
   assert.deepEqual(supervisor.snapshot(), {
     state: 'stopped',

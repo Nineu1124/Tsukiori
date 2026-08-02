@@ -3266,14 +3266,14 @@ src/helpers/
 
 ### T1.2 Named Pipe IPC 与 Daemon 生命周期
 
-- [ ] 实现本机 IPC、握手、重连和请求校验
+- [x] 实现本机 IPC、握手、重连和请求校验
 - 前置依赖：T1.1、T0.3
 - 交付物：IPC 协议实现、握手状态机、协议兼容测试
 - Checkpoints：
-  - [ ] Named Pipe 限制为当前用户并验证 Peer Identity
-  - [ ] daemonInstanceId、challenge-response 和协议版本握手可验证
-  - [ ] GUI 断线后能重新订阅快照和增量事件
-  - [ ] 非法参数、旧连接和不兼容协议均被拒绝并记录
+  - [x] Named Pipe 限制为当前用户并验证 Peer Identity
+  - [x] daemonInstanceId、challenge-response 和协议版本握手可验证
+  - [x] GUI 断线后能重新订阅快照和增量事件
+  - [x] 非法参数、旧连接和不兼容协议均被拒绝并记录
 
 ### T1.3 领域模型与 SQLite 持久化
 

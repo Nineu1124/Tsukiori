@@ -1,14 +1,16 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface, type Interface } from 'node:readline';
 import {
   DAEMON_VERSION,
   HOST_PROTOCOL_VERSION,
+  IPC_PROTOCOL_VERSION,
   isDaemonMessage,
   type DaemonMessage,
   type DaemonReadyMessage,
   type DaemonStatusMessage,
 } from '@tsukiori/protocol';
+import { NamedPipeClient } from './named-pipe-client.js';
 
 type PendingRequest = {
   resolve: (message: DaemonMessage) => void;
@@ -40,6 +42,8 @@ export class DaemonSupervisor {
   #child: ChildProcessWithoutNullStreams | null = null;
   #reader: Interface | null = null;
   #ready: DaemonReadyMessage | null = null;
+  #ipcClient: NamedPipeClient | null = null;
+  #bootstrapToken = '';
   #pending = new Map<string, PendingRequest>();
   #startupResolve: ((message: DaemonReadyMessage) => void) | null = null;
   #startupReject: ((error: Error) => void) | null = null;
@@ -71,9 +75,11 @@ export class DaemonSupervisor {
       return this.snapshot();
     }
 
+    this.#bootstrapToken = randomBytes(32).toString('hex');
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
       ...this.#options.environment,
+      TSUKIORI_IPC_BOOTSTRAP_TOKEN: this.#bootstrapToken,
     };
     if (
       process.versions.electron &&
@@ -141,7 +147,8 @@ export class DaemonSupervisor {
 
     if (
       ready.daemonVersion !== this.#options.expectedVersion ||
-      ready.protocolVersion !== HOST_PROTOCOL_VERSION
+      ready.protocolVersion !== HOST_PROTOCOL_VERSION ||
+      ready.ipcProtocolVersion !== IPC_PROTOCOL_VERSION
     ) {
       await this.stop(true);
       throw new Error(
@@ -157,7 +164,30 @@ export class DaemonSupervisor {
     }
 
     this.#ready = ready;
+    try {
+      await this.reconnectIpc(0, 0);
+    } catch (error) {
+      await this.stop(true).catch(() => undefined);
+      throw error;
+    }
     return this.snapshot();
+  }
+
+  async reconnectIpc(lastStreamSequence: number, knownSnapshotVersion: number) {
+    const ready = this.#ready;
+    if (!ready || !this.#bootstrapToken) {
+      throw new Error('Daemon IPC identity is unavailable');
+    }
+    this.#ipcClient?.close();
+    const client = new NamedPipeClient({
+      pipeName: ready.pipeName,
+      daemonInstanceId: ready.instanceId,
+      protocolVersion: ready.ipcProtocolVersion,
+      bootstrapToken: this.#bootstrapToken,
+    });
+    await client.connect();
+    this.#ipcClient = client;
+    return client.subscribe(lastStreamSequence, knownSnapshotVersion);
   }
 
   async probe(): Promise<DaemonStatusMessage> {
@@ -179,6 +209,8 @@ export class DaemonSupervisor {
   }
 
   async stop(force = false): Promise<void> {
+    this.#ipcClient?.close();
+    this.#ipcClient = null;
     const child = this.#child;
     if (!child || child.exitCode !== null) {
       this.#reset();
@@ -199,15 +231,26 @@ export class DaemonSupervisor {
       child.kill('SIGTERM');
     }
 
-    await Promise.race([
-      new Promise<void>((resolveExit) => child.once('exit', () => resolveExit())),
-      new Promise<void>((_, rejectTimeout) =>
-        setTimeout(() => rejectTimeout(new Error('Timed out stopping daemon')), 10_000),
-      ),
-    ]).catch((error: unknown) => {
+    let stopTimeout: NodeJS.Timeout | null = null;
+    try {
+      await Promise.race([
+        new Promise<void>((resolveExit) => {
+          if (child.exitCode !== null) resolveExit();
+          else child.once('exit', () => resolveExit());
+        }),
+        new Promise<void>((_, rejectTimeout) => {
+          stopTimeout = setTimeout(
+            () => rejectTimeout(new Error('Timed out stopping daemon')),
+            10_000,
+          );
+        }),
+      ]);
+    } catch (error) {
       child.kill('SIGKILL');
       throw error;
-    });
+    } finally {
+      if (stopTimeout) clearTimeout(stopTimeout);
+    }
     this.#reset();
   }
 
@@ -280,6 +323,9 @@ export class DaemonSupervisor {
   }
 
   #reset(): void {
+    this.#ipcClient?.close();
+    this.#ipcClient = null;
+    this.#bootstrapToken = '';
     this.#reader?.close();
     this.#reader = null;
     this.#child = null;
