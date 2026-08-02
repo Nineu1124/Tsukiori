@@ -1,0 +1,46 @@
+{
+  "task": "T4.2",
+  "testedCodexSchemaVersion": "0.146.0",
+  "eventReadersPerHandle": 1,
+  "mapping": {
+    "thread": "HostSession",
+    "turn": "HostTurn",
+    "itemAndNotification": "Host Event",
+    "hostAndRuntimeIdsRemainDistinct": true
+  },
+  "multiThreadIsolation": {
+    "threadCount": 3,
+    "duplicateLifecycleEventsApplied": 0,
+    "crossTalkObserved": false
+  },
+  "approvals": {
+    "command": {
+      "category": "shell",
+      "enforcementLevel": "interceptable",
+      "contract": "passed"
+    },
+    "file": {
+      "category": "file_write",
+      "enforcementLevel": "interceptable",
+      "contract": "passed"
+    },
+    "network": {
+      "category": "network",
+      "enforcementLevel": "interceptable",
+      "syntheticContract": "passed",
+      "realRuntimeSupport": "unknown"
+    }
+  },
+  "recovery": {
+    "interruptUsesRuntimeIds": true,
+    "resumeRebindsThread": true,
+    "oldEpochInvalidated": true,
+    "recoveryAttentionCreated": true
+  },
+  "unknownEvents": {
+    "sanitized": true,
+    "bounded": true,
+    "streamContinues": true
+  },
+  "containsCredentials": false
+}

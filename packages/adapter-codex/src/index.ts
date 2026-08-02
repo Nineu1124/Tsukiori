@@ -9,6 +9,7 @@ import type {
   RuntimeCompatibility, RuntimeHandleRecord, RuntimeProfileRecord,
 } from '@tsukiori/domain';
 import { ExecutionEnvironmentRegistry } from '@tsukiori/project-manager';
+import { CodexSessionBridge } from './protocol-bridge.js';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -157,6 +158,7 @@ export class CodexRuntimeAdapter {
   readonly #id: () => string;
   readonly #daemonBootId: string;
   readonly #handles = new Map<string, InternalHandle>();
+  readonly #bridges = new Map<string, CodexSessionBridge>();
 
   constructor(
     database: LocalDatabase,
@@ -291,6 +293,20 @@ export class CodexRuntimeAdapter {
     return this.#request(internal, method, params);
   }
 
+  bindProtocolBridge(handleId: string, bridge: CodexSessionBridge): void {
+    const internal = this.#handles.get(handleId);
+    if (!internal || internal.closed || internal.record.state !== 'ready') {
+      throw new CodexAdapterError('Runtime Handle is not ready');
+    }
+    if (bridge.handleId !== handleId || bridge.connectionEpoch !== internal.record.connectionEpoch) {
+      throw new CodexAdapterError('Codex protocol bridge Handle or connection Epoch mismatch');
+    }
+    if (bridge.eventReaderCount !== 1) {
+      throw new CodexAdapterError('Codex protocol bridge must declare exactly one event reader');
+    }
+    this.#bridges.set(handleId, bridge);
+  }
+
   async stop(handleId: string): Promise<void> {
     const internal = this.#handles.get(handleId);
     if (!internal || internal.closed) return;
@@ -382,18 +398,37 @@ export class CodexRuntimeAdapter {
       let message: Record<string, unknown>;
       try { message = JSON.parse(line) as Record<string, unknown>; }
       catch { this.#failPending(internal, new CodexAdapterError('Codex emitted invalid JSONL')); return; }
-      if (!Object.hasOwn(message, 'id') || message.method) return;
-      const id = Number(message.id);
-      const pending = internal.pending.get(id);
-      if (!pending) return;
-      clearTimeout(pending.timer);
-      internal.pending.delete(id);
-      if (message.error) pending.reject(new CodexAdapterError(pending.method + ' failed'));
-      else pending.resolve(message.result);
+      const method = typeof message.method === 'string' ? message.method : undefined;
+      if (Object.hasOwn(message, 'id') && !method) {
+        const id = Number(message.id);
+        const pending = internal.pending.get(id);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        internal.pending.delete(id);
+        if (message.error) pending.reject(new CodexAdapterError(pending.method + ' failed'));
+        else pending.resolve(message.result);
+        return;
+      }
+      const bridge = this.#bridges.get(internal.record.id);
+      if (!bridge || !method) return;
+      if (Object.hasOwn(message, 'id')) {
+        void bridge.handleServerRequest(String(message.id), method, message.params)
+          .then((result) => this.#write(internal, { id: message.id as JsonValue, result }))
+          .catch(() => this.#write(internal, {
+            id: message.id as JsonValue,
+            error: { code: -32000, message: 'rejected' },
+          }));
+        return;
+      }
+      bridge.acceptNotification(method, message.params);
     });
     internal.child.once('error', (error) => this.#failPending(internal, error));
     internal.child.once('exit', (code) => {
       internal.closed = true;
+      this.#bridges.get(internal.record.id)?.invalidateEpoch(
+        internal.expectedExit ? 'runtime_stopped' : 'runtime_exited',
+      );
+      this.#bridges.delete(internal.record.id);
       this.#failPending(internal, new CodexAdapterError('Codex app-server exited'));
       const at = this.#now();
       const existing = this.#database.readRuntimeHandle(internal.record.id);
@@ -428,7 +463,12 @@ export class CodexRuntimeAdapter {
   }
 
   #notify(internal: InternalHandle, method: string, params: JsonValue): void {
-    internal.child.stdin.write(JSON.stringify({ method, params }) + '\n');
+    this.#write(internal, { method, params });
+  }
+
+  #write(internal: InternalHandle, message: Record<string, JsonValue>): void {
+    if (internal.closed || internal.child.stdin.destroyed) return;
+    internal.child.stdin.write(JSON.stringify(message) + '\n');
   }
 
   #failPending(internal: InternalHandle, error: Error): void {
@@ -484,6 +524,8 @@ export function defaultCodexCandidates(): CodexLaunchCandidate[] {
   }
   return candidates;
 }
+
+export * from './protocol-bridge.js';
 
 function compareSemver(left: string, right: string): number {
   const a = left.split('.').map(Number);

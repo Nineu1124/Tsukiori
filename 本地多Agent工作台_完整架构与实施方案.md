@@ -3459,15 +3459,15 @@ src/helpers/
 
 ### T4.2 Codex Thread、Turn、Item 与 Approval
 
-- [ ] 实现 Codex 会话协议和审批事件映射
+- [x] 实现 Codex 会话协议和审批事件映射
 - 前置依赖：T4.1、T1.4、T1.5
 - 交付物：Thread/Turn/Item 映射、Approval Broker、合同 Fixture
 - Checkpoints：
-  - [ ] Thread、Turn、Item 可映射到 HostSession、HostTurn 和 Host Event
-  - [ ] Command、File、Network Approval 显示真实 Enforcement Level
-  - [ ] Interrupt、Resume 和旧 Epoch 失效行为通过合同测试
-  - [ ] 未知 Item/Event 在脱敏限额后可诊断且不阻断会话
-  - [ ] 多 Thread 事件不会串线或重复应用
+  - [x] Thread、Turn、Item 可映射到 HostSession、HostTurn 和 Host Event
+  - [x] Command、File、Network Approval 显示真实 Enforcement Level
+  - [x] Interrupt、Resume 和旧 Epoch 失效行为通过合同测试
+  - [x] 未知 Item/Event 在脱敏限额后可诊断且不阻断会话
+  - [x] 多 Thread 事件不会串线或重复应用
 
 ### T4.3 Codex 原生能力展示
 

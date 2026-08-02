@@ -18,6 +18,8 @@ export type RuntimeNativeEvent = {
   runtimeEventId?: string;
   runtimeSessionId?: string;
   runtimeTurnId?: string;
+  hostSessionId?: string;
+  hostTurnId?: string;
   projectId?: string;
   createdAt?: number;
 };
@@ -208,7 +210,8 @@ export class EventNormalizer {
     const receivedAt = Date.now();
     const limited = limit(event.payload, this.#maxPayloadBytes);
     const hostType = forcedType ?? knownTypes[event.nativeType] ?? 'native.event';
-    const sessionId = event.runtimeSessionId;
+    const sessionId = event.hostSessionId ?? event.runtimeSessionId;
+    const turnId = event.hostTurnId ?? event.runtimeTurnId;
     const sessionSequence = sessionId
       ? (this.#sessionSequences.get(sessionId) ?? 0) + 1
       : undefined;
@@ -225,16 +228,16 @@ export class EventNormalizer {
     this.#streamSequence += 1;
     return {
       eventId: randomUUID(), schemaVersion: 1,
-      scope: sessionId ? (event.runtimeTurnId ? 'turn' : 'session') : 'runtime',
+      scope: sessionId ? (turnId ? 'turn' : 'session') : 'runtime',
       ...(event.projectId ? { projectId: event.projectId } : {}),
       runtimeHandleId: this.#runtimeHandleId,
       ...(sessionId ? { sessionId } : {}),
-      ...(event.runtimeTurnId ? { turnId: event.runtimeTurnId } : {}),
+      ...(turnId ? { turnId } : {}),
       streamId: this.#streamId, streamSequence: this.#streamSequence,
       ...(sessionSequence ? { sessionSequence } : {}),
       type: hostType, payload, runtimeType: this.#runtimeType,
       ...(event.runtimeEventId ? { runtimeEventId: event.runtimeEventId } : {}),
-      ...(sessionId ? { runtimeSessionId: sessionId } : {}),
+      ...(event.runtimeSessionId ? { runtimeSessionId: event.runtimeSessionId } : {}),
       ...(event.runtimeTurnId ? { runtimeTurnId: event.runtimeTurnId } : {}),
       connectionEpoch: event.connectionEpoch,
       createdAt: event.createdAt ?? receivedAt, receivedAt,

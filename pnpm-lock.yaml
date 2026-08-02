@@ -51,9 +51,15 @@ importers:
       '@tsukiori/domain':
         specifier: workspace:*
         version: link:../domain
+      '@tsukiori/permission-broker':
+        specifier: workspace:*
+        version: link:../permission-broker
       '@tsukiori/project-manager':
         specifier: workspace:*
         version: link:../project-manager
+      '@tsukiori/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
 
   packages/adapter-fake:
     dependencies:

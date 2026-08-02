@@ -5,7 +5,12 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -14,6 +19,8 @@
   "dependencies": {
     "@tsukiori/database": "workspace:*",
     "@tsukiori/domain": "workspace:*",
-    "@tsukiori/project-manager": "workspace:*"
+    "@tsukiori/project-manager": "workspace:*",
+    "@tsukiori/permission-broker": "workspace:*",
+    "@tsukiori/runtime-core": "workspace:*"
   }
 }
