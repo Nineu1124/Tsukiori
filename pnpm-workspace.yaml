@@ -1,2 +1,6 @@
+packages:
+  - "apps/*"
+  - "packages/*"
 allowBuilds:
-  node-pty: true
+  electron: true
+  node-pty: false

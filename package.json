@@ -19,10 +19,16 @@
     "test:windows": "node --test spikes/windows/*.test.mjs",
     "spike:windows": "node spikes/windows/harness.mjs",
     "test:opencode": "node --test spikes/opencode/*.test.mjs",
-    "spike:opencode": "node spikes/opencode/harness.mjs"
+    "spike:opencode": "node spikes/opencode/harness.mjs",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test:host": "pnpm run build && node --test tests/host/*.test.mjs"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "1.18.4",
-    "node-pty": "1.1.0"
+    "@types/node": "26.1.2",
+    "node-pty": "1.1.0",
+    "turbo": "2.10.8",
+    "typescript": "7.0.2"
   }
 }

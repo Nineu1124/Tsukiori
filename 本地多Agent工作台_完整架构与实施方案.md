@@ -3255,14 +3255,14 @@ src/helpers/
 
 ### T1.1 Monorepo 与进程边界
 
-- [ ] 建立可运行的 Monorepo 和桌面进程拓扑
+- [x] 建立可运行的 Monorepo 和桌面进程拓扑
 - 前置依赖：G0
 - 交付物：Monorepo、Electron Desktop、独立 Daemon 启动骨架
 - Checkpoints：
-  - [ ] Desktop、Daemon、共享协议和测试包的依赖方向符合第 31 章
-  - [ ] Renderer 不启用 Node Integration，并通过受限 Preload API 通信
-  - [ ] Desktop 可启动、检测和停止指定版本的 Daemon
-  - [ ] Renderer 崩溃不会直接终止 Daemon
+  - [x] Desktop、Daemon、共享协议和测试包的依赖方向符合第 31 章
+  - [x] Renderer 不启用 Node Integration，并通过受限 Preload API 通信
+  - [x] Desktop 可启动、检测和停止指定版本的 Daemon
+  - [x] Renderer 崩溃不会直接终止 Daemon
 
 ### T1.2 Named Pipe IPC 与 Daemon 生命周期
 
