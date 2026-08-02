@@ -42,6 +42,8 @@ try {
   const profile = adapter.probe();
   handle = await adapter.start(profile.id, worktree);
   const selection = handle.selectProvider('dpsk', 'deepseek-v4-flash');
+  const eventReaderCount = handle.eventReaderCount;
+  const globalEventStreamConnected = handle.eventStreamState === 'connected';
   const verification = await handle.verifyProviderConnection(selection.providerId, selection.modelId);
   const handleId = handle.id;
   const workspacePathVerified = handle.providers.workspacePathVerified;
@@ -67,6 +69,8 @@ try {
     modelId: selection.modelId,
     destinationHost: selection.destinationHost,
     workspacePathVerified,
+    eventReaderCount,
+    globalEventStreamConnected,
     completed: verification.completed,
     finalHandleState: database.readRuntimeHandle(handleId)?.state,
     persistedPromptOrOutput: false,

@@ -1,0 +1,25 @@
+{
+  "task": "T3.2",
+  "runtimeVersion": "1.18.4",
+  "eventReadersPerHandle": 1,
+  "sessionRoutes": 2,
+  "runtimeScopePreserved": true,
+  "snapshotRecovery": true,
+  "realAdapterProbe": {
+    "globalEventStreamConnected": true,
+    "providerRequestCompleted": true
+  },
+  "mappedHostEvents": [
+    "assistant.message_started",
+    "assistant.text_delta",
+    "assistant.message_completed",
+    "tool.started",
+    "tool.completed",
+    "permission.requested",
+    "permission.resolved",
+    "turn.state_changed",
+    "runtime.warning"
+  ],
+  "rawPayloadsCommitted": false,
+  "containsCredentials": false
+}

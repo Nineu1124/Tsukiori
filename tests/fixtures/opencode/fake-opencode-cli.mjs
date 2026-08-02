@@ -16,6 +16,10 @@ if (process.argv.includes('auth') && process.argv.includes('list')) {
 if (!process.argv.includes('serve')) process.exit(3);
 
 const sessions = new Map();
+const eventStreams = new Set();
+let eventSerial = 0;
+let disconnectedFirstEventStream = false;
+
 function send(response, status, value, contentType = 'application/json') {
   response.writeHead(status, { 'content-type': contentType });
   response.end(typeof value === 'string' ? value : JSON.stringify(value));
@@ -32,6 +36,33 @@ function authorized(request) {
   ).toString('base64');
   return request.headers.authorization === expected;
 }
+function event(type, properties) {
+  return { id: 'event-fixture-' + ++eventSerial, type, properties };
+}
+function publish(payload) {
+  const envelope = JSON.stringify({ directory: process.cwd(), payload });
+  for (const response of eventStreams) response.write('data: ' + envelope + '\n\n');
+}
+function openEventStream(request, response) {
+  response.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+  response.flushHeaders();
+  eventStreams.add(response);
+  const close = () => eventStreams.delete(response);
+  request.once('close', close);
+  response.once('close', close);
+  response.write('data: ' + JSON.stringify({
+    directory: process.cwd(),
+    payload: event('server.connected', {}),
+  }) + '\n\n');
+  if (config.disconnectFirstEventStream && !disconnectedFirstEventStream) {
+    disconnectedFirstEventStream = true;
+    setTimeout(() => response.end(), 20);
+  }
+}
 
 const server = createServer(async (request, response) => {
   if (!authorized(request)) {
@@ -45,6 +76,10 @@ const server = createServer(async (request, response) => {
   }
   if (request.method === 'GET' && url.pathname === '/global/health') {
     send(response, 200, { healthy: true, version: config.version });
+    return;
+  }
+  if (request.method === 'GET' && url.pathname === '/global/event') {
+    openEventStream(request, response);
     return;
   }
   if (request.method === 'GET' && url.pathname === '/path') {
@@ -61,27 +96,17 @@ const server = createServer(async (request, response) => {
     send(response, 200, {
       all: [
         {
-          id: 'dpsk',
-          name: 'DeepSeek Fixture',
-          source: 'config',
-          env: [],
-          api: 'https://api.deepseek.com/v1',
-          options: {},
+          id: 'dpsk', name: 'DeepSeek Fixture', source: 'config', env: [],
+          api: 'https://api.deepseek.com/v1', options: {},
           models: {
             'deepseek-v4-flash': {
-              id: 'deepseek-v4-flash',
-              name: 'DeepSeek V4 Flash',
-              status: 'active',
-              experimental: false,
+              id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash',
+              status: 'active', experimental: false,
             },
           },
         },
         {
-          id: 'offline',
-          name: 'Offline Fixture',
-          source: 'custom',
-          env: [],
-          options: {},
+          id: 'offline', name: 'Offline Fixture', source: 'custom', env: [], options: {},
           models: { local: { id: 'local', name: 'Local' } },
         },
       ],
@@ -90,16 +115,35 @@ const server = createServer(async (request, response) => {
     });
     return;
   }
+  if (request.method === 'GET' && url.pathname === '/session/status') {
+    send(response, 200, Object.fromEntries(
+      [...sessions.entries()].map(([id, session]) => [id, { type: session.status }]),
+    ));
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/session') {
     const input = await body(request);
     const id = 'session-fixture-' + (sessions.size + 1);
-    sessions.set(id, { input, messages: [] });
+    const session = { id, title: input.title, input, messages: [], status: 'idle' };
+    sessions.set(id, session);
+    publish(event('session.created', { sessionID: id, info: { id, title: input.title } }));
     send(response, 200, { id, title: input.title });
     return;
   }
   const sessionMatch = url.pathname.match(/^\/session\/([^/]+)$/);
+  if (request.method === 'GET' && sessionMatch) {
+    const session = sessions.get(sessionMatch[1]);
+    if (!session) {
+      send(response, 404, { error: 'missing' });
+      return;
+    }
+    send(response, 200, { id: session.id, title: session.title });
+    return;
+  }
   if (request.method === 'DELETE' && sessionMatch) {
-    send(response, 200, sessions.delete(sessionMatch[1]));
+    const existed = sessions.delete(sessionMatch[1]);
+    if (existed) publish(event('session.deleted', { sessionID: sessionMatch[1] }));
+    send(response, 200, existed);
     return;
   }
   const promptMatch = url.pathname.match(/^\/session\/([^/]+)\/prompt_async$/);
@@ -110,6 +154,36 @@ const server = createServer(async (request, response) => {
       send(response, 404, { error: 'missing' });
       return;
     }
+    session.status = 'busy';
+    publish(event('session.status', { sessionID: session.id, status: { type: 'busy' } }));
+    if (config.emitSessionError) {
+      session.status = 'idle';
+      publish(event('session.error', {
+        sessionID: session.id,
+        error: { name: 'FixtureError', message: '<sanitized>' },
+      }));
+      send(response, 204, '');
+      return;
+    }
+    publish(event('message.updated', {
+      sessionID: session.id,
+      info: { id: 'message-assistant-' + eventSerial, sessionID: session.id, role: 'assistant', time: { created: Date.now() } },
+    }));
+    publish(event('message.part.delta', {
+      sessionID: session.id, messageID: 'message-assistant', partID: 'part-text', field: 'text', delta: 'fixture-delta',
+    }));
+    publish(event('message.part.updated', {
+      sessionID: session.id, time: Date.now(),
+      part: { id: 'part-tool', sessionID: session.id, messageID: 'message-assistant', type: 'tool', tool: 'fixture', state: { status: 'pending' } },
+    }));
+    publish(event('message.part.updated', {
+      sessionID: session.id, time: Date.now(),
+      part: { id: 'part-tool', sessionID: session.id, messageID: 'message-assistant', type: 'tool', tool: 'fixture', state: { status: 'completed' } },
+    }));
+    publish(event('permission.asked', {
+      id: 'permission-fixture', sessionID: session.id, permission: 'bash', patterns: ['<sanitized>'], metadata: {}, always: [],
+    }));
+    publish(event('permission.replied', { sessionID: session.id, requestID: 'permission-fixture', reply: 'once' }));
     session.messages = [
       { info: { id: 'message-user', role: 'user' }, parts: [] },
       { info: { id: 'message-assistant', role: 'assistant' }, parts: [] },
@@ -119,6 +193,15 @@ const server = createServer(async (request, response) => {
       modelID: input.model?.modelID,
       partCount: Array.isArray(input.parts) ? input.parts.length : 0,
     };
+    publish(event('message.updated', {
+      sessionID: session.id,
+      info: {
+        id: 'message-assistant', sessionID: session.id, role: 'assistant', finish: 'stop',
+        time: { created: Date.now(), completed: Date.now() },
+      },
+    }));
+    session.status = 'idle';
+    publish(event('session.idle', { sessionID: session.id }));
     send(response, 204, '');
     return;
   }
@@ -132,10 +215,12 @@ const server = createServer(async (request, response) => {
 
 server.listen(0, '127.0.0.1', () => {
   const address = server.address();
-  process.stdout.write(
-    'opencode server listening on http://127.0.0.1:' + address.port + '\n',
-  );
+  process.stdout.write('opencode server listening on http://127.0.0.1:' + address.port + '\n');
 });
 for (const signal of ['SIGTERM', 'SIGINT']) {
-  process.on(signal, () => server.close(() => process.exit(0)));
+  process.on(signal, () => {
+    for (const response of eventStreams) response.end();
+    eventStreams.clear();
+    server.close(() => process.exit(0));
+  });
 }

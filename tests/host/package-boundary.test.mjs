@@ -48,6 +48,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/database': 'workspace:*',
     '@tsukiori/domain': 'workspace:*',
     '@tsukiori/project-manager': 'workspace:*',
+    '@tsukiori/runtime-core': 'workspace:*',
   });
   assert.deepEqual(permissionBroker.dependencies, {
     '@tsukiori/database': 'workspace:*',

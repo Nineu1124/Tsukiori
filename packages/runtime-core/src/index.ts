@@ -194,7 +194,13 @@ export class EventNormalizer {
     return { status: 'accepted', events: output };
   }
 
-  snapshotRecovery(sessions: readonly { sessionId: string; activity: string; health: string }[]): EventEnvelope[] {
+  snapshotRecovery(sessions: readonly {
+    sessionId: string;
+    hostSessionId?: string;
+    projectId?: string;
+    activity: string;
+    health: string;
+  }[]): EventEnvelope[] {
     const warning = this.#envelope({
       nativeType: 'runtime.unknown', connectionEpoch: this.#epoch,
       payload: { reason: 'event_replay_unavailable', mode: 'snapshot_recovery' },
@@ -202,6 +208,8 @@ export class EventNormalizer {
     return [warning, ...sessions.map((session) => this.#envelope({
       nativeType: 'session.state', connectionEpoch: this.#epoch,
       runtimeSessionId: session.sessionId,
+      ...(session.hostSessionId ? { hostSessionId: session.hostSessionId } : {}),
+      ...(session.projectId ? { projectId: session.projectId } : {}),
       payload: { activity: session.activity, health: session.health, recoveredFromSnapshot: true },
     }))];
   }

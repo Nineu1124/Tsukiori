@@ -3397,14 +3397,14 @@ src/helpers/
 
 ### T3.2 OpenCode Session、Turn 与 SSE
 
-- [ ] 实现 OpenCode 会话控制和事件消费
+- [x] 实现 OpenCode 会话控制和事件消费
 - 前置依赖：T3.1、T1.4
 - 交付物：Session/Turn 映射、SSE 消费器、事件 Fixture
 - Checkpoints：
-  - [ ] Create、Resume Session 和 Start Turn 可稳定执行
-  - [ ] SSE 事件可映射文本、工具、权限、完成和错误状态
-  - [ ] 多 Session 不争抢底层事件读取器且 Runtime Scope 事件不丢失
-  - [ ] 断线后可重新 Probe、恢复快照并建立新 Connection Epoch
+  - [x] Create、Resume Session 和 Start Turn 可稳定执行
+  - [x] SSE 事件可映射文本、工具、权限、完成和错误状态
+  - [x] 多 Session 不争抢底层事件读取器且 Runtime Scope 事件不丢失
+  - [x] 断线后可重新 Probe、恢复快照并建立新 Connection Epoch
 
 ### T3.3 OpenCode 权限、控制与恢复
 

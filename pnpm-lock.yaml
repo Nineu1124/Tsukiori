@@ -81,6 +81,9 @@ importers:
       '@tsukiori/project-manager':
         specifier: workspace:*
         version: link:../project-manager
+      '@tsukiori/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
 
   packages/database:
     dependencies:

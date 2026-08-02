@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2';
 import type { LocalDatabase } from '@tsukiori/database';
 import type {
-  JsonValue, ProcessRecord, RuntimeAuditRecord, RuntimeCompatibility,
+  HostTurn, JsonValue, ProcessRecord, RuntimeAuditRecord, RuntimeCompatibility,
   RuntimeHandleRecord, RuntimeProfileRecord,
 } from '@tsukiori/domain';
 import { ExecutionEnvironmentRegistry } from '@tsukiori/project-manager';
@@ -14,6 +14,10 @@ import {
   type OpenCodeProviderCatalog, type OpenCodeProviderSelection,
   type OpenCodeProviderVerification,
 } from './provider.js';
+import {
+  OpenCodeSessionBridge,
+  type OpenCodeRecoveryResult,
+} from './session-bridge.js';
 
 const START_TIMEOUT_MS = 20_000;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -32,6 +36,7 @@ type InternalHandle = {
   record: RuntimeHandleRecord;
   process: ProcessRecord;
   catalog: OpenCodeProviderCatalog;
+  bridge: OpenCodeSessionBridge | null;
   cwd: string;
   expectedExit: boolean;
   closed: boolean;
@@ -60,6 +65,30 @@ export class OpenCodeRuntimeHandle {
 
   verifyProviderConnection(providerId: string, modelId: string): Promise<OpenCodeProviderVerification> {
     return this.adapter.verifyProviderConnection(this.id, providerId, modelId);
+  }
+
+  get eventReaderCount(): number {
+    return this.adapter.eventReaderCount(this.id);
+  }
+
+  get eventStreamState(): string {
+    return this.adapter.eventStreamState(this.id);
+  }
+
+  createSession(hostSessionId: string, providerId: string, modelId: string, title?: string): Promise<string> {
+    return this.adapter.createSession(this.id, hostSessionId, providerId, modelId, title);
+  }
+
+  resumeSession(hostSessionId: string): Promise<string> {
+    return this.adapter.resumeSession(this.id, hostSessionId);
+  }
+
+  startTurn(hostSessionId: string, text: string): Promise<HostTurn> {
+    return this.adapter.startTurn(this.id, hostSessionId, text);
+  }
+
+  recoverEventStream(): Promise<OpenCodeRecoveryResult> {
+    return this.adapter.recoverEventStream(this.id);
   }
 
   stop(): Promise<void> {
@@ -192,6 +221,7 @@ export class OpenCodeRuntimeAdapter {
         providers: [],
         providersTruncated: false,
       },
+      bridge: null,
       cwd,
       expectedExit: false,
       closed: false,
@@ -247,6 +277,14 @@ export class OpenCodeRuntimeAdapter {
       internal.process = { ...internal.process, status: 'running' };
       this.#database.saveRuntimeHandle(internal.record);
       this.#database.saveProcess(internal.process);
+      internal.bridge = new OpenCodeSessionBridge(
+        this.#database,
+        internal.client,
+        internal.record,
+        internal.cwd,
+        { now: this.#now, id: this.#id },
+      );
+      await internal.bridge.startEventReader();
       const connected = internal.catalog.providers.filter((item) => item.connected);
       this.#database.saveRuntimeProfile({
         ...profile,
@@ -310,6 +348,45 @@ export class OpenCodeRuntimeAdapter {
     }
   }
 
+  eventReaderCount(handleId: string): number {
+    return this.#bridge(handleId).eventReaderCount;
+  }
+
+  eventStreamState(handleId: string): string {
+    return this.#bridge(handleId).eventStreamState;
+  }
+
+  async createSession(
+    handleId: string,
+    hostSessionId: string,
+    providerId: string,
+    modelId: string,
+    title?: string,
+  ): Promise<string> {
+    const selection = this.selectProvider(handleId, providerId, modelId);
+    return this.#bridge(handleId).createSession(hostSessionId, selection, title);
+  }
+
+  resumeSession(handleId: string, hostSessionId: string): Promise<string> {
+    return this.#bridge(handleId).resumeSession(hostSessionId);
+  }
+
+  startTurn(handleId: string, hostSessionId: string, text: string): Promise<HostTurn> {
+    return this.#bridge(handleId).startTurn(hostSessionId, text);
+  }
+
+  async recoverEventStream(handleId: string): Promise<OpenCodeRecoveryResult> {
+    const internal = this.#ready(handleId);
+    const profile = this.reProbe(internal.record.profileId);
+    if (profile.compatibility !== 'supported') {
+      throw new OpenCodeAdapterError('OpenCode recovery compatibility is ' + profile.compatibility);
+    }
+    const connectionEpoch = 'opencode-epoch:' + this.#id();
+    internal.record = { ...internal.record, connectionEpoch, updatedAt: this.#now() };
+    this.#database.saveRuntimeHandle(internal.record);
+    return this.#bridge(handleId).recoverConnection(connectionEpoch);
+  }
+
   async stop(handleId: string): Promise<void> {
     const internal = this.#handles.get(handleId);
     if (!internal || internal.closed) return;
@@ -324,6 +401,7 @@ export class OpenCodeRuntimeAdapter {
     this.#database.saveRuntimeHandle(internal.record);
     this.#database.saveProcess(internal.process);
     this.#audit('stop', 'started', { state: 'stopping' }, internal.record.profileId, handleId);
+    await internal.bridge?.stopEventReader();
     const exited = new Promise<void>((resolveExit) => internal.child.once('exit', () => resolveExit()));
     internal.child.kill('SIGTERM');
     const timer = setTimeout(() => internal.child.kill('SIGKILL'), 3_000);
@@ -540,6 +618,7 @@ export class OpenCodeRuntimeAdapter {
 
   async #failStart(internal: InternalHandle): Promise<void> {
     internal.expectedExit = true;
+    await internal.bridge?.stopEventReader();
     internal.record = { ...internal.record, state: 'failed', updatedAt: this.#now() };
     internal.process = { ...internal.process, status: 'stopping' };
     this.#database.saveRuntimeHandle(internal.record);
@@ -550,6 +629,12 @@ export class OpenCodeRuntimeAdapter {
       internal.child.kill('SIGKILL');
       await exited;
     }
+  }
+
+  #bridge(handleId: string): OpenCodeSessionBridge {
+    const internal = this.#ready(handleId);
+    if (!internal.bridge) throw new OpenCodeAdapterError('OpenCode Session Bridge is unavailable');
+    return internal.bridge;
   }
 
   #ready(handleId: string): InternalHandle {
@@ -658,3 +743,4 @@ function boundedFetch(
 }
 
 export * from './provider.js';
+export * from './session-bridge.js';

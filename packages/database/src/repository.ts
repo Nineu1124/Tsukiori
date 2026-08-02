@@ -341,6 +341,7 @@ export class LocalDatabase {
       platformOs: value.platformOs ?? null, startedAt: value.startedAt, updatedAt: value.updatedAt,
       exitedAt: value.exitedAt ?? null, exitCode: value.exitCode ?? null, expectedExit: value.expectedExit ?? null,
     }).onConflictDoUpdate({ target: schema.runtimeHandles.id, set: {
+      connectionEpoch: value.connectionEpoch,
       state: value.state, pid: value.pid ?? null, userAgent: value.userAgent ?? null,
       platformFamily: value.platformFamily ?? null, platformOs: value.platformOs ?? null,
       updatedAt: value.updatedAt, exitedAt: value.exitedAt ?? null,
