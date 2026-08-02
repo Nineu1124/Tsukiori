@@ -279,13 +279,13 @@ export class PermissionBroker {
 
   #ruleFor(request: RequestRow, payload: RequestPayload, decision: PermissionDecision, at: number): PermissionRuleRecord | null {
     if (decision !== 'allow_session' && decision !== 'allow_project' && decision !== 'deny_session') return null;
-    if (decision === 'allow_project') {
-      if (request.enforcement_level === 'observable_only' || request.enforcement_level === 'opaque') {
-        throw new Error('Project allow requires enforceable permission');
-      }
-      if (!this.#isStructuredMatcher(payload.matcher)) {
-        throw new Error('Project allow requires a structured matcher; raw shell rules are forbidden');
-      }
+    if ((decision === 'allow_session' || decision === 'allow_project')
+      && !this.#isStructuredMatcher(payload.matcher)) {
+      throw new Error('Persistent allow requires a structured matcher; raw shell rules are forbidden');
+    }
+    if (decision === 'allow_project'
+      && (request.enforcement_level === 'observable_only' || request.enforcement_level === 'opaque')) {
+      throw new Error('Project allow requires enforceable permission');
     }
     const projectRule = decision === 'allow_project';
     return {

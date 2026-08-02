@@ -11,7 +11,18 @@ import {
   type DaemonReadyMessage,
   type DaemonStatusMessage,
 } from '@tsukiori/protocol';
+import {
+  WindowsCredentialBroker,
+  type CredentialBinding,
+  type SecretReference,
+} from '@tsukiori/credential-broker';
 import { NamedPipeClient } from './named-pipe-client.js';
+
+const DAEMON_CREDENTIAL_BINDING: CredentialBinding = {
+  runtimeType: 'daemon',
+  runtimeProfileId: 'host-daemon',
+  environmentVariable: 'TSUKIORI_IPC_BOOTSTRAP_TOKEN',
+};
 
 type PendingRequest = {
   resolve: (message: DaemonMessage) => void;
@@ -27,6 +38,7 @@ export type DaemonSupervisorOptions = {
   environment?: NodeJS.ProcessEnv;
   leaseFile?: string;
   exitPolicy?: 'keep' | 'stop';
+  credentialBroker?: WindowsCredentialBroker;
 };
 
 type DaemonLease = {
@@ -37,7 +49,7 @@ type DaemonLease = {
   instanceId: string;
   pid: number;
   pipeName: string;
-  bootstrapToken: string;
+  bootstrapSecretRef: SecretReference;
   createdAt: number;
 };
 export type DaemonSnapshot = {
@@ -58,12 +70,15 @@ export class DaemonSupervisor {
   #ready: DaemonReadyMessage | null = null;
   #ipcClient: NamedPipeClient | null = null;
   #bootstrapToken = '';
+  #bootstrapSecretRef: SecretReference | null = null;
+  readonly #credentials: WindowsCredentialBroker;
   #pending = new Map<string, PendingRequest>();
   #startupResolve: ((message: DaemonReadyMessage) => void) | null = null;
   #startupReject: ((error: Error) => void) | null = null;
   #stderr = '';
 
   constructor(options: DaemonSupervisorOptions) {
+    this.#credentials = options.credentialBroker ?? new WindowsCredentialBroker();
     this.#options = {
       daemonEntry: options.daemonEntry,
       executable: options.executable ?? process.execPath,
@@ -94,11 +109,20 @@ export class DaemonSupervisor {
     if (await this.#attachFromLease()) return this.snapshot();
 
     this.#bootstrapToken = randomBytes(32).toString('hex');
+    if (this.#options.leaseFile) {
+      this.#bootstrapSecretRef = this.#credentials.store({
+        secret: this.#bootstrapToken,
+        binding: DAEMON_CREDENTIAL_BINDING,
+      });
+    }
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
       ...this.#options.environment,
       TSUKIORI_IPC_BOOTSTRAP_TOKEN: this.#bootstrapToken,
-      ...(this.#options.leaseFile ? { TSUKIORI_DAEMON_LEASE_FILE: this.#options.leaseFile } : {}),
+      ...(this.#options.leaseFile ? {
+        TSUKIORI_DAEMON_LEASE_FILE: this.#options.leaseFile,
+        TSUKIORI_IPC_BOOTSTRAP_REF: this.#bootstrapSecretRef ?? '',
+      } : {}),
     };
     if (
       process.versions.electron &&
@@ -135,6 +159,7 @@ export class DaemonSupervisor {
       this.#rejectPending(error);
       this.#reader?.close();
       this.#reader = null;
+      this.#deleteBootstrapSecret();
       this.#child = null;
       this.#ready = null;
     });
@@ -327,6 +352,7 @@ export class DaemonSupervisor {
     this.#child = null;
     this.#ready = null;
     this.#bootstrapToken = '';
+    this.#bootstrapSecretRef = null;
   }
 
   async #attachFromLease(): Promise<boolean> {
@@ -340,6 +366,7 @@ export class DaemonSupervisor {
       return false;
     }
     if (!this.#isProcessAlive(lease.pid)) {
+      try { this.#credentials.delete(lease.bootstrapSecretRef); } catch { /* stale reference remains fail-closed */ }
       unlinkSync(leaseFile);
       return false;
     }
@@ -348,26 +375,34 @@ export class DaemonSupervisor {
       || lease.ipcProtocolVersion !== IPC_PROTOCOL_VERSION) {
       throw new Error('Running Daemon lease is incompatible; refusing duplicate start');
     }
-    const client = new NamedPipeClient({
-      pipeName: lease.pipeName,
-      daemonInstanceId: lease.instanceId,
-      protocolVersion: lease.ipcProtocolVersion,
-      bootstrapToken: lease.bootstrapToken,
-    });
-    try {
-      await client.connect();
-      const ping = await client.request('daemon.ping', {}) as Record<string, unknown>;
-      if (ping.daemonInstanceId !== lease.instanceId || ping.pid !== lease.pid
-        || ping.protocolVersion !== HOST_PROTOCOL_VERSION) {
-        throw new Error('Running Daemon lease identity mismatch');
-      }
-    } catch (error) {
-      client.close();
-      throw new Error('Running Daemon could not be safely authenticated; refusing duplicate start', {
-        cause: error,
-      });
-    }
-    this.#bootstrapToken = lease.bootstrapToken;
+    const client = await this.#credentials.use(
+      lease.bootstrapSecretRef,
+      DAEMON_CREDENTIAL_BINDING,
+      async (secret) => {
+        this.#bootstrapToken = secret;
+        const candidate = new NamedPipeClient({
+          pipeName: lease.pipeName,
+          daemonInstanceId: lease.instanceId,
+          protocolVersion: lease.ipcProtocolVersion,
+          bootstrapToken: secret,
+        });
+        try {
+          await candidate.connect();
+          const ping = await candidate.request('daemon.ping', {}) as Record<string, unknown>;
+          if (ping.daemonInstanceId !== lease.instanceId || ping.pid !== lease.pid
+            || ping.protocolVersion !== HOST_PROTOCOL_VERSION) {
+            throw new Error('Running Daemon lease identity mismatch');
+          }
+          return candidate;
+        } catch (error) {
+          candidate.close();
+          throw new Error('Running Daemon could not be safely authenticated; refusing duplicate start', {
+            cause: error,
+          });
+        }
+      },
+    );
+    this.#bootstrapSecretRef = lease.bootstrapSecretRef;
     this.#ready = {
       type: 'daemon.ready',
       protocolVersion: HOST_PROTOCOL_VERSION,
@@ -388,11 +423,19 @@ export class DaemonSupervisor {
       || typeof item.protocolVersion !== 'number' || typeof item.ipcProtocolVersion !== 'number'
       || typeof item.instanceId !== 'string' || typeof item.pid !== 'number'
       || !Number.isInteger(item.pid) || item.pid <= 0 || typeof item.pipeName !== 'string'
-      || typeof item.bootstrapToken !== 'string' || item.bootstrapToken.length < 32
+      || typeof item.bootstrapSecretRef !== 'string'
+      || !/^secretref:[a-f0-9-]{36}$/.test(item.bootstrapSecretRef)
       || typeof item.createdAt !== 'number') {
       throw new Error('Invalid Daemon lease');
     }
     return item as unknown as DaemonLease;
+  }
+
+  #deleteBootstrapSecret(): void {
+    const reference = this.#bootstrapSecretRef;
+    this.#bootstrapSecretRef = null;
+    if (!reference) return;
+    try { this.#credentials.delete(reference); } catch { /* stale OS entry is safer than deleting another reference */ }
   }
 
   #isProcessAlive(pid: number): boolean {
@@ -483,6 +526,7 @@ export class DaemonSupervisor {
   #reset(): void {
     this.#ipcClient?.close();
     this.#ipcClient = null;
+    this.#deleteBootstrapSecret();
     this.#bootstrapToken = '';
     this.#reader?.close();
     this.#reader = null;

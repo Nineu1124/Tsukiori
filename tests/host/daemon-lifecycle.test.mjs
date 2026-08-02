@@ -87,6 +87,9 @@ test('keep policy survives GUI release, reauthenticates the same Daemon, and sto
   });
   const started = await first.start();
   assert.equal(existsSync(leaseFile), true);
+  const lease = JSON.parse(readFileSync(leaseFile, 'utf8'));
+  assert.match(lease.bootstrapSecretRef, /^secretref:[a-f0-9-]{36}$/);
+  assert.equal('bootstrapToken' in lease, false);
   await first.release();
   assert.equal(first.snapshot().state, 'stopped');
 

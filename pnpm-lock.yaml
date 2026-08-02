@@ -35,6 +35,9 @@ importers:
       '@tsukiori/adapter-fake':
         specifier: workspace:*
         version: link:../../packages/adapter-fake
+      '@tsukiori/credential-broker':
+        specifier: workspace:*
+        version: link:../../packages/credential-broker
       '@tsukiori/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -111,6 +114,8 @@ importers:
       '@tsukiori/workspace-manager':
         specifier: workspace:*
         version: link:../workspace-manager
+
+  packages/credential-broker: {}
 
   packages/database:
     dependencies:

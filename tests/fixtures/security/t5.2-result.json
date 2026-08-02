@@ -1,0 +1,18 @@
+{
+  "task": "T5.2",
+  "schemaVersion": 1,
+  "credentialStore": "windows_credential_manager",
+  "injection": "environment_to_bound_runtime_only",
+  "rendererReceivesSecret": false,
+  "commandLineReceivesSecret": false,
+  "persistenceReceivesSecret": false,
+  "rawShellProjectAllow": false,
+  "untrustedPresentation": "plain_text_only",
+  "securityBoundaryLabels": {
+    "observable_only": "not_a_security_sandbox",
+    "opaque": "not_a_security_sandbox",
+    "worktree": "code_isolation_not_security_sandbox"
+  },
+  "containsCredentials": false,
+  "containsPromptOrSource": false
+}

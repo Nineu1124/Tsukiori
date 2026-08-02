@@ -109,6 +109,10 @@ test('broad project allow is rejected for raw shell and non-enforceable requests
     matcher: { raw: 'arbitrary shell text' }, availableDecisions: ['allow_project'],
   }));
   assert.throws(() => permission.decide('request-raw', 'epoch-1', 'allow_project'), /structured matcher/);
+  permission.submit(request('request-raw-session', {
+    matcher: { command: 'raw shell text' }, availableDecisions: ['allow_session'],
+  }));
+  assert.throws(() => permission.decide('request-raw-session', 'epoch-1', 'allow_session'), /structured matcher/);
   permission.submit(request('request-opaque', {
     enforcementLevel: 'opaque', availableDecisions: ['allow_project'],
   }));

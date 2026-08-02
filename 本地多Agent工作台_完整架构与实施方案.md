@@ -3532,15 +3532,15 @@ src/helpers/
 
 ### T5.2 安全、权限规则与凭据
 
-- [ ] 完成 V1 安全收敛和凭据生命周期
+- [x] 完成 V1 安全收敛和凭据生命周期
 - 前置依赖：T5.1、T4.2
 - 交付物：安全测试报告、Credential Broker、权限规则审计
 - Checkpoints：
-  - [ ] 凭据存入操作系统凭据库并仅按 Secret Reference 注入指定 Runtime
-  - [ ] Secret 不进入 Renderer、命令行参数、SQLite/WAL/Blob、日志或诊断包
-  - [ ] 原始 Shell 字符串不会生成宽泛持久 Allow 规则
-  - [ ] 路径穿越、Junction、IPC、XSS、ANSI、Markdown 和 MCP 注入测试通过
-  - [ ] observable_only、opaque 和 Worktree 隔离不会被描述成安全沙箱
+  - [x] 凭据存入操作系统凭据库并仅按 Secret Reference 注入指定 Runtime
+  - [x] Secret 不进入 Renderer、命令行参数、SQLite/WAL/Blob、日志或诊断包
+  - [x] 原始 Shell 字符串不会生成宽泛持久 Allow 规则
+  - [x] 路径穿越、Junction、IPC、XSS、ANSI、Markdown 和 MCP 注入测试通过
+  - [x] observable_only、opaque 和 Worktree 隔离不会被描述成安全沙箱
 
 ### T5.3 资源治理、日志、诊断与性能
 

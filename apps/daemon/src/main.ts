@@ -17,8 +17,12 @@ const instanceId = randomUUID();
 const pipeName = 'tsukiori-' + instanceId;
 const bootstrapToken = process.env.TSUKIORI_IPC_BOOTSTRAP_TOKEN;
 const leaseFile = process.env.TSUKIORI_DAEMON_LEASE_FILE;
+const bootstrapSecretRef = process.env.TSUKIORI_IPC_BOOTSTRAP_REF;
 if (!bootstrapToken || bootstrapToken.length < 32) {
   throw new Error('Daemon requires a parent-provided IPC bootstrap token');
+}
+if (leaseFile && (!bootstrapSecretRef || !/^secretref:[a-f0-9-]{36}$/.test(bootstrapSecretRef))) {
+  throw new Error('Persistent Daemon requires an OS Credential Manager Secret Reference');
 }
 let stopping = false;
 let pipeHost: ChildProcess | null = null;
@@ -45,7 +49,7 @@ function publishLease(): void {
     instanceId,
     pid: process.pid,
     pipeName,
-    bootstrapToken,
+    bootstrapSecretRef,
     createdAt: Date.now(),
   }), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
   renameSync(temporary, leaseFile);

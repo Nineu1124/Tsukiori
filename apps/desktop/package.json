@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tsukiori/adapter-fake": "workspace:*",
+    "@tsukiori/credential-broker": "workspace:*",
     "@tsukiori/protocol": "workspace:*"
   },
   "devDependencies": {

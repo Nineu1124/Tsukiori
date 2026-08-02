@@ -108,6 +108,42 @@ function limit(value: unknown, maxBytes: number): { value: JsonValue; hash: stri
   return { value: { preview, contentHash: hash }, hash, truncated: true, redacted };
 }
 
+const ansiSequence = /[\u001B\u009B](?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001B\\)|[@-_])/g;
+const unsafeControl = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/g;
+
+export type PlainTextPresentation = {
+  format: 'plain_text';
+  text: string;
+  strippedAnsi: boolean;
+  strippedControl: boolean;
+  truncated: boolean;
+};
+
+export function toPlainTextPresentation(value: unknown, maxBytes = 16 * 1024): PlainTextPresentation {
+  if (!Number.isInteger(maxBytes) || maxBytes < 64 || maxBytes > 256 * 1024) {
+    throw new Error('Plain text presentation limit is invalid');
+  }
+  const input = typeof value === 'string' ? value : JSON.stringify(sanitize(value));
+  const withoutAnsi = input.replace(ansiSequence, '');
+  const withoutControl = withoutAnsi.replace(unsafeControl, '');
+  const bytes = Buffer.from(withoutControl, 'utf8');
+  const truncated = bytes.length > maxBytes;
+  let text = truncated ? bytes.subarray(0, maxBytes).toString('utf8') : withoutControl;
+  if (text.endsWith('\uFFFD')) text = text.slice(0, -1);
+  return {
+    format: 'plain_text',
+    text,
+    strippedAnsi: withoutAnsi !== input,
+    strippedControl: withoutControl !== withoutAnsi,
+    truncated,
+  };
+}
+
+export const V1_SECURITY_BOUNDARY_LABELS = Object.freeze({
+  observable_only: 'not_a_security_sandbox',
+  opaque: 'not_a_security_sandbox',
+  worktree: 'code_isolation_not_security_sandbox',
+});
 export class EventNormalizer {
   readonly #runtimeHandleId: string;
   readonly #runtimeType: string;
