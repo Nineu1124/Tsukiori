@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
@@ -125,7 +125,7 @@ test('Project to DeepSeek Runtime change, permission, Diff, Commit, Archive and 
     const sessionId = started.snapshot.session.id;
     const worktreePath = started.snapshot.binding.path;
     assert.equal(['running', 'waiting_permission'].includes(started.turn.status), true);
-    assert.equal(started.snapshot.project.rootPath, f.repository);
+    assert.equal(started.snapshot.project.rootPath, realpathSync.native(f.repository));
     assert.equal(started.snapshot.session.provider, 'dpsk');
     assert.equal(started.snapshot.session.model, 'deepseek-v4-flash');
     assert.equal(started.snapshot.visibleEntryPoints.includes('deepseek'), true);

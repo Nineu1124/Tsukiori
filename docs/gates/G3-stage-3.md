@@ -102,6 +102,8 @@ npm run test:gate3
 
 G3 恢复测试第一版错误地对包含预期 `false` 的安全字段使用 `every(Boolean)`，导致 `runtimeUnavailableShownAsRunning:false` 被误判为 Gate 失败。测试改为逐字段验证预期语义；未降低恢复或安全标准，随后 5/5 通过。
 
+首个 G3 Windows CI `30743708738` 暴露两个仅在 Runner 出现的问题：Actions 默认浅克隆使历史提交祖先检查返回 128；Runner `%TEMP%` 的 8.3 短路径与 Git Probe 的 canonical 长路径被逐字比较。修复为 Checkout `fetch-depth: 0`，并使用 `realpathSync.native()` 比较 Project Root。修复后本机 G0 5/5、Alpha 5/5、G3 5/5、Checkpoint/秘密/whitespace 均通过；安全与功能检查未被删除或降级。
+
 ## 验证命令
 
 ```powershell
