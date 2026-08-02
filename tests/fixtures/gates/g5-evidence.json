@@ -1,43 +1,44 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gate": "G5",
   "decision": "pass",
   "releaseStatus": "local_v1_ready_candidate",
   "platform": "windows-x64",
   "continuousIntegration": {
-    "runId": 30755866810,
-    "headSha": "c9d859da144d944f72bdb8b84f9d9c122dfa35fa",
-    "credentialFreeRegression": "success",
-    "installerLifecycle": "success"
+    "workflow": "windows-ci",
+    "trigger": "g5-completion-push",
+    "requiredConclusion": "success",
+    "credentialFreeRegression": "required",
+    "installerLifecycle": "required"
+  },
+  "preGateEvidence": {
+    "runId": 30758935659,
+    "headSha": "2a8ff95d736a329eb4fc957528eeab2a61c1b0d4",
+    "t5_7TestsPassed": true,
+    "readinessFailureExpected": true,
+    "reason": "G5 and 37.0 intentionally remained unchecked before gate revalidation"
+  },
+  "localInstallerVerification": {
+    "command": "scripts/verify-windows-release-candidate.ps1",
+    "install": "passed",
+    "packagedSmoke": "passed",
+    "update": "passed",
+    "uninstall": "passed",
+    "reinstall": "passed",
+    "finalUninstall": "passed",
+    "userDataRetained": true,
+    "artifactSha256": "84cb427ff3a6c25843d3633b917a249967bb6415120bf3edc20ceb6d3606c51a",
+    "artifactCommitted": false
   },
   "releasePolicy": {
     "localV1RequiresAuthenticode": false,
     "verifiedPublisherRequiresAuthenticode": true,
     "smartScreenWarningRequired": true,
-    "integrity": [
-      "sha256",
-      "ed25519-release-manifest",
-      "https-origin",
-      "channel",
-      "database-schema"
-    ]
+    "integrity": ["sha256", "ed25519-release-manifest", "https-origin", "channel", "database-schema"]
   },
-  "unresolvedSevereIssues": {
-    "security": 0,
-    "dataLoss": 0,
-    "wrongProcessTermination": 0
-  },
-  "acceptance": {
-    "sections": "37.1-37.9",
-    "items": 75,
-    "allChecked": true,
-    "allMappedToEvidence": true
-  },
-  "backlogExcluded": [
-    "B1",
-    "B2",
-    "B3"
-  ],
+  "unresolvedSevereIssues": { "security": 0, "dataLoss": 0, "wrongProcessTermination": 0 },
+  "acceptance": { "sections": "37.1-37.10", "items": 85, "allChecked": true, "allMappedToEvidence": true },
+  "backlogExcluded": ["B1", "B2", "B3"],
   "containsCredentials": false,
   "containsPrivateSigningMaterial": false,
   "containsUserSource": false

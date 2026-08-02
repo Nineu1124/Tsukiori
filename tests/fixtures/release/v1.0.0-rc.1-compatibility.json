@@ -37,6 +37,23 @@
         "WebSocket sampling timed out on this host and automatically degraded to HTTPS.",
         "No structured network approval context was observed; this capability remains unknown."
       ]
+    },
+    {
+      "runtime": "claude-code",
+      "minimumSupportedVersion": "2.1.201",
+      "maximumTestedVersion": "2.1.201",
+      "transport": "stream-json",
+      "supportLevel": "degraded",
+      "knownIssues": [
+        "Permission semantics are limited to Plan, Accept Edits, and Don't Ask.",
+        "Hooks, Skills, MCP, Subagents, Checkpoint, and granular approvals remain outside the Local V1 adapter contract.",
+        "Provider and model compatibility depend on the configured Anthropic, DeepSeek, or Anthropic-compatible service."
+      ]
+    },
+    {
+      "runtime": "generic-acp",
+      "supportLevel": "unknown",
+      "knownIssues": ["Generic ACP is not connected to Local V1 session creation and remains backlog task B2."]
     }
   ],
   "publication": {

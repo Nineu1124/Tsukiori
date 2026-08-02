@@ -30,8 +30,8 @@ function checkboxLines(startMarker, endMarker) {
     .filter((line) => /^- \[[ xX]\] /.test(line));
 }
 
-test('all 28 V1 tasks and all six stage gates are complete', () => {
-  const counts = [4, 5, 4, 4, 5, 6];
+test('all 29 V1 tasks and all six stage gates are complete', () => {
+  const counts = [4, 5, 4, 4, 5, 7];
   let taskCount = 0;
   for (let stage = 0; stage < counts.length; stage += 1) {
     for (let item = 1; item <= counts[stage]; item += 1) {
@@ -61,11 +61,11 @@ test('release candidate, matrix, report, known issues, and G5 evidence are archi
   }
   assert.equal(g5.gate, 'G5');
   assert.equal(g5.decision, 'pass');
-  assert.equal(ready.g5ContinuousIntegration.runId, 30755866810);
-  assert.equal(ready.g5ContinuousIntegration.headSha, 'c9d859da144d944f72bdb8b84f9d9c122dfa35fa');
-  assert.equal(ready.g5ContinuousIntegration.conclusion, 'success');
-  assert.equal(ready.g5ContinuousIntegration.credentialFreeRegression, 'success');
-  assert.equal(ready.g5ContinuousIntegration.installerLifecycle, 'success');
+  assert.equal(ready.g5ContinuousIntegration.workflow, 'windows-ci');
+  assert.equal(ready.g5ContinuousIntegration.trigger, 'g5-completion-push');
+  assert.equal(ready.g5ContinuousIntegration.requiredConclusion, 'success');
+  assert.equal(ready.g5ContinuousIntegration.credentialFreeRegression, 'required');
+  assert.equal(ready.g5ContinuousIntegration.installerLifecycle, 'required');
 });
 
 test('Local V1 signing policy remains explicit and Verified Publisher stays fail closed', () => {

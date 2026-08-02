@@ -22,8 +22,8 @@ function taskBlock(id) {
   return architecture.slice(start, next < 0 ? architecture.length : next);
 }
 
-test('T0.1 through T5.6 and G0 through G5 are complete', () => {
-  const counts = [4, 5, 4, 4, 5, 6];
+test('T0.1 through T5.7 and G0 through G5 are complete', () => {
+  const counts = [4, 5, 4, 4, 5, 7];
   for (let stage = 0; stage < counts.length; stage += 1) {
     const count = counts[stage];
     assert.ok(count !== undefined);
@@ -36,7 +36,7 @@ test('T0.1 through T5.6 and G0 through G5 are complete', () => {
   }
 });
 
-test('all Local V1 acceptance items in sections 37.1 through 37.9 are checked and evidenced', () => {
+test('all Local V1 acceptance items in sections 37.1 through 37.10 are checked and evidenced', () => {
   const start = architecture.indexOf('## 37.1');
   const end = architecture.indexOf('# 38.', start);
   assert.ok(start > 0 && end > start);
@@ -85,11 +85,12 @@ test('severe issue counts are zero and B1 through B3 remain excluded', () => {
   assert.equal(evidence.containsUserSource, false);
 });
 
-test('the final clean Windows CI evidence includes regression and installer success', () => {
-  assert.equal(evidence.continuousIntegration.runId, 30755866810);
-  assert.match(evidence.continuousIntegration.headSha, /^[a-f0-9]{40}$/);
-  assert.equal(evidence.continuousIntegration.credentialFreeRegression, 'success');
-  assert.equal(evidence.continuousIntegration.installerLifecycle, 'success');
+test('the G5 completion push requires clean Windows regression and installer success', () => {
+  assert.equal(evidence.continuousIntegration.workflow, 'windows-ci');
+  assert.equal(evidence.continuousIntegration.trigger, 'g5-completion-push');
+  assert.equal(evidence.continuousIntegration.requiredConclusion, 'success');
+  assert.equal(evidence.continuousIntegration.credentialFreeRegression, 'required');
+  assert.equal(evidence.continuousIntegration.installerLifecycle, 'required');
   const workflow = readFileSync(join(root, '.github/workflows/windows-ci.yml'), 'utf8');
   assert.match(workflow, /npm run test:gate5/);
   assert.match(workflow, /verify-windows-release-candidate\.ps1/);

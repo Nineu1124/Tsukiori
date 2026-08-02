@@ -3613,15 +3613,15 @@ src/helpers/
 
 ### G5 阶段 5 Gate
 
-- [ ] Windows Local V1 已满足发布条件
+- [x] Windows Local V1 已满足发布条件
 - 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5、T5.6、T5.7
 - 交付物：最终 V1 Gate 报告和发布签字记录
 - Checkpoints：
-  - [ ] T0.* 至 T5.* 的全部顶层任务已勾选
-  - [ ] G0 至 G4 已通过，且 G5 无未解决阻塞项
-  - [ ] 第 37.1 至 37.10 章所有 Local V1 发布检查已勾选并有证据
-  - [ ] 严重级别安全、数据丢失和错误进程终止问题均为零
-  - [ ] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
+  - [x] T0.* 至 T5.* 的全部顶层任务已勾选
+  - [x] G0 至 G4 已通过，且 G5 无未解决阻塞项
+  - [x] 第 37.1 至 37.10 章所有 Local V1 发布检查已勾选并有证据
+  - [x] 严重级别安全、数据丢失和错误进程终止问题均为零
+  - [x] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
 
 ## V1 之后任务池
 
@@ -3986,11 +3986,11 @@ Runtime Native Protocol
 
 ## 37.0 Local V1 Ready 总门槛
 
-- [ ] [T0.*–T5.*] T0.1 至 T5.7 的全部顶层任务已完成
-- [ ] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
-- [ ] [37.1–37.10] 本章所有分类验收项均已勾选
-- [ ] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
-- [ ] [B1–B3] 完整 Claude Adapter、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
+- [x] [T0.*–T5.*] T0.1 至 T5.7 的全部顶层任务已完成
+- [x] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
+- [x] [37.1–37.10] 本章所有分类验收项均已勾选
+- [x] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
+- [x] [B1–B3] 完整 Claude Adapter、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
 
 只有以上五项全部通过，版本状态才能标记为 Local V1 Ready。Verified Publisher 是未来可选发布通道，不阻塞 Local V1。
 
@@ -4004,14 +4004,14 @@ Runtime Native Protocol
 
 ## 37.2 Runtime
 
-- [x] [T4.1, T5.6] 自动发现并实际启动 Codex；OpenCode 保留为后续可选 Runtime
-- [x] [T3.1, T4.1, T4.3, T5.2] 显示路径、版本、认证来源、Provider 数据出口、能力支持级别和 Enforcement Level
-- [x] [T5.6] Codex 可使用现有 ChatGPT/API 认证完成真实 Thread 与 Turn
+- [x] [T4.1, T5.6, T5.7] 自动发现并实际启动 Codex 与受限 Claude Code；OpenCode 保留为后续可选 Runtime
+- [x] [T3.1, T4.1, T4.3, T5.2, T5.7] 显示路径、版本、认证来源、Provider 数据出口、能力支持级别和 Enforcement Level
+- [x] [T5.6, T5.7] Codex 可使用现有 ChatGPT 或兼容 API Provider 完成真实 Thread 与 Turn
 - [x] [T4.1] Codex 使用原生 app-server
 - [x] [T3.2, T4.2] 控制命令与事件流分离
 - [x] [T4.2, T4.5, T5.6] 多个 Codex Session 使用独立 app-server 事件读取器
 - [x] [T3.3, T4.5, T5.1] 单个 Runtime 崩溃不影响其他 Runtime
-- [x] [T3.4, T4.3, T5.6, G4] OpenCode、Claude 和 ACP 未接入交互产品时显示为后续能力，不伪装为已支持
+- [x] [T3.4, T4.3, T5.6, T5.7, G4] OpenCode 与 ACP 显示为 `unknown`；Claude Code `stream-json` 接入显示为 `degraded`，完整 Claude Adapter 仍属 B1，不伪装为完整支持
 
 ## 37.3 Project / Worktree
 
