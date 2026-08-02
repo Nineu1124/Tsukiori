@@ -219,7 +219,8 @@ export type RuntimeAuditRecord = {
   profileId?: string;
   handleId?: string;
   action: 'discover' | 'probe' | 'schema_lock' | 'start' | 'initialize' | 'auth_probe'
-    | 'capability_probe' | 'stop' | 'exit' | 'reprobe';
+    | 'capability_probe' | 'provider_probe' | 'provider_verify'
+    | 'stop' | 'exit' | 'reprobe';
   outcome: 'started' | 'succeeded' | 'failed' | 'degraded';
   detail: JsonValue;
   createdAt: number;

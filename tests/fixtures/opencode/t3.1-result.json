@@ -1,0 +1,16 @@
+{
+  "task": "T3.1",
+  "runtimeVersion": "1.18.4",
+  "worktreeScopedServers": 2,
+  "deepSeek": {
+    "providerId": "dpsk",
+    "modelId": "deepseek-v4-flash",
+    "destinationHost": "api.deepseek.com",
+    "realSessionCompleted": true
+  },
+  "credentials": {
+    "persisted": false,
+    "commandLineArguments": false
+  },
+  "containsCredentials": false
+}

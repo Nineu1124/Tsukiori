@@ -26,6 +26,12 @@ h1 { margin: 5px 0 0; font-size: 28px; letter-spacing: -.035em; }.workspace-meta
 dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }dl div { padding: 10px; border-radius: 10px; background: rgba(8,10,14,.38); }dt { color: #768499; font-size: 10px; text-transform: uppercase; }dd { margin: 4px 0 0; font-size: 13px; }
 .permission-actions { display: flex; justify-content: end; gap: 8px; margin-top: 16px; }.permission-actions button { border: 1px solid #3b4451; border-radius: 9px; background: #1d232d; padding: 8px 12px; }.permission-actions .primary { border-color: #6d8cc0; background: #41689f; }
 .native-capability-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid #2b3340; }
+.provider-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid #2b3340; }
+.provider-panel label { display: grid; gap: 5px; margin-top: 10px; color: #8f9bad; font-size: 11px; }
+.provider-panel select { width: 100%; padding: 8px 10px; border: 1px solid #354052; border-radius: 8px; color: #edf1f7; background: #111720; }
+.data-destination { margin: 12px 0 4px; color: #c4cfdd; font-size: 12px; }
+.data-destination strong { color: #7ce0aa; font-family: ui-monospace,Consolas,monospace; }
+.request-boundary { margin: 0; color: #768499; font-size: 11px; }
 .native-capability-panel ul { display: grid; gap: 8px; margin: 10px 0; padding: 0; list-style: none; }
 .native-capability { display: grid; gap: 5px; padding: 10px; border: 1px solid #303948; border-radius: 10px; background: rgba(8,10,14,.35); }
 .native-capability div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

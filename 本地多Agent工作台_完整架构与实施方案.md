@@ -3386,14 +3386,14 @@ src/helpers/
 
 ### T3.1 OpenCode 发现、启动与 Provider
 
-- [ ] 实现 OpenCode Runtime 生命周期和 Provider 配置
+- [x] 实现 OpenCode Runtime 生命周期和 Provider 配置
 - 前置依赖：G2、T0.1
 - 交付物：OpenCode Adapter、Runtime Profile、Provider/Model 选择器
 - Checkpoints：
-  - [ ] 可自动发现并 Probe OpenCode 路径、版本和认证来源
-  - [ ] 每个工作区可启动和停止独立 Worktree Scope Server
-  - [ ] Provider 数据出口在启动前清晰展示
-  - [ ] DeepSeek Provider 可完成真实会话且 API Key 不进入参数、日志或数据库
+  - [x] 可自动发现并 Probe OpenCode 路径、版本和认证来源
+  - [x] 每个工作区可启动和停止独立 Worktree Scope Server
+  - [x] Provider 数据出口在启动前清晰展示
+  - [x] DeepSeek Provider 可完成真实会话且 API Key 不进入参数、日志或数据库
 
 ### T3.2 OpenCode Session、Turn 与 SSE
 

@@ -62,13 +62,16 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
   assert.deepEqual(result.rendererState, {
     permissionCards: 1, toolCards: 1, attentionItems: 1,
     permissionCategory: 'shell', enforcementLevel: 'interceptable',
-    runtimeCards: 1, runtimeAuthSource: 'chatgpt', runtimeCompatibility: 'supported',
+    runtimeCards: 2, runtimeAuthSource: 'chatgpt', runtimeCompatibility: 'supported',
     nativeCapabilityRows: 5,
     nativeCapabilityLevels: ['supported', 'experimental', 'degraded', 'unsupported', 'unknown'],
     nativeCapabilityScopes: [
       'runtime_native', 'runtime_native', 'runtime_native', 'runtime_native', 'runtime_native',
     ],
     sandboxEnforcement: 'runtime_native · enforcement=unknown',
+    openCodeProvider: 'dpsk', openCodeModel: 'deepseek-v4-flash',
+    openCodeDestination: 'api.deepseek.com', modelRequestStarted: 'false',
+    modelRequestState: '模型请求尚未启动',
   });
   assert.equal(result.daemonVersion, '0.1.0');
   assert.equal(result.protocolVersion, 1);

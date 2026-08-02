@@ -20,6 +20,9 @@ test('Session workspace includes Attention, Tool, Permission, and Runtime auth p
   assert.match(html, /认证来源/);
   assert.match(html, /兼容性/);
   assert.match(html, /CODEX NATIVE CAPABILITIES/);
+  assert.match(html, /PROVIDER &amp; DATA DESTINATION/);
+  assert.match(html, /数据出口/);
+  assert.match(html, /模型请求尚未启动/);
   assert.match(html, /不自动提升为公共 Adapter 能力/);
   for (const label of ['类别', '风险', '范围', 'Enforcement Level']) assert.match(html, new RegExp(label));
   assert.match(script, /window\.tsukiori\.workspace\.snapshot\(\)/);
@@ -28,6 +31,9 @@ test('Session workspace includes Attention, Tool, Permission, and Runtime auth p
   assert.match(script, /supportLevel/);
   assert.match(script, /enforcementLevel/);
   assert.match(script, /runtime_native/);
+  assert.match(script, /runtime\.providers/);
+  assert.match(script, /destinationHost/);
+  assert.match(script, /modelRequestStarted/);
   assert.match(script, /textContent/);
   assert.doesNotMatch(script, /innerHTML|insertAdjacentHTML|eval\(/);
 });

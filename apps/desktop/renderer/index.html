@@ -59,6 +59,13 @@
           <div><dt>认证来源</dt><dd data-field="authSource"></dd></div>
           <div><dt>兼容性</dt><dd data-field="compatibility"></dd></div>
         </dl>
+        <div class="provider-panel" data-field="providerPanel" hidden>
+          <p class="section-label">PROVIDER &amp; DATA DESTINATION</p>
+          <label>Provider<select data-field="providerSelect" aria-label="OpenCode Provider"></select></label>
+          <label>Model<select data-field="modelSelect" aria-label="OpenCode Model"></select></label>
+          <p class="data-destination">数据出口：<strong data-field="destinationHost"></strong></p>
+          <p class="request-boundary" data-field="modelRequestState">模型请求尚未启动</p>
+        </div>
         <div class="native-capability-panel">
           <p class="section-label">CODEX NATIVE CAPABILITIES</p>
           <ul data-field="nativeCapabilities" aria-label="Codex native capabilities"></ul>

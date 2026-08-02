@@ -39,6 +39,14 @@ const workspaceSnapshot = smokeMode ? {
       { id: 'authentication', label: '认证来源', supportLevel: 'unknown',
         enforcementLevel: 'unknown', scope: 'runtime_native', summary: 'not verified' },
     ],
+  }, {
+    id: 'runtime-opencode', runtimeType: 'opencode', version: '1.18.4', state: 'ready',
+    authenticated: true, authSource: 'apikey', compatibility: 'supported',
+    providers: [{
+      id: 'dpsk', name: 'DeepSeek', connected: true, destinationHost: 'api.deepseek.com',
+      models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }],
+    }],
+    nativeCapabilities: [],
   }],
 } : { permissions: [], attention: [], tools: [], runtimes: [] };
 let quitting = false;
@@ -102,6 +110,21 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
             .map((element) => element.textContent?.split(' · ')[0]),
           sandboxEnforcement: document.querySelector(
             '.native-capability[data-capability="sandbox"] [data-field="enforcement"]',
+          )?.textContent,
+          openCodeProvider: document.querySelector(
+            '.provider-panel[data-provider-id="dpsk"] [data-field="providerSelect"]',
+          )?.value,
+          openCodeModel: document.querySelector(
+            '.provider-panel[data-provider-id="dpsk"] [data-field="modelSelect"]',
+          )?.value,
+          openCodeDestination: document.querySelector(
+            '.provider-panel[data-provider-id="dpsk"] [data-field="destinationHost"]',
+          )?.textContent,
+          modelRequestStarted: document.querySelector(
+            '.provider-panel[data-provider-id="dpsk"]',
+          )?.dataset.modelRequestStarted,
+          modelRequestState: document.querySelector(
+            '.provider-panel[data-provider-id="dpsk"] [data-field="modelRequestState"]',
           )?.textContent,
         });
       } else if (++attempts >= 40) {

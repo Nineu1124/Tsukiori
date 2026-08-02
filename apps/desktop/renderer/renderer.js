@@ -58,6 +58,46 @@ function renderNativeCapability(list, capability) {
   list.append(item);
 }
 
+function appendOption(select, value, label) {
+  const option = document.createElement('option');
+  option.value = String(value);
+  option.textContent = String(label);
+  select.append(option);
+}
+
+function renderProviderSelection(card, runtime) {
+  const providers = runtime.providers ?? [];
+  if (providers.length === 0) return;
+  const panel = card.querySelector('[data-field="providerPanel"]');
+  const providerSelect = card.querySelector('[data-field="providerSelect"]');
+  const modelSelect = card.querySelector('[data-field="modelSelect"]');
+  const destination = card.querySelector('[data-field="destinationHost"]');
+  const requestState = card.querySelector('[data-field="modelRequestState"]');
+  panel.hidden = false;
+  panel.dataset.modelRequestStarted = 'false';
+
+  for (const provider of providers) {
+    appendOption(providerSelect, provider.id, provider.name ?? provider.id);
+  }
+  const updateProvider = () => {
+    const provider = providers.find((item) => item.id === providerSelect.value) ?? providers[0];
+    modelSelect.textContent = '';
+    for (const model of provider?.models ?? []) {
+      appendOption(modelSelect, model.id, model.name ?? model.id);
+    }
+    destination.textContent = String(provider?.destinationHost ?? 'unknown');
+    panel.dataset.providerId = String(provider?.id ?? 'unknown');
+    panel.dataset.destinationHost = String(provider?.destinationHost ?? 'unknown');
+    panel.dataset.modelId = String(modelSelect.value || 'unknown');
+    requestState.textContent = '模型请求尚未启动';
+  };
+  providerSelect.addEventListener('change', updateProvider);
+  modelSelect.addEventListener('change', () => {
+    panel.dataset.modelId = String(modelSelect.value || 'unknown');
+  });
+  updateProvider();
+}
+
 function renderRuntime(runtime) {
   const template = document.querySelector('#runtime-card-template');
   const card = template.content.firstElementChild.cloneNode(true);
@@ -70,6 +110,7 @@ function renderRuntime(runtime) {
   for (const capability of runtime.nativeCapabilities ?? []) {
     renderNativeCapability(capabilityList, capability);
   }
+  renderProviderSelection(card, runtime);
   runtimeList.append(card);
 }
 function renderAttention(item) {
