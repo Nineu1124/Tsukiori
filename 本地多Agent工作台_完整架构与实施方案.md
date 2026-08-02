@@ -3350,14 +3350,14 @@ src/helpers/
 
 ### T2.3 Setup、Cleanup 与 Workspace Binding
 
-- [ ] 实现项目初始化、清理和 Session 工作区绑定
+- [x] 实现项目初始化、清理和 Session 工作区绑定
 - 前置依赖：T2.2
 - 交付物：Setup/Cleanup 执行器、Workspace Binding、审计记录
 - Checkpoints：
-  - [ ] 结构化命令与显式授权 Shell 的执行路径能够区分
-  - [ ] Setup 失败会保留可诊断状态，不自动删除含代码的 Worktree
-  - [ ] 每个可写 Session 默认绑定独立 Worktree
-  - [ ] 归档后仍能定位 Session、Commit、Worktree 和清理状态
+  - [x] 结构化命令与显式授权 Shell 的执行路径能够区分
+  - [x] Setup 失败会保留可诊断状态，不自动删除含代码的 Worktree
+  - [x] 每个可写 Session 默认绑定独立 Worktree
+  - [x] 归档后仍能定位 Session、Commit、Worktree 和清理状态
 
 ### T2.4 Git Status 与 Diff 服务
 

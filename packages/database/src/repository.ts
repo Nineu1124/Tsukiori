@@ -4,6 +4,7 @@ import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type {
+  ActionAuditRecord,
   BlobObjectRecord,
   ExecutionEnvironment,
   HostSession,
@@ -19,7 +20,9 @@ import type {
   SessionLifecycle,
   SessionStateProjection,
   WorkspaceState,
+  WorkspaceBindingRecord,
   WorkspaceStateProjection,
+  WorktreeAction,
   WorktreeRecord,
 } from '@tsukiori/domain';
 import { RestrictedBlobStore } from './blob-store.js';
@@ -134,6 +137,10 @@ export class LocalDatabase {
     this.#guard.assertText(id);
     return this.sqlite.prepare('DELETE FROM projects WHERE id=?').run(id).changes === 1;
   }
+  readSession(id: string): HostSession | null {
+    const row = this.sqlite.prepare('SELECT * FROM sessions WHERE id=?').get(id) as Record<string, unknown> | undefined;
+    return row ? this.#session(row) : null;
+  }
   saveSession(value: HostSession): void {
     this.#validate(value);
     this.orm.insert(schema.sessions).values({
@@ -239,6 +246,56 @@ export class LocalDatabase {
     ) as Record<string, unknown>[];
     return rows.map((row) => this.#worktree(row));
   }
+  saveWorkspaceBinding(value: WorkspaceBindingRecord): void {
+    this.#validate(value);
+    this.orm.insert(schema.workspaceBindings).values({
+      id: value.id, sessionId: value.sessionId, projectId: value.projectId,
+      worktreeId: value.worktreeId, executionEnvironmentId: value.executionEnvironmentId,
+      bindingType: value.bindingType, status: value.status, path: value.path,
+      baseCommit: value.baseCommit, lastKnownCommit: value.lastKnownCommit ?? null,
+      cleanupState: value.cleanupState, createdAt: value.createdAt, updatedAt: value.updatedAt,
+      archivedAt: value.archivedAt ?? null,
+    }).onConflictDoUpdate({ target: schema.workspaceBindings.id, set: {
+      status: value.status, path: value.path, lastKnownCommit: value.lastKnownCommit ?? null,
+      cleanupState: value.cleanupState, updatedAt: value.updatedAt, archivedAt: value.archivedAt ?? null,
+    }}).run();
+  }
+
+  readWorkspaceBinding(id: string): WorkspaceBindingRecord | null {
+    const row = this.sqlite.prepare('SELECT * FROM workspace_bindings WHERE id=? OR session_id=?')
+      .get(id, id) as Record<string, unknown> | undefined;
+    return row ? this.#workspaceBinding(row) : null;
+  }
+
+  listWorkspaceBindings(projectId?: string): WorkspaceBindingRecord[] {
+    const rows = (projectId === undefined
+      ? this.sqlite.prepare('SELECT * FROM workspace_bindings ORDER BY created_at, id').all()
+      : this.sqlite.prepare('SELECT * FROM workspace_bindings WHERE project_id=? ORDER BY created_at, id').all(projectId)
+    ) as Record<string, unknown>[];
+    return rows.map((row) => this.#workspaceBinding(row));
+  }
+
+  saveActionAudit(value: ActionAuditRecord): void {
+    this.#validate(value);
+    this.orm.insert(schema.actionAudit).values({
+      id: value.id, projectId: value.projectId, sessionId: value.sessionId,
+      worktreeId: value.worktreeId, phase: value.phase, actionIndex: value.actionIndex,
+      actionType: value.actionType, executable: value.executable ?? null,
+      shellType: value.shellType ?? null, scriptHash: value.scriptHash ?? null,
+      approvalSource: value.approvalSource ?? null, status: value.status,
+      exitCode: value.exitCode ?? null, timedOut: value.timedOut ?? null,
+      diagnosticJson: this.#json(value.diagnostic), startedAt: value.startedAt,
+      finishedAt: value.finishedAt ?? null,
+    }).onConflictDoUpdate({ target: schema.actionAudit.id, set: {
+      status: value.status, exitCode: value.exitCode ?? null, timedOut: value.timedOut ?? null,
+      diagnosticJson: this.#json(value.diagnostic), finishedAt: value.finishedAt ?? null,
+    }}).run();
+  }
+
+  listActionAudits(worktreeId: string): ActionAuditRecord[] {
+    return (this.sqlite.prepare('SELECT * FROM action_audit WHERE worktree_id=? ORDER BY started_at, action_index, id')
+      .all(worktreeId) as Record<string, unknown>[]).map((row) => this.#actionAudit(row));
+  }
   appendSessionEvent(value: SessionEventRecord): void {
     this.#validate(value);
     this.orm.insert(schema.sessionEvents).values({
@@ -335,6 +392,52 @@ export class LocalDatabase {
     return row.count;
   }
 
+  #session(row: Record<string, unknown>): HostSession {
+    return {
+      id: String(row.id), title: String(row.title), projectId: String(row.project_id),
+      ...(row.primary_workspace_binding_id === null ? {} : { primaryWorkspaceBindingId: String(row.primary_workspace_binding_id) }),
+      runtimeType: String(row.runtime_type), runtimeProfileId: String(row.runtime_profile_id),
+      ...(row.runtime_session_id === null ? {} : { runtimeSessionId: String(row.runtime_session_id) }),
+      ...(row.provider === null ? {} : { provider: String(row.provider) }),
+      ...(row.model === null ? {} : { model: String(row.model) }),
+      ...(row.mode === null ? {} : { mode: String(row.mode) }),
+      lifecycle: String(row.lifecycle) as HostSession['lifecycle'],
+      activity: String(row.activity) as HostSession['activity'], health: String(row.health) as HostSession['health'],
+      writeMode: String(row.write_mode) as HostSession['writeMode'], createdAt: Number(row.created_at),
+      updatedAt: Number(row.updated_at), ...(row.archived_at === null ? {} : { archivedAt: Number(row.archived_at) }),
+    };
+  }
+
+  #workspaceBinding(row: Record<string, unknown>): WorkspaceBindingRecord {
+    return {
+      id: String(row.id), sessionId: String(row.session_id), projectId: String(row.project_id),
+      worktreeId: String(row.worktree_id), executionEnvironmentId: String(row.execution_environment_id),
+      bindingType: String(row.binding_type) as WorkspaceBindingRecord['bindingType'],
+      status: String(row.status) as WorkspaceBindingRecord['status'], path: String(row.path),
+      baseCommit: String(row.base_commit),
+      ...(row.last_known_commit === null ? {} : { lastKnownCommit: String(row.last_known_commit) }),
+      cleanupState: String(row.cleanup_state) as WorkspaceBindingRecord['cleanupState'],
+      createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+      ...(row.archived_at === null ? {} : { archivedAt: Number(row.archived_at) }),
+    };
+  }
+
+  #actionAudit(row: Record<string, unknown>): ActionAuditRecord {
+    return {
+      id: String(row.id), projectId: String(row.project_id), sessionId: String(row.session_id),
+      worktreeId: String(row.worktree_id), phase: String(row.phase) as ActionAuditRecord['phase'],
+      actionIndex: Number(row.action_index), actionType: String(row.action_type) as ActionAuditRecord['actionType'],
+      ...(row.executable === null ? {} : { executable: String(row.executable) }),
+      ...(row.shell_type === null ? {} : { shellType: String(row.shell_type) }),
+      ...(row.script_hash === null ? {} : { scriptHash: String(row.script_hash) }),
+      ...(row.approval_source === null ? {} : { approvalSource: String(row.approval_source) }),
+      status: String(row.status) as ActionAuditRecord['status'],
+      ...(row.exit_code === null ? {} : { exitCode: Number(row.exit_code) }),
+      ...(row.timed_out === null ? {} : { timedOut: Boolean(row.timed_out) }),
+      diagnostic: JSON.parse(String(row.diagnostic_json)) as JsonValue,
+      startedAt: Number(row.started_at), ...(row.finished_at === null ? {} : { finishedAt: Number(row.finished_at) }),
+    };
+  }
   #operation(row: Record<string, unknown>): OperationRecord {
     return {
       id: String(row.id), operationId: String(row.operation_id),
@@ -380,8 +483,8 @@ export class LocalDatabase {
       rootPath: String(row.root_path), gitRoot: String(row.git_root), repositoryId: String(row.repository_id),
       ...(row.default_branch === null ? {} : { defaultBranch: String(row.default_branch) }),
       ...(row.default_base_ref === null ? {} : { defaultBaseRef: String(row.default_base_ref) }),
-      ...(row.setup_actions_json === null ? {} : { setupActions: JSON.parse(String(row.setup_actions_json)) as JsonValue[] }),
-      ...(row.cleanup_actions_json === null ? {} : { cleanupActions: JSON.parse(String(row.cleanup_actions_json)) as JsonValue[] }),
+      ...(row.setup_actions_json === null ? {} : { setupActions: JSON.parse(String(row.setup_actions_json)) as WorktreeAction[] }),
+      ...(row.cleanup_actions_json === null ? {} : { cleanupActions: JSON.parse(String(row.cleanup_actions_json)) as WorktreeAction[] }),
       ...(row.canonical_git_dir === null ? {} : { canonicalGitDir: String(row.canonical_git_dir) }),
       ...(row.current_branch === null ? {} : { currentBranch: String(row.current_branch) }),
       ...(row.remote_count === null ? {} : { remoteCount: Number(row.remote_count) }),

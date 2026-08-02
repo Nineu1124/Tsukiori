@@ -30,7 +30,8 @@
     "test:permission": "pnpm run build && node --test tests/permission/*.test.mjs",
     "test:ui": "node --test tests/ui/*.test.mjs",
     "test:project": "pnpm run build && node --test tests/project/*.test.mjs",
-    "test:worktree": "pnpm run build && node --test tests/worktree/*.test.mjs"
+    "test:worktree": "pnpm run build && node --test tests/worktree/*.test.mjs",
+    "test:workspace": "pnpm run build && node --test tests/workspace/*.test.mjs"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "1.18.4",

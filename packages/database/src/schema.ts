@@ -241,6 +241,27 @@ export const attentionItems = sqliteTable(
   },
   (table) => [uniqueIndex('attention_items_kind_source_uq').on(table.kind, table.sourceRef)],
 );
+export const workspaceBindings = sqliteTable('workspace_bindings', {
+  id: text('id').primaryKey(), sessionId: text('session_id').notNull().unique(),
+  projectId: text('project_id').notNull(), worktreeId: text('worktree_id').notNull(),
+  executionEnvironmentId: text('execution_environment_id').notNull(),
+  bindingType: text('binding_type').notNull(), status: text('status').notNull(),
+  path: text('path').notNull(), baseCommit: text('base_commit').notNull(),
+  lastKnownCommit: text('last_known_commit'), cleanupState: text('cleanup_state').notNull(),
+  createdAt: integer('created_at').notNull(), updatedAt: integer('updated_at').notNull(),
+  archivedAt: integer('archived_at'),
+});
+
+export const actionAudit = sqliteTable('action_audit', {
+  id: text('id').primaryKey(), projectId: text('project_id').notNull(),
+  sessionId: text('session_id').notNull(), worktreeId: text('worktree_id').notNull(),
+  phase: text('phase').notNull(), actionIndex: integer('action_index').notNull(),
+  actionType: text('action_type').notNull(), executable: text('executable'),
+  shellType: text('shell_type'), scriptHash: text('script_hash'), approvalSource: text('approval_source'),
+  status: text('status').notNull(), exitCode: integer('exit_code'),
+  timedOut: integer('timed_out', { mode: 'boolean' }), diagnosticJson: text('diagnostic_json').notNull(),
+  startedAt: integer('started_at').notNull(), finishedAt: integer('finished_at'),
+});
 export const databaseSchema = {
   executionEnvironments,
   projects,
@@ -259,4 +280,6 @@ export const databaseSchema = {
   permissionRules,
   permissionAudit,
   attentionItems,
+  workspaceBindings,
+  actionAudit,
 };

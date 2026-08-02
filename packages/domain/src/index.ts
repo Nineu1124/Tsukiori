@@ -34,6 +34,10 @@ export type ExecutionEnvironment = {
   updatedAt: number;
 };
 
+export type WorktreeAction =
+  | { type: 'exec'; executable: string; args: string[]; timeoutMs?: number }
+  | { type: 'shell'; shell: 'powershell' | 'cmd' | 'bash' | 'zsh'; script: string; approvalSource: string; timeoutMs?: number };
+
 export type Project = {
   id: string;
   name: string;
@@ -43,8 +47,8 @@ export type Project = {
   repositoryId: string;
   defaultBranch?: string;
   defaultBaseRef?: string;
-  setupActions?: JsonValue[];
-  cleanupActions?: JsonValue[];
+  setupActions?: WorktreeAction[];
+  cleanupActions?: WorktreeAction[];
   canonicalGitDir?: string;
   currentBranch?: string;
   remoteCount?: number;
@@ -266,6 +270,42 @@ export type AttentionItemRecord = {
   createdAt: number;
   updatedAt: number;
   resolvedAt?: number;
+};
+export type WorkspaceBindingRecord = {
+  id: string;
+  sessionId: string;
+  projectId: string;
+  worktreeId: string;
+  executionEnvironmentId: string;
+  bindingType: 'isolated-worktree' | 'shared-workdir' | 'read-only';
+  status: 'preparing' | 'active' | 'setup_failed' | 'archived';
+  path: string;
+  baseCommit: string;
+  lastKnownCommit?: string;
+  cleanupState: 'not_requested' | 'retained' | 'succeeded' | 'failed' | 'blocked';
+  createdAt: number;
+  updatedAt: number;
+  archivedAt?: number;
+};
+
+export type ActionAuditRecord = {
+  id: string;
+  projectId: string;
+  sessionId: string;
+  worktreeId: string;
+  phase: 'setup' | 'cleanup';
+  actionIndex: number;
+  actionType: 'exec' | 'shell';
+  executable?: string;
+  shellType?: string;
+  scriptHash?: string;
+  approvalSource?: string;
+  status: 'prepared' | 'running' | 'succeeded' | 'failed';
+  exitCode?: number;
+  timedOut?: boolean;
+  diagnostic: JsonValue;
+  startedAt: number;
+  finishedAt?: number;
 };
 export type BlobObjectRecord = {
   id: string;

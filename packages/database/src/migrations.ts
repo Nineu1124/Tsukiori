@@ -150,11 +150,37 @@ ALTER TABLE projects ADD COLUMN is_dirty INTEGER;
 ALTER TABLE projects ADD COLUMN last_probed_at INTEGER;
 CREATE UNIQUE INDEX projects_repository_id_uq ON projects(repository_id);
 `;
+const migration5 = `
+CREATE TABLE workspace_bindings (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL UNIQUE, project_id TEXT NOT NULL,
+  worktree_id TEXT NOT NULL, execution_environment_id TEXT NOT NULL,
+  binding_type TEXT NOT NULL, status TEXT NOT NULL, path TEXT NOT NULL,
+  base_commit TEXT NOT NULL, last_known_commit TEXT, cleanup_state TEXT NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER,
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (project_id) REFERENCES projects(id),
+  FOREIGN KEY (worktree_id) REFERENCES worktrees(id),
+  FOREIGN KEY (execution_environment_id) REFERENCES execution_environments(id)
+);
+CREATE INDEX workspace_bindings_worktree_idx ON workspace_bindings(worktree_id, status);
+CREATE TABLE action_audit (
+  id TEXT PRIMARY KEY, project_id TEXT NOT NULL, session_id TEXT NOT NULL, worktree_id TEXT NOT NULL,
+  phase TEXT NOT NULL, action_index INTEGER NOT NULL, action_type TEXT NOT NULL,
+  executable TEXT, shell_type TEXT, script_hash TEXT, approval_source TEXT,
+  status TEXT NOT NULL, exit_code INTEGER, timed_out INTEGER,
+  diagnostic_json TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER,
+  FOREIGN KEY (project_id) REFERENCES projects(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (worktree_id) REFERENCES worktrees(id)
+);
+CREATE INDEX action_audit_workspace_idx ON action_audit(worktree_id, phase, started_at);
+`;
 export const migrations: readonly Migration[] = [
   { version: 1, name: 'core_records', sql: migration1 },
   { version: 2, name: 'orthogonal_state_projections', sql: migration2 },
   { version: 3, name: 'permission_and_attention', sql: migration3 },
   { version: 4, name: 'project_git_probe_metadata', sql: migration4 },
+  { version: 5, name: 'workspace_binding_and_action_audit', sql: migration5 },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

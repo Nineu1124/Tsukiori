@@ -99,6 +99,21 @@ importers:
         specifier: workspace:*
         version: link:../protocol
 
+  packages/workspace-manager:
+    dependencies:
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@tsukiori/project-manager':
+        specifier: workspace:*
+        version: link:../project-manager
+      '@tsukiori/worktree-manager':
+        specifier: workspace:*
+        version: link:../worktree-manager
+
   packages/worktree-manager:
     dependencies:
       '@tsukiori/database':

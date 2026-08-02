@@ -1,0 +1,22 @@
+{
+  "task": "T2.3",
+  "actionExecution": {
+    "structuredExecUsesShell": false,
+    "shellRequiresApprovalSource": true,
+    "persistentOutput": "hash-and-byte-count-only"
+  },
+  "setupFailure": {
+    "worktreeRetained": true,
+    "diagnosticAuditRetained": true,
+    "automaticDelete": false
+  },
+  "workspaceBinding": {
+    "defaultWritableMode": "isolated-worktree",
+    "oneWritableSessionPerWorktree": true
+  },
+  "archive": {
+    "retainsSessionCommitWorktreeLink": true,
+    "defaultCleanup": "retained"
+  },
+  "containsCredentials": false
+}
