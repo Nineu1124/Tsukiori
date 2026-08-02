@@ -32,7 +32,7 @@
     "probe:gate3": "pnpm run build && node scripts/probe-gate3-real.mjs",
     "spike:opencode": "node spikes/opencode/harness.mjs",
     "build": "turbo run build",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck --concurrency=4",
     "test:host": "pnpm run build && node --test tests/host/*.test.mjs",
     "test:ipc": "pnpm run build && node --test tests/ipc/*.test.mjs",
     "test:database": "pnpm run build && node --test tests/database/*.test.mjs",
