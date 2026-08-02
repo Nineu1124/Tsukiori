@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "gate": "G1",
+  "evaluatedAt": "2026-08-02T05:03:26Z",
+  "taskCommits": {
+    "T1.1": "b6cdea3bc7b1588c21d4dfad27af47a32b49a7c0",
+    "T1.2": "a20f90aa79f6749bf0743f40f2c3a234771c5447",
+    "T1.3": "5a75326b72692f813ba65d22824d595647c582ff",
+    "T1.4": "305a1fd9f7c1d742805cee4bce645a9d009219e5",
+    "T1.5": "066e1cfd82d1e0b38f145c2eb8e355b24f923d33"
+  },
+  "windowsCi": {
+    "T1.1": { "runId": 30730459610, "conclusion": "success" },
+    "T1.2": { "runId": 30731608697, "conclusion": "success" },
+    "T1.3": { "runId": 30732385385, "conclusion": "success" },
+    "T1.4": { "runId": 30732763749, "conclusion": "success" },
+    "T1.5": {
+      "runId": 30733399052,
+      "conclusion": "success",
+      "url": "https://github.com/Nineu1124/Tsukiori/actions/runs/30733399052"
+    }
+  },
+  "integration": {
+    "parallelFakeSessions": 3,
+    "crossTalkObserved": false,
+    "faults": ["duplicate", "out_of_order", "disconnect", "unknown_event", "stale_connection_epoch"]
+  },
+  "recovery": {
+    "sqliteReopenRestoredHistory": true,
+    "pendingPermissionRestored": true,
+    "rendererCrashInjected": true,
+    "daemonAliveAfterRendererCrash": true,
+    "fakeRuntimeAliveAfterRendererCrash": true
+  },
+  "security": {
+    "currentUserOnlyPipe": true,
+    "challengeResponse": "hmac-sha256",
+    "sqliteSecretGuard": true,
+    "rendererSandbox": true,
+    "contextIsolation": true,
+    "nodeIntegration": false,
+    "rawRuntimePayloadsCommitted": false,
+    "providerCredentialsRequiredInCi": false
+  },
+  "containsCredentials": false
+}

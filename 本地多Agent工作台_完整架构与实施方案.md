@@ -3313,15 +3313,15 @@ src/helpers/
 
 ### G1 阶段 1 Gate
 
-- [ ] 宿主骨架和 Fake Runtime 已达到可集成状态
+- [x] 宿主骨架和 Fake Runtime 已达到可集成状态
 - 前置依赖：T1.1、T1.2、T1.3、T1.4、T1.5
 - 交付物：阶段 1 集成测试报告
 - Checkpoints：
-  - [ ] T1.1 至 T1.5 全部完成
-  - [ ] 至少三个 Fake Session 可并行运行且事件路由无串线
-  - [ ] 重复、乱序、断线、未知事件和旧 Epoch 场景全部通过
-  - [ ] GUI 重启和 Renderer 崩溃场景不丢历史与待处理事项
-  - [ ] IPC、数据库和 Renderer 基础安全测试通过
+  - [x] T1.1 至 T1.5 全部完成
+  - [x] 至少三个 Fake Session 可并行运行且事件路由无串线
+  - [x] 重复、乱序、断线、未知事件和旧 Epoch 场景全部通过
+  - [x] GUI 重启和 Renderer 崩溃场景不丢历史与待处理事项
+  - [x] IPC、数据库和 Renderer 基础安全测试通过
 
 ## 阶段 2：Project 与 Worktree
 

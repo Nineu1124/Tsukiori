@@ -44,6 +44,7 @@ jobs:
           npm run test:runtime
           npm run test:permission
           npm run test:ui
+          npm run test:gate1
           npm run test:codex
           npm run test:windows
           npm run test:opencode
