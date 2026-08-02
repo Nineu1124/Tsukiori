@@ -9,6 +9,9 @@ export const executionEnvironments = sqliteTable('execution_environments', {
   defaultShell: text('default_shell').notNull(),
   gitExecutable: text('git_executable').notNull(),
   capabilitiesJson: text('capabilities_json').notNull(),
+  gitVersion: text('git_version'),
+  gitCapabilitiesJson: text('git_capabilities_json'),
+  lastProbedAt: integer('last_probed_at'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
@@ -24,6 +27,11 @@ export const projects = sqliteTable('projects', {
   defaultBaseRef: text('default_base_ref'),
   setupActionsJson: text('setup_actions_json'),
   cleanupActionsJson: text('cleanup_actions_json'),
+  canonicalGitDir: text('canonical_git_dir'),
+  currentBranch: text('current_branch'),
+  remoteCount: integer('remote_count'),
+  isDirty: integer('is_dirty', { mode: 'boolean' }),
+  lastProbedAt: integer('last_probed_at'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

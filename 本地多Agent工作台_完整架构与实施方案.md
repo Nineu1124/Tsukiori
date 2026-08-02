@@ -3327,14 +3327,14 @@ src/helpers/
 
 ### T2.1 Execution Environment 与 Project Manager
 
-- [ ] 实现 Windows Native 环境和项目管理
+- [x] 实现 Windows Native 环境和项目管理
 - 前置依赖：G1
 - 交付物：Execution Environment Registry、Project Manager、Git 探测器
 - Checkpoints：
-  - [ ] 可添加、移除和重新探测本地 Git 项目
-  - [ ] Windows Native Git 路径、版本和能力可记录
-  - [ ] Project、Git、Runtime 与 Worktree 的环境一致性会被强制检查
-  - [ ] Windows/WSL 路径或可执行文件混用会被明确拒绝
+  - [x] 可添加、移除和重新探测本地 Git 项目
+  - [x] Windows Native Git 路径、版本和能力可记录
+  - [x] Project、Git、Runtime 与 Worktree 的环境一致性会被强制检查
+  - [x] Windows/WSL 路径或可执行文件混用会被明确拒绝
 
 ### T2.2 Worktree 生命周期与 Durable Operation
 

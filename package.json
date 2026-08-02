@@ -28,7 +28,8 @@
     "test:database": "pnpm run build && node --test tests/database/*.test.mjs",
     "test:runtime": "pnpm run build && node --test tests/runtime/*.test.mjs",
     "test:permission": "pnpm run build && node --test tests/permission/*.test.mjs",
-    "test:ui": "node --test tests/ui/*.test.mjs"
+    "test:ui": "node --test tests/ui/*.test.mjs",
+    "test:project": "pnpm run build && node --test tests/project/*.test.mjs"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "1.18.4",

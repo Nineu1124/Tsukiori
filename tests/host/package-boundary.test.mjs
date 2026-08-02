@@ -11,13 +11,14 @@ async function manifest(path) {
 }
 
 test('workspace package dependency direction follows the architecture boundary', async () => {
-  const [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, testkit, daemon, desktop] = await Promise.all([
+  const [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, testkit, daemon, desktop] = await Promise.all([
     manifest('packages/protocol'),
     manifest('packages/domain'),
     manifest('packages/database'),
     manifest('packages/runtime-core'),
     manifest('packages/adapter-fake'),
     manifest('packages/permission-broker'),
+    manifest('packages/project-manager'),
     manifest('packages/testkit'),
     manifest('apps/daemon'),
     manifest('apps/desktop'),
@@ -34,6 +35,10 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/database': 'workspace:*',
     '@tsukiori/domain': 'workspace:*',
   });
+  assert.deepEqual(projectManager.dependencies, {
+    '@tsukiori/database': 'workspace:*',
+    '@tsukiori/domain': 'workspace:*',
+  });
   assert.deepEqual(testkit.dependencies, {
     '@tsukiori/protocol': 'workspace:*',
   });
@@ -45,7 +50,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/protocol': 'workspace:*',
   });
 
-  const manifests = [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, testkit, daemon, desktop];
+  const manifests = [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, testkit, daemon, desktop];
   for (const packageJson of manifests) {
     const dependencies = {
       ...packageJson.dependencies,

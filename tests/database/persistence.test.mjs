@@ -97,7 +97,7 @@ test('core domain records, durable operations, events, permissions, and Blob ref
   const paths = fixture(t);
   let repository = new LocalDatabase(paths);
   assert.equal(repository.journalMode, 'wal');
-  assert.deepEqual(repository.schemaVersions, [1, 2, 3]);
+  assert.deepEqual(repository.schemaVersions, [1, 2, 3, 4]);
   seed(repository);
   const duplicateBlob = repository.putBlob(Buffer.from('sanitized fixture payload'), 'text/plain');
   assert.match(duplicateBlob.id, /^blob:[a-f0-9]{64}$/);
@@ -158,18 +158,18 @@ test('migrations are repeatable for an empty database and a previous-version fix
   repository.close();
 
   repository = new LocalDatabase(previous);
-  assert.deepEqual(repository.schemaVersions, [1, 2, 3]);
+  assert.deepEqual(repository.schemaVersions, [1, 2, 3, 4]);
   assert.equal(repository.count('session_lifecycle_projections'), 0);
   repository.close();
 
   repository = new LocalDatabase(previous);
-  assert.deepEqual(repository.schemaVersions, [1, 2, 3]);
-  assert.equal(LATEST_SCHEMA_VERSION, 3);
+  assert.deepEqual(repository.schemaVersions, [1, 2, 3, 4]);
+  assert.equal(LATEST_SCHEMA_VERSION, 4);
   repository.close();
 
   const empty = fixture(t, 'empty.db');
   repository = new LocalDatabase(empty);
-  assert.deepEqual(repository.schemaVersions, [1, 2, 3]);
+  assert.deepEqual(repository.schemaVersions, [1, 2, 3, 4]);
   repository.close();
 });
 

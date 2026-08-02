@@ -8,6 +8,7 @@ import type {
   ExecutionEnvironment,
   HostSession,
   HostTurn,
+  JsonValue,
   OperationRecord,
   PermissionRequestRecord,
   ProcessRecord,
@@ -75,11 +76,15 @@ export class LocalDatabase {
     this.orm.insert(schema.executionEnvironments).values({
       id: value.id, type: value.type, displayName: value.displayName, homePath: value.homePath,
       pathStyle: value.pathStyle, defaultShell: value.defaultShell, gitExecutable: value.gitExecutable,
-      capabilitiesJson: this.#json(value.capabilities), createdAt: value.createdAt, updatedAt: value.updatedAt,
+      capabilitiesJson: this.#json(value.capabilities), gitVersion: value.gitVersion ?? null,
+      gitCapabilitiesJson: value.gitCapabilities ? this.#json(value.gitCapabilities) : null,
+      lastProbedAt: value.lastProbedAt ?? null, createdAt: value.createdAt, updatedAt: value.updatedAt,
     }).onConflictDoUpdate({ target: schema.executionEnvironments.id, set: {
       type: value.type, displayName: value.displayName, homePath: value.homePath,
       pathStyle: value.pathStyle, defaultShell: value.defaultShell, gitExecutable: value.gitExecutable,
-      capabilitiesJson: this.#json(value.capabilities), updatedAt: value.updatedAt,
+      capabilitiesJson: this.#json(value.capabilities), gitVersion: value.gitVersion ?? null,
+      gitCapabilitiesJson: value.gitCapabilities ? this.#json(value.gitCapabilities) : null,
+      lastProbedAt: value.lastProbedAt ?? null, updatedAt: value.updatedAt,
     }}).run();
   }
 
@@ -91,16 +96,44 @@ export class LocalDatabase {
       defaultBranch: value.defaultBranch ?? null, defaultBaseRef: value.defaultBaseRef ?? null,
       setupActionsJson: value.setupActions ? this.#json(value.setupActions) : null,
       cleanupActionsJson: value.cleanupActions ? this.#json(value.cleanupActions) : null,
-      createdAt: value.createdAt, updatedAt: value.updatedAt,
+      canonicalGitDir: value.canonicalGitDir ?? null, currentBranch: value.currentBranch ?? null,
+      remoteCount: value.remoteCount ?? null, isDirty: value.isDirty ?? null,
+      lastProbedAt: value.lastProbedAt ?? null, createdAt: value.createdAt, updatedAt: value.updatedAt,
     }).onConflictDoUpdate({ target: schema.projects.id, set: {
       name: value.name, rootPath: value.rootPath, gitRoot: value.gitRoot,
       defaultBranch: value.defaultBranch ?? null, defaultBaseRef: value.defaultBaseRef ?? null,
       setupActionsJson: value.setupActions ? this.#json(value.setupActions) : null,
       cleanupActionsJson: value.cleanupActions ? this.#json(value.cleanupActions) : null,
-      updatedAt: value.updatedAt,
+      canonicalGitDir: value.canonicalGitDir ?? null, currentBranch: value.currentBranch ?? null,
+      remoteCount: value.remoteCount ?? null, isDirty: value.isDirty ?? null,
+      lastProbedAt: value.lastProbedAt ?? null, updatedAt: value.updatedAt,
     }}).run();
   }
 
+  readExecutionEnvironment(id: string): ExecutionEnvironment | null {
+    const row = this.sqlite.prepare('SELECT * FROM execution_environments WHERE id=?').get(id) as Record<string, unknown> | undefined;
+    return row ? this.#executionEnvironment(row) : null;
+  }
+
+  listExecutionEnvironments(): ExecutionEnvironment[] {
+    return (this.sqlite.prepare('SELECT * FROM execution_environments ORDER BY display_name, id').all() as Record<string, unknown>[])
+      .map((row) => this.#executionEnvironment(row));
+  }
+
+  readProject(id: string): Project | null {
+    const row = this.sqlite.prepare('SELECT * FROM projects WHERE id=?').get(id) as Record<string, unknown> | undefined;
+    return row ? this.#project(row) : null;
+  }
+
+  listProjects(): Project[] {
+    return (this.sqlite.prepare('SELECT * FROM projects ORDER BY name, id').all() as Record<string, unknown>[])
+      .map((row) => this.#project(row));
+  }
+
+  deleteProject(id: string): boolean {
+    this.#guard.assertText(id);
+    return this.sqlite.prepare('DELETE FROM projects WHERE id=?').run(id).changes === 1;
+  }
   saveSession(value: HostSession): void {
     this.#validate(value);
     this.orm.insert(schema.sessions).values({
@@ -279,6 +312,38 @@ export class LocalDatabase {
     return row.count;
   }
 
+  #executionEnvironment(row: Record<string, unknown>): ExecutionEnvironment {
+    return {
+      id: String(row.id), type: String(row.type) as ExecutionEnvironment['type'],
+      displayName: String(row.display_name), homePath: String(row.home_path),
+      pathStyle: String(row.path_style) as ExecutionEnvironment['pathStyle'],
+      defaultShell: String(row.default_shell), gitExecutable: String(row.git_executable),
+      capabilities: JSON.parse(String(row.capabilities_json)) as ExecutionEnvironment['capabilities'],
+      ...(row.git_version === null ? {} : { gitVersion: String(row.git_version) }),
+      ...(row.git_capabilities_json === null ? {} : {
+        gitCapabilities: JSON.parse(String(row.git_capabilities_json)) as NonNullable<ExecutionEnvironment['gitCapabilities']>,
+      }),
+      ...(row.last_probed_at === null ? {} : { lastProbedAt: Number(row.last_probed_at) }),
+      createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+    };
+  }
+
+  #project(row: Record<string, unknown>): Project {
+    return {
+      id: String(row.id), name: String(row.name), executionEnvironmentId: String(row.execution_environment_id),
+      rootPath: String(row.root_path), gitRoot: String(row.git_root), repositoryId: String(row.repository_id),
+      ...(row.default_branch === null ? {} : { defaultBranch: String(row.default_branch) }),
+      ...(row.default_base_ref === null ? {} : { defaultBaseRef: String(row.default_base_ref) }),
+      ...(row.setup_actions_json === null ? {} : { setupActions: JSON.parse(String(row.setup_actions_json)) as JsonValue[] }),
+      ...(row.cleanup_actions_json === null ? {} : { cleanupActions: JSON.parse(String(row.cleanup_actions_json)) as JsonValue[] }),
+      ...(row.canonical_git_dir === null ? {} : { canonicalGitDir: String(row.canonical_git_dir) }),
+      ...(row.current_branch === null ? {} : { currentBranch: String(row.current_branch) }),
+      ...(row.remote_count === null ? {} : { remoteCount: Number(row.remote_count) }),
+      ...(row.is_dirty === null ? {} : { isDirty: Boolean(row.is_dirty) }),
+      ...(row.last_probed_at === null ? {} : { lastProbedAt: Number(row.last_probed_at) }),
+      createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+    };
+  }
   #validate(value: unknown): void {
     this.#guard.serializeJson(value);
   }

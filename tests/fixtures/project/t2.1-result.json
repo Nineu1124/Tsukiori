@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "task": "T2.1",
+  "environment": {
+    "type": "windows-native",
+    "pathStyle": "windows",
+    "gitExecutable": "<canonical-windows-git.exe>",
+    "gitVersionRecorded": true
+  },
+  "git": {
+    "probeUsesShell": false,
+    "argumentsAreStructured": true,
+    "capabilities": ["worktree", "porcelainV2", "lfs", "symlinks"]
+  },
+  "projectLifecycle": ["add", "reprobe", "remove"],
+  "environmentConsistency": ["project", "git", "runtime", "worktree"],
+  "rejectedMixes": ["windows-project-wsl-runtime", "windows-git-wsl-worktree", "wsl-project-windows-executable"],
+  "containsCredentials": false
+}

@@ -22,6 +22,14 @@ export type ExecutionEnvironment = {
     jobObjects: boolean;
     symlinks: boolean;
   };
+  gitVersion?: string;
+  gitCapabilities?: {
+    worktree: boolean;
+    porcelainV2: boolean;
+    lfs: boolean;
+    symlinks: boolean;
+  };
+  lastProbedAt?: number;
   createdAt: number;
   updatedAt: number;
 };
@@ -37,6 +45,11 @@ export type Project = {
   defaultBaseRef?: string;
   setupActions?: JsonValue[];
   cleanupActions?: JsonValue[];
+  canonicalGitDir?: string;
+  currentBranch?: string;
+  remoteCount?: number;
+  isDirty?: boolean;
+  lastProbedAt?: number;
   createdAt: number;
   updatedAt: number;
 };

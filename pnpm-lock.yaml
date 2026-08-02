@@ -76,6 +76,15 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
+  packages/project-manager:
+    dependencies:
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
+
   packages/protocol: {}
 
   packages/runtime-core:

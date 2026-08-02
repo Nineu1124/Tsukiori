@@ -139,10 +139,22 @@ CREATE TABLE attention_items (
 );
 CREATE INDEX attention_items_inbox_idx ON attention_items(status, updated_at DESC);
 `;
+const migration4 = `
+ALTER TABLE execution_environments ADD COLUMN git_version TEXT;
+ALTER TABLE execution_environments ADD COLUMN git_capabilities_json TEXT;
+ALTER TABLE execution_environments ADD COLUMN last_probed_at INTEGER;
+ALTER TABLE projects ADD COLUMN canonical_git_dir TEXT;
+ALTER TABLE projects ADD COLUMN current_branch TEXT;
+ALTER TABLE projects ADD COLUMN remote_count INTEGER;
+ALTER TABLE projects ADD COLUMN is_dirty INTEGER;
+ALTER TABLE projects ADD COLUMN last_probed_at INTEGER;
+CREATE UNIQUE INDEX projects_repository_id_uq ON projects(repository_id);
+`;
 export const migrations: readonly Migration[] = [
   { version: 1, name: 'core_records', sql: migration1 },
   { version: 2, name: 'orthogonal_state_projections', sql: migration2 },
   { version: 3, name: 'permission_and_attention', sql: migration3 },
+  { version: 4, name: 'project_git_probe_metadata', sql: migration4 },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;
