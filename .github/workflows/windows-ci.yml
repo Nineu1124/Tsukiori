@@ -48,6 +48,7 @@ jobs:
           npm run test:project
           npm run test:worktree
           npm run test:workspace
+          npm run test:git
           npm run test:codex
           npm run test:windows
           npm run test:opencode

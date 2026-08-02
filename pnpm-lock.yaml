@@ -67,6 +67,18 @@ importers:
 
   packages/domain: {}
 
+  packages/git-service:
+    dependencies:
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@tsukiori/project-manager':
+        specifier: workspace:*
+        version: link:../project-manager
+
   packages/permission-broker:
     dependencies:
       '@tsukiori/database':

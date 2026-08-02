@@ -11,7 +11,7 @@ async function manifest(path) {
 }
 
 test('workspace package dependency direction follows the architecture boundary', async () => {
-  const [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, testkit, daemon, desktop] = await Promise.all([
+  const [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, testkit, daemon, desktop] = await Promise.all([
     manifest('packages/protocol'),
     manifest('packages/domain'),
     manifest('packages/database'),
@@ -21,6 +21,7 @@ test('workspace package dependency direction follows the architecture boundary',
     manifest('packages/project-manager'),
     manifest('packages/worktree-manager'),
     manifest('packages/workspace-manager'),
+    manifest('packages/git-service'),
     manifest('packages/testkit'),
     manifest('apps/daemon'),
     manifest('apps/desktop'),
@@ -52,6 +53,11 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/project-manager': 'workspace:*',
     '@tsukiori/worktree-manager': 'workspace:*',
   });
+  assert.deepEqual(gitService.dependencies, {
+    '@tsukiori/database': 'workspace:*',
+    '@tsukiori/domain': 'workspace:*',
+    '@tsukiori/project-manager': 'workspace:*',
+  });
   assert.deepEqual(testkit.dependencies, {
     '@tsukiori/protocol': 'workspace:*',
   });
@@ -63,7 +69,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/protocol': 'workspace:*',
   });
 
-  const manifests = [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, testkit, daemon, desktop];
+  const manifests = [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, testkit, daemon, desktop];
   for (const packageJson of manifests) {
     const dependencies = {
       ...packageJson.dependencies,

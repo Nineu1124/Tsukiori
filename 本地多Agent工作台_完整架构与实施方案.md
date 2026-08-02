@@ -3361,14 +3361,14 @@ src/helpers/
 
 ### T2.4 Git Status 与 Diff 服务
 
-- [ ] 实现以 Git CLI 为事实来源的状态和 Diff
+- [x] 实现以 Git CLI 为事实来源的状态和 Diff
 - 前置依赖：T2.1、T2.2、T2.3
 - 交付物：Git Service、Diff Service、Git 集成测试
 - Checkpoints：
-  - [ ] 文件列表、Working Diff、Staged Diff 和 Session Commit Diff 可生成
-  - [ ] Rename、二进制文件、超大文件和未跟踪文件有明确降级显示
-  - [ ] 脏主工作区不会被 Session 操作污染
-  - [ ] Git 命令使用结构化参数，不通过原始 Shell 字符串拼接
+  - [x] 文件列表、Working Diff、Staged Diff 和 Session Commit Diff 可生成
+  - [x] Rename、二进制文件、超大文件和未跟踪文件有明确降级显示
+  - [x] 脏主工作区不会被 Session 操作污染
+  - [x] Git 命令使用结构化参数，不通过原始 Shell 字符串拼接
 
 ### G2 阶段 2 Gate
 
