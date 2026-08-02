@@ -3494,15 +3494,15 @@ src/helpers/
 
 ### T4.5 OpenCode/Codex 双 Runtime 闭环
 
-- [ ] 完成双 Runtime 并行稳定性和 V1 E2E
+- [x] 完成双 Runtime 并行稳定性和 V1 E2E
 - 前置依赖：T3.4、T4.2、T4.3、T4.4
 - 交付物：双 Runtime E2E、并发与隔离测试报告
 - Checkpoints：
-  - [ ] 同一项目可同时运行 OpenCode 与 Codex 的独立 Session
-  - [ ] 两个 Runtime 使用不同 Worktree 且共享统一 Attention Center
-  - [ ] 两份 Diff 可分别 Review、Commit 并在 Integration Worktree 合并
-  - [ ] 任一 Runtime 崩溃不影响另一 Runtime 的控制与事件流
-  - [ ] 至少三个并行 Session 在持续测试中无事件串线和代码污染
+  - [x] 同一项目可同时运行 OpenCode 与 Codex 的独立 Session
+  - [x] 两个 Runtime 使用不同 Worktree 且共享统一 Attention Center
+  - [x] 两份 Diff 可分别 Review、Commit 并在 Integration Worktree 合并
+  - [x] 任一 Runtime 崩溃不影响另一 Runtime 的控制与事件流
+  - [x] 至少三个并行 Session 在持续测试中无事件串线和代码污染
 
 ### G4 阶段 4 Gate
 

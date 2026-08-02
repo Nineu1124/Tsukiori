@@ -58,4 +58,5 @@ jobs:
           npm run test:opencode
           npm run test:opencode-adapter
           npm run test:alpha
+          npm run test:dual-runtime
           npm run test:gate3

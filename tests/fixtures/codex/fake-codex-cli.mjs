@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 const configPath = process.argv[2];
@@ -12,6 +12,9 @@ if (!process.argv.includes('app-server')) process.exit(3);
 
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let lastClientResponse = null;
+let threadSerial = 0;
+let turnSerial = 0;
+function send(value) { process.stdout.write(JSON.stringify(value) + '\n'); }
 input.on('line', (line) => {
   const message = JSON.parse(line);
   if (!message.method) {
@@ -110,6 +113,36 @@ input.on('line', (line) => {
       id: message.id,
       result: { status: config.sandboxReadiness ?? 'ready' },
     }) + '\n');
+    return;
+  }
+  if (message.method === 'thread/start') {
+    const threadId = 'codex-thread-' + ++threadSerial;
+    send({ id: message.id, result: { thread: { id: threadId } } });
+    send({ method: 'thread/started', params: { thread: { id: threadId } } });
+    return;
+  }
+  if (message.method === 'thread/resume') {
+    const threadId = message.params?.threadId;
+    send({ id: message.id, result: { thread: { id: threadId } } });
+    return;
+  }
+  if (message.method === 'turn/start') {
+    const threadId = message.params?.threadId;
+    const turnId = 'codex-turn-' + ++turnSerial;
+    send({ id: message.id, result: { turn: { id: turnId } } });
+    setTimeout(() => {
+      send({ method: 'turn/started', params: { threadId, turn: { id: turnId, status: 'inProgress' } } });
+      send({ method: 'item/started', params: {
+        threadId, turnId, item: { id: 'codex-item-' + turnId, type: 'agentMessage' },
+      } });
+      if (config.writeFixtureFile) {
+        writeFileSync(config.fixtureFileName ?? 'codex-runtime.txt', 'sanitized fake Codex change\n', 'utf8');
+      }
+      send({ method: 'item/completed', params: {
+        threadId, turnId, item: { id: 'codex-item-' + turnId, type: 'agentMessage' },
+      } });
+      send({ method: 'turn/completed', params: { threadId, turn: { id: turnId, status: 'completed' } } });
+    }, config.turnDelayMs ?? 5);
     return;
   }
   if (message.method === 'fixture/crash') {

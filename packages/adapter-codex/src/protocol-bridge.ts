@@ -259,12 +259,20 @@ export class CodexSessionBridge {
     } else if (method === 'turn/completed') {
       const turn = this.#objectOrNull(params.turn);
       const failed = String(turn?.status ?? '') === 'failed';
+      const runtimeTurnId = String(turn?.id ?? params.turnId ?? 'unknown');
       this.#database.saveSession({
         ...session, activity: 'idle', ...(failed ? { health: 'error' as const } : {}), updatedAt: this.#now(),
       });
+      this.#permissions.addAttention({
+        projectId: session.projectId,
+        sessionId: session.id,
+        kind: failed ? 'failed' : 'completed',
+        title: failed ? 'Codex Turn 执行失败' : 'Codex Turn 已完成',
+        sourceRef: 'codex-turn:' + session.id + ':' + runtimeTurnId,
+        payload: { runtimeTurnId },
+      });
     }
   }
-
   #approvalKind(method: string, params: Record<string, unknown>): {
     category: 'shell' | 'file_write' | 'network'; risk: 'medium' | 'high'; title: string; description: string; scope: string;
   } {

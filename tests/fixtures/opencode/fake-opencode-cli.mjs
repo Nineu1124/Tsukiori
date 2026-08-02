@@ -246,7 +246,8 @@ const server = createServer(async (request, response) => {
     session.promptCount += 1;
     session.status = 'busy';
     publish(event('session.status', { sessionID: session.id, status: { type: 'busy' } }));
-    if (config.crashOnMarkedSession && String(session.title).includes('CRASH')) {
+    if ((config.crashOnMarkedSession && String(session.title).includes('CRASH'))
+      || (Number.isInteger(config.crashOnPromptCount) && session.promptCount === config.crashOnPromptCount)) {
       setImmediate(() => process.exit(23));
       return;
     }
