@@ -49,6 +49,7 @@ jobs:
           npm run test:worktree
           npm run test:workspace
           npm run test:git
+          npm run test:gate2
           npm run test:codex
           npm run test:windows
           npm run test:opencode

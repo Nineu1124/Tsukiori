@@ -1,0 +1,34 @@
+{
+  "gate": "G2",
+  "taskCommits": {
+    "T2.1": "9affecad2f1f66a023fe70b37c995f0c950dded4",
+    "T2.2": "07940c38af29d06448882d5eb8e3d4b4241541b1",
+    "T2.3": "182eabec33e7cbe58ca54c25b2e70004d0263f60",
+    "T2.4": "cdcb504f0f0f0050fba23d735361105ef4ecc1c4"
+  },
+  "windowsCi": {
+    "T2.1": { "runId": 30733980535, "conclusion": "success" },
+    "T2.2": { "runId": 30734388929, "conclusion": "success" },
+    "T2.3": { "runId": 30735030702, "conclusion": "success" },
+    "T2.4": { "runId": 30735413041, "conclusion": "success" }
+  },
+  "integration": {
+    "fakeSessions": 3,
+    "independentWorktrees": 3,
+    "mainWorkspaceChanged": false
+  },
+  "recovery": {
+    "createCrashRecovered": "committed",
+    "dirtyCleanupCrashRecovered": "failed",
+    "uncommittedCodeRetained": true,
+    "externalActionReplayed": false
+  },
+  "security": {
+    "pathTraversalRejected": true,
+    "junctionEscapeRejected": true,
+    "crossEnvironmentRejected": true,
+    "dirtyDeleteRejected": true,
+    "gitPathEscapeRejected": true
+  },
+  "containsCredentials": false
+}

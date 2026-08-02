@@ -3372,15 +3372,15 @@ src/helpers/
 
 ### G2 阶段 2 Gate
 
-- [ ] Project、Worktree 和 Git 基础闭环已通过
+- [x] Project、Worktree 和 Git 基础闭环已通过
 - 前置依赖：T2.1、T2.2、T2.3、T2.4
 - 交付物：阶段 2 Git 与恢复测试报告
 - Checkpoints：
-  - [ ] T2.1 至 T2.4 全部完成
-  - [ ] 三个 Fake Session 可在三个 Worktree 并行修改且主工作区不受影响
-  - [ ] 创建与清理强杀恢复场景不丢失未提交代码
-  - [ ] 路径穿越、Junction 逃逸和跨环境混用测试通过
-  - [ ] Worktree 强制删除保护和 Git 边界测试通过
+  - [x] T2.1 至 T2.4 全部完成
+  - [x] 三个 Fake Session 可在三个 Worktree 并行修改且主工作区不受影响
+  - [x] 创建与清理强杀恢复场景不丢失未提交代码
+  - [x] 路径穿越、Junction 逃逸和跨环境混用测试通过
+  - [x] Worktree 强制删除保护和 Git 边界测试通过
 
 ## 阶段 3：OpenCode Windows Alpha
 
