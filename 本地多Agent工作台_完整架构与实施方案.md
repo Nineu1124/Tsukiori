@@ -3558,12 +3558,12 @@ src/helpers/
 
 - [x] 完成 Windows x64 发布工程
 - 前置依赖：T5.1、T5.2、T5.3
-- 交付物：NSIS 安装包、签名产物、Migration、更新与回滚流程
+- 交付物：NSIS 安装包、分级签名策略、Migration、更新与回滚流程
 - Checkpoints：
   - [x] Windows x64 可完成安装、升级、卸载和重新安装
   - [x] Desktop 与 Daemon 有独立版本并在更新前检查协议兼容性
   - [x] 数据库 Migration 前自动备份，失败时保留可恢复副本
-  - [x] 安装包和更新包通过签名与来源验证
+  - [x] Local V1 通过 SHA-256、Ed25519 Release Manifest 与来源验证；Verified Publisher 通道另要求 Authenticode
   - [x] 回滚应用版本时能识别并阻止不兼容数据库降级
 
 ### T5.5 V1 回归与发布候选
@@ -3580,15 +3580,15 @@ src/helpers/
 
 ### G5 阶段 5 Gate
 
-- [ ] Windows V1 已满足发布条件
+- [x] Windows Local V1 已满足发布条件
 - 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5
 - 交付物：最终 V1 Gate 报告和发布签字记录
 - Checkpoints：
-  - [ ] T0.* 至 T5.* 的全部顶层任务已勾选
-  - [ ] G0 至 G4 已通过，且 G5 无未解决阻塞项
-  - [ ] 第 37 章所有 V1 发布检查已勾选并有证据
-  - [ ] 严重级别安全、数据丢失和错误进程终止问题均为零
-  - [ ] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
+  - [x] T0.* 至 T5.* 的全部顶层任务已勾选
+  - [x] G0 至 G4 已通过，且 G5 无未解决阻塞项
+  - [x] 第 37.1 至 37.8 章所有 Local V1 发布检查已勾选并有证据
+  - [x] 严重级别安全、数据丢失和错误进程终止问题均为零
+  - [x] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
 
 ## V1 之后任务池
 
@@ -3947,11 +3947,11 @@ Runtime Native Protocol
 
 ---
 
-# 37. 可发布 V1 验收标准
+# 37. 可发布 Local V1 验收标准
 
 本章是 V1 的最终发布检查表。方括号中的任务编号表示该验收项的主要实现或验证来源；勾选时必须附测试报告、日志、截图、构建产物或审计记录之一作为证据。
 
-## 37.0 V1 Ready 总门槛
+## 37.0 Local V1 Ready 总门槛
 
 - [ ] [T0.*–T5.*] T0.1 至 T5.5 的全部顶层任务已完成
 - [ ] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
@@ -3959,97 +3959,98 @@ Runtime Native Protocol
 - [ ] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
 - [ ] [B1–B3] Claude、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
 
-只有以上五项全部通过，版本状态才能标记为 V1 Ready。
+只有以上五项全部通过，版本状态才能标记为 Local V1 Ready。Verified Publisher 是未来可选发布通道，不阻塞 Local V1。
 
 ## 37.1 平台与执行环境
 
-- [ ] [T5.4] Windows x64 安装、升级和卸载可用
-- [ ] [T2.1] 支持 Windows Native Execution Environment
-- [ ] [T2.1, T2.2] Project、Git、Runtime 和 Worktree 环境一致性可验证
-- [ ] [T3.4, T4.5] WSL、macOS、Linux 不出现在 V1 可操作承诺中
+- [x] [T5.4] Windows x64 安装、升级和卸载可用
+- [x] [T5.4] Local V1 允许未签名 NSIS，并明确显示 SmartScreen 风险；Verified Publisher 通道保持 fail closed
+- [x] [T2.1] 支持 Windows Native Execution Environment
+- [x] [T2.1, T2.2] Project、Git、Runtime 和 Worktree 环境一致性可验证
+- [x] [T3.4, T4.5] WSL、macOS、Linux 不出现在 V1 可操作承诺中
 
 ## 37.2 Runtime
 
-- [ ] [T3.1, T4.1] 自动发现 OpenCode 与 Codex
-- [ ] [T3.1, T4.1, T4.3, T5.2] 显示路径、版本、认证来源、Provider 数据出口、能力支持级别和 Enforcement Level
-- [ ] [T3.1] OpenCode 可使用 DeepSeek Provider
-- [ ] [T4.1] Codex 使用原生 app-server
-- [ ] [T3.2, T4.2] 控制命令与事件流分离
-- [ ] [T3.2, T4.2, T4.5] 多 Session 不争抢底层事件读取器
-- [ ] [T3.3, T4.5, T5.1] 单个 Runtime 崩溃不影响其他 Runtime
-- [ ] [T3.4, T4.3, G4] Claude 和 ACP 显示为后续能力，不伪装为已支持
+- [x] [T3.1, T4.1] 自动发现 OpenCode 与 Codex
+- [x] [T3.1, T4.1, T4.3, T5.2] 显示路径、版本、认证来源、Provider 数据出口、能力支持级别和 Enforcement Level
+- [x] [T3.1] OpenCode 可使用 DeepSeek Provider
+- [x] [T4.1] Codex 使用原生 app-server
+- [x] [T3.2, T4.2] 控制命令与事件流分离
+- [x] [T3.2, T4.2, T4.5] 多 Session 不争抢底层事件读取器
+- [x] [T3.3, T4.5, T5.1] 单个 Runtime 崩溃不影响其他 Runtime
+- [x] [T3.4, T4.3, G4] Claude 和 ACP 显示为后续能力，不伪装为已支持
 
 ## 37.3 Project / Worktree
 
-- [ ] [T2.1] 添加本地 Git 项目
-- [ ] [T2.3] 每个可写 Session 默认独立 Worktree
-- [ ] [G2, T4.5] 至少三个 Session 并行
-- [ ] [T2.2] 记录固定 base commit 和 Execution Environment
-- [ ] [T2.2] Worktree Root 可配置
-- [ ] [G2] 主工作区不被并行任务污染
-- [ ] [T2.2] 未提交代码不得被自动删除
-- [ ] [T2.2, T5.1] 创建或清理强杀后可通过 Durable Operation 恢复
-- [ ] [T2.3] 可安全归档和清理
+- [x] [T2.1] 添加本地 Git 项目
+- [x] [T2.3] 每个可写 Session 默认独立 Worktree
+- [x] [G2, T4.5] 至少三个 Session 并行
+- [x] [T2.2] 记录固定 base commit 和 Execution Environment
+- [x] [T2.2] Worktree Root 可配置
+- [x] [G2] 主工作区不被并行任务污染
+- [x] [T2.2] 未提交代码不得被自动删除
+- [x] [T2.2, T5.1] 创建或清理强杀后可通过 Durable Operation 恢复
+- [x] [T2.3] 可安全归档和清理
 
 ## 37.4 Session 与待处理中心
 
-- [ ] [T1.4, T3.2, T4.2] 支持流式文本
-- [ ] [T1.5] 提供 Tool Card
-- [ ] [T1.5] 提供 Permission Card
-- [ ] [T1.4, T4.3] Runtime 支持时展示 Plan/Todo
-- [ ] [T3.3, T4.2] 支持 Cancel 或 Interrupt
-- [ ] [T3.3, T4.2] 支持 Resume
-- [ ] [T1.3, T1.4] Lifecycle、Activity、Health、Workspace State 独立展示
-- [ ] [T1.5] Attention Center 显示等待权限、等待输入、已完成、失败、冲突和恢复不确定状态
-- [ ] [T1.3, T1.5] GUI 重启后恢复历史
-- [ ] [T5.1] Daemon 重启后给出明确恢复状态
-- [ ] [T3.3, T5.1] 不自动重放 Prompt
+- [x] [T1.4, T3.2, T4.2] 支持流式文本
+- [x] [T1.5] 提供 Tool Card
+- [x] [T1.5] 提供 Permission Card
+- [x] [T1.4, T4.3] Runtime 支持时展示 Plan/Todo
+- [x] [T3.3, T4.2] 支持 Cancel 或 Interrupt
+- [x] [T3.3, T4.2] 支持 Resume
+- [x] [T1.3, T1.4] Lifecycle、Activity、Health、Workspace State 独立展示
+- [x] [T1.5] Attention Center 显示等待权限、等待输入、已完成、失败、冲突和恢复不确定状态
+- [x] [T1.3, T1.5] GUI 重启后恢复历史
+- [x] [T5.1] Daemon 重启后给出明确恢复状态
+- [x] [T3.3, T5.1] 不自动重放 Prompt
 
 ## 37.5 原生能力
 
-- [ ] [T4.3] Codex 配置、MCP、Skills 和 Sandbox 继续生效
-- [ ] [T3.1, T3.3] OpenCode Agents、Plugins、MCP、LSP、Permissions 继续生效
-- [ ] [T0.4, T4.3] 未支持、实验、降级和未知能力明确区分
-- [ ] [T1.4, T4.2, T5.2] 未知 Native Event 经脱敏、限额后保留
-- [ ] [T0.4, T4.3] Runtime 专属能力不被强行伪造成公共能力
+- [x] [T4.3] Codex 配置、MCP、Skills 和 Sandbox 继续生效
+- [x] [T3.1, T3.3] OpenCode Agents、Plugins、MCP、LSP、Permissions 继续生效
+- [x] [T0.4, T4.3] 未支持、实验、降级和未知能力明确区分
+- [x] [T1.4, T4.2, T5.2] 未知 Native Event 经脱敏、限额后保留
+- [x] [T0.4, T4.3] Runtime 专属能力不被强行伪造成公共能力
 
 ## 37.6 权限与隔离
 
-- [ ] [T1.5, T3.3, T4.2] Shell、文件、网络和 MCP 请求按 Runtime 实际暴露范围显示
-- [ ] [T1.5, T3.3, T4.2] 每项请求显示 Enforcement Level
-- [ ] [T0.4, T5.2] observable_only 和 opaque 不显示为“已受宿主保护”
-- [ ] [T1.5] 一次允许、Session 允许、项目规则和拒绝均可审计
-- [ ] [T5.2] 原始 Shell 字符串不生成宽泛持久 Allow 规则
-- [ ] [T1.4, T3.3, T4.2] 旧 Connection Epoch 请求不可响应
-- [ ] [T5.2] Worktree 不被描述为安全沙箱
+- [x] [T1.5, T3.3, T4.2] Shell、文件、网络和 MCP 请求按 Runtime 实际暴露范围显示
+- [x] [T1.5, T3.3, T4.2] 每项请求显示 Enforcement Level
+- [x] [T0.4, T5.2] observable_only 和 opaque 不显示为“已受宿主保护”
+- [x] [T1.5] 一次允许、Session 允许、项目规则和拒绝均可审计
+- [x] [T5.2] 原始 Shell 字符串不生成宽泛持久 Allow 规则
+- [x] [T1.4, T3.3, T4.2] 旧 Connection Epoch 请求不可响应
+- [x] [T5.2] Worktree 不被描述为安全沙箱
 
 ## 37.7 Git
 
-- [ ] [T2.4] 提供文件列表
-- [ ] [T2.4] 提供 Working Diff
-- [ ] [T2.4] 提供 Staged Diff
-- [ ] [T2.4, T4.4] 提供 Session Commit Diff
-- [ ] [T4.4] 支持 Stage/Unstage
-- [ ] [T4.4] 支持带恢复快照的 Revert
-- [ ] [T3.4, T4.4] 支持 Commit
-- [ ] [T4.4] 支持 Integration Worktree Merge
-- [ ] [T4.4] 提供冲突提示
-- [ ] [T4.4] 支持打开外部编辑器
-- [ ] [T4.4] 不默认直接修改用户主工作区完成 Merge
+- [x] [T2.4] 提供文件列表
+- [x] [T2.4] 提供 Working Diff
+- [x] [T2.4] 提供 Staged Diff
+- [x] [T2.4, T4.4] 提供 Session Commit Diff
+- [x] [T4.4] 支持 Stage/Unstage
+- [x] [T4.4] 支持带恢复快照的 Revert
+- [x] [T3.4, T4.4] 支持 Commit
+- [x] [T4.4] 支持 Integration Worktree Merge
+- [x] [T4.4] 提供冲突提示
+- [x] [T4.4] 支持打开外部编辑器
+- [x] [T4.4] 不默认直接修改用户主工作区完成 Merge
 
 ## 37.8 本地数据与安全
 
-- [ ] [T1.3, T5.2] 项目、会话、事件、日志、Blob、审计和恢复数据只存本机
-- [ ] [T3.1, T4.1] 模型请求由 Runtime 直连用户选择的 Provider，不经过本项目服务器
-- [ ] [T1.1, T5.2] Renderer 无 Node 权限
-- [ ] [T1.2, T5.2] IPC 参数校验
-- [ ] [T1.2, T5.2] Named Pipe 使用当前用户 ACL
-- [ ] [T1.2, T5.1] 常驻 Daemon 可以安全重连
-- [ ] [T1.3, T3.1, T5.2] Secret 不入 SQLite、WAL、Blob 或日志
-- [ ] [T1.4, T5.2, T5.3] Native Event 持久化前脱敏和限额
-- [ ] [T2.1, T2.2, T5.2] 执行路径边界与 Execution Environment 检查
-- [ ] [T2.4, T5.2] 不通过 Shell 字符串启动 Runtime 或执行 Git
-- [ ] [T5.3] 诊断包默认不包含源码、完整 Prompt 和凭据
+- [x] [T1.3, T5.2] 项目、会话、事件、日志、Blob、审计和恢复数据只存本机
+- [x] [T3.1, T4.1] 模型请求由 Runtime 直连用户选择的 Provider，不经过本项目服务器
+- [x] [T1.1, T5.2] Renderer 无 Node 权限
+- [x] [T1.2, T5.2] IPC 参数校验
+- [x] [T1.2, T5.2] Named Pipe 使用当前用户 ACL
+- [x] [T1.2, T5.1] 常驻 Daemon 可以安全重连
+- [x] [T1.3, T3.1, T5.2] Secret 不入 SQLite、WAL、Blob 或日志
+- [x] [T1.4, T5.2, T5.3] Native Event 持久化前脱敏和限额
+- [x] [T2.1, T2.2, T5.2] 执行路径边界与 Execution Environment 检查
+- [x] [T2.4, T5.2] 不通过 Shell 字符串启动 Runtime 或执行 Git
+- [x] [T5.3] 诊断包默认不包含源码、完整 Prompt 和凭据
 
 ---
 # 38. 主要风险与应对

@@ -18,7 +18,7 @@ function section(startMarker, endMarker) {
 }
 
 const chapter32 = section('# 32. 实施 TODO 与里程碑', '# 33. 测试体系');
-const chapter37 = section('# 37. 可发布 V1 验收标准', '# 38. 主要风险与应对');
+const chapter37 = section('# 37. 可发布 Local V1 验收标准', '# 38. 主要风险与应对');
 
 const headingPattern = /^### (T\d+\.\d+|G\d+|B\d+)\s+.+$/gm;
 const headings = [...chapter32.matchAll(headingPattern)];

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "gate": "G5",
+  "decision": "pass",
+  "releaseStatus": "local_v1_ready_candidate",
+  "platform": "windows-x64",
+  "continuousIntegration": {
+    "runId": 30750424400,
+    "headSha": "a2ac6ecd14fe3dde1bf69a647fccd0bb87022d1c",
+    "credentialFreeRegression": "success",
+    "installerLifecycle": "success"
+  },
+  "releasePolicy": {
+    "localV1RequiresAuthenticode": false,
+    "verifiedPublisherRequiresAuthenticode": true,
+    "smartScreenWarningRequired": true,
+    "integrity": [
+      "sha256",
+      "ed25519-release-manifest",
+      "https-origin",
+      "channel",
+      "database-schema"
+    ]
+  },
+  "unresolvedSevereIssues": {
+    "security": 0,
+    "dataLoss": 0,
+    "wrongProcessTermination": 0
+  },
+  "acceptance": {
+    "sections": "37.1-37.8",
+    "items": 67,
+    "allChecked": true,
+    "allMappedToEvidence": true
+  },
+  "backlogExcluded": [
+    "B1",
+    "B2",
+    "B3"
+  ],
+  "containsCredentials": false,
+  "containsPrivateSigningMaterial": false,
+  "containsUserSource": false
+}

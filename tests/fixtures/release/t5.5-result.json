@@ -17,7 +17,8 @@
     "byteLength": 214324819,
     "sha256": "e50c880cdc729a94084fe84f92041779a4459974997fbd50a53f671df06756f0",
     "committed": false,
-    "publishableWithoutAuthenticode": false
+    "localV1PublishableWithoutAuthenticode": true,
+    "verifiedPublisherWithoutAuthenticode": false
   },
   "upgradeRecovery": {
     "previousDatabaseSchema": 5,

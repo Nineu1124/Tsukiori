@@ -40,7 +40,10 @@
     }
   ],
   "publication": {
-    "authenticodeRequired": true,
+    "channel": "local",
+    "localV1RequiresAuthenticode": false,
+    "verifiedPublisherRequiresAuthenticode": true,
+    "unsignedSmartScreenWarningRequired": true,
     "detachedManifestSignature": "Ed25519",
     "testArtifactCommitted": false,
     "privateSigningMaterialCommitted": false

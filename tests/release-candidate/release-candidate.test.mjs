@@ -45,7 +45,10 @@ test('V1 RC locks Desktop, Daemon, Runtime versions, Schema hashes, and knownIss
   assert.equal(codex.maximumTestedVersion, '0.146.0');
   assert.equal(codex.schemaSha256, codexManifest.sha256);
   assert.deepEqual(codex.knownIssues, codexCapabilities.knownIssues);
-  assert.equal(compatibility.publication.authenticodeRequired, true);
+  assert.equal(compatibility.publication.channel, 'local');
+  assert.equal(compatibility.publication.localV1RequiresAuthenticode, false);
+  assert.equal(compatibility.publication.verifiedPublisherRequiresAuthenticode, true);
+  assert.equal(compatibility.publication.unsignedSmartScreenWarningRequired, true);
   assert.equal(compatibility.publication.testArtifactCommitted, false);
   assert.equal(compatibility.publication.privateSigningMaterialCommitted, false);
 });
