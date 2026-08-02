@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "gate": "G0",
+  "evaluatedAt": "<timestamp>",
+  "taskCommits": {
+    "T0.1": "8df8fe42eea7b1dcaa4222c7304650b5f47daac6",
+    "T0.2": "426c000821abc7c9a729b37bf96f9a40bcf1ea98",
+    "T0.3": "190f0264c5022d0f7ba6319cde4c5d6cbf35f515",
+    "T0.4": "05206997f601f4166f523e5435e1242beb03af2d"
+  },
+  "t04Ci": {
+    "workflow": "windows-ci",
+    "runId": 30729649391,
+    "conclusion": "success",
+    "url": "https://github.com/Nineu1124/Tsukiori/actions/runs/30729649391"
+  },
+  "runtimeBoundaries": [
+    {
+      "runtime": "opencode",
+      "control": "authenticated HTTP SDK v2 requests",
+      "events": "one independently consumed global SSE stream per Runtime Handle",
+      "separated": true
+    },
+    {
+      "runtime": "codex",
+      "control": "JSON-RPC requests and responses over app-server stdin/stdout",
+      "events": "one JSONL stdout reader per Runtime Handle dispatching notifications and server requests",
+      "separated": true
+    }
+  ],
+  "recoveryAssessments": [
+    {
+      "target": "gui",
+      "observedState": "gui_down_control_and_runtime_alive",
+      "dataDestructionObserved": false,
+      "requiredRecovery": "restart GUI and resubscribe to daemon snapshot plus incremental events"
+    },
+    {
+      "target": "daemon",
+      "observedState": "daemon_down_runtime_orphaned",
+      "dataDestructionObserved": false,
+      "requiredRecovery": "restart daemon, fingerprint the orphan Runtime, and reconcile without replaying high-risk operations"
+    },
+    {
+      "target": "runtime",
+      "observedState": "runtime_exited_daemon_alive",
+      "dataDestructionObserved": false,
+      "requiredRecovery": "mark Runtime exited and use the adapter-specific persisted-session recovery path"
+    }
+  ],
+  "security": {
+    "secretScanner": "scripts/secret-scan.mjs",
+    "rawRuntimePayloadsCommitted": false,
+    "providerCredentialsRequiredInCi": false,
+    "worktreeDescribedAsSandbox": false
+  },
+  "unknownsPreserved": [
+    "opencode.in_flight_turn_crash_recovery",
+    "opencode.connection_epoch",
+    "opencode.event_replay",
+    "codex.structured_network_approval",
+    "codex.runtime_scope_events",
+    "codex.connection_epoch",
+    "codex.event_replay"
+  ]
+}

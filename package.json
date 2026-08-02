@@ -13,6 +13,7 @@
     "check:checkpoints": "node scripts/verify-checkpoints.mjs",
     "check:secrets": "node scripts/secret-scan.mjs",
     "test:contract": "node --test spikes/adapter-contract/*.test.mjs",
+    "test:gate0": "node --test tests/gates/g0.test.mjs",
     "test:codex": "node --test spikes/codex/*.test.mjs",
     "spike:codex": "node spikes/codex/harness.mjs",
     "test:windows": "node --test spikes/windows/*.test.mjs",
