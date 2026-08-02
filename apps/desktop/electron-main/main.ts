@@ -10,11 +10,15 @@ const daemonEntry = resolve(currentDirectory, '..', '..', '..', 'daemon', 'dist'
 const preloadEntry = resolve(currentDirectory, '..', 'preload', 'index.cjs');
 const rendererEntry = resolve(currentDirectory, '..', 'renderer', 'index.html');
 const smokeMode = process.env.TSUKIORI_DESKTOP_SMOKE === '1';
+const daemonExitPolicy = process.env.TSUKIORI_DAEMON_EXIT_POLICY === 'keep' ? 'keep' : 'stop';
+const daemonLeaseFile = resolve(app.getPath('userData'), 'daemon-lease-v1.json');
 
 const supervisor = new DaemonSupervisor({
   daemonEntry,
   executable: process.env.TSUKIORI_NODE_EXECUTABLE ?? process.execPath,
   expectedVersion: DAEMON_VERSION,
+  leaseFile: daemonLeaseFile,
+  exitPolicy: daemonExitPolicy,
 });
 
 const workspaceSnapshot = smokeMode ? {
@@ -267,7 +271,7 @@ app.on('before-quit', (event) => {
   }
   event.preventDefault();
   quitting = true;
-  void supervisor.stop().finally(() => app.quit());
+  void supervisor.release().finally(() => app.quit());
 });
 
 app.whenReady()

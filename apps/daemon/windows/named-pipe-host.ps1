@@ -10,6 +10,9 @@ param(
   [Parameter(Mandatory = $true)]
   [int]$ProtocolVersion,
 
+  [Parameter(Mandatory = $true)]
+  [int]$DaemonPid,
+
   [int]$MaxConnections = 32
 )
 
@@ -80,6 +83,7 @@ $events = @(
   [ordered]@{ streamSequence = 1; type = 'daemon.started'; payload = [ordered]@{ state = 'running' } },
   [ordered]@{ streamSequence = 2; type = 'runtime.summary'; payload = [ordered]@{ activeHandles = 0 } }
 )
+$shutdownRequested = $false
 
 function Write-JsonLine {
   param(
@@ -258,9 +262,23 @@ for ($connectionIndex = 0; $connectionIndex -lt $MaxConnections; $connectionInde
           result = [ordered]@{
             daemonInstanceId = $DaemonInstanceId
             connectionEpoch = $epoch
+            pid = $DaemonPid
+            protocolVersion = $ProtocolVersion
           }
         })
         continue
+      }
+      if ($request.method -eq 'daemon.shutdown') {
+        Write-JsonLine $writer ([ordered]@{
+          jsonrpc = '2.0'
+          id = [string]$request.id
+          result = [ordered]@{
+            accepted = $true
+            daemonInstanceId = $DaemonInstanceId
+          }
+        })
+        $shutdownRequested = $true
+        break
       }
       if ($request.method -ne 'stream.subscribe') {
         Write-JsonLine $writer ([ordered]@{ jsonrpc = '2.0'; id = [string]$request.id; error = [ordered]@{ code = 'method_not_found' } })
@@ -309,4 +327,5 @@ for ($connectionIndex = 0; $connectionIndex -lt $MaxConnections; $connectionInde
     if ($null -ne $writer) { try { $writer.Dispose() } catch { Write-Audit 'connection.cleanup' 'writer_pipe_broken' $epoch } }
     try { $server.Dispose() } catch { Write-Audit 'connection.cleanup' 'server_pipe_broken' $epoch }
   }
+  if ($shutdownRequested) { break }
 }

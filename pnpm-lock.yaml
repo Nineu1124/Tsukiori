@@ -162,6 +162,21 @@ importers:
 
   packages/protocol: {}
 
+  packages/recovery-manager:
+    dependencies:
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@tsukiori/permission-broker':
+        specifier: workspace:*
+        version: link:../permission-broker
+      '@tsukiori/worktree-manager':
+        specifier: workspace:*
+        version: link:../worktree-manager
+
   packages/runtime-core:
     dependencies:
       '@tsukiori/domain':

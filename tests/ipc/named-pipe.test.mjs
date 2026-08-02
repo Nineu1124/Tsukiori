@@ -42,6 +42,8 @@ async function startHost() {
       daemonInstanceId,
       '-ProtocolVersion',
       '1',
+      '-DaemonPid',
+      String(process.pid),
       '-MaxConnections',
       '12',
     ],

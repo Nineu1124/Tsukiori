@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { createInterface, type Interface } from 'node:readline';
 import {
   DAEMON_VERSION,
@@ -24,8 +25,21 @@ export type DaemonSupervisorOptions = {
   expectedVersion?: string;
   startupTimeoutMs?: number;
   environment?: NodeJS.ProcessEnv;
+  leaseFile?: string;
+  exitPolicy?: 'keep' | 'stop';
 };
 
+type DaemonLease = {
+  schemaVersion: 1;
+  daemonVersion: string;
+  protocolVersion: number;
+  ipcProtocolVersion: number;
+  instanceId: string;
+  pid: number;
+  pipeName: string;
+  bootstrapToken: string;
+  createdAt: number;
+};
 export type DaemonSnapshot = {
   state: 'stopped' | 'running';
   daemonVersion: string | null;
@@ -37,7 +51,7 @@ export type DaemonSnapshot = {
 export class DaemonSupervisor {
   readonly #options: Required<
     Pick<DaemonSupervisorOptions, 'daemonEntry' | 'executable' | 'expectedVersion' | 'startupTimeoutMs'>
-  > & { environment: NodeJS.ProcessEnv };
+  > & { environment: NodeJS.ProcessEnv; leaseFile?: string; exitPolicy: 'keep' | 'stop' };
 
   #child: ChildProcessWithoutNullStreams | null = null;
   #reader: Interface | null = null;
@@ -56,11 +70,13 @@ export class DaemonSupervisor {
       expectedVersion: options.expectedVersion ?? DAEMON_VERSION,
       startupTimeoutMs: options.startupTimeoutMs ?? 15_000,
       environment: options.environment ?? {},
+      ...(options.leaseFile ? { leaseFile: options.leaseFile } : {}),
+      exitPolicy: options.exitPolicy ?? 'stop',
     };
   }
 
   snapshot(): DaemonSnapshot {
-    const running = this.#child !== null && this.#child.exitCode === null && this.#ready !== null;
+    const running = this.#ready !== null && (this.#child === null || this.#child.exitCode === null);
     return {
       state: running ? 'running' : 'stopped',
       daemonVersion: this.#ready?.daemonVersion ?? null,
@@ -75,11 +91,14 @@ export class DaemonSupervisor {
       return this.snapshot();
     }
 
+    if (await this.#attachFromLease()) return this.snapshot();
+
     this.#bootstrapToken = randomBytes(32).toString('hex');
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
       ...this.#options.environment,
       TSUKIORI_IPC_BOOTSTRAP_TOKEN: this.#bootstrapToken,
+      ...(this.#options.leaseFile ? { TSUKIORI_DAEMON_LEASE_FILE: this.#options.leaseFile } : {}),
     };
     if (
       process.versions.electron &&
@@ -191,6 +210,21 @@ export class DaemonSupervisor {
   }
 
   async probe(): Promise<DaemonStatusMessage> {
+    if (!this.#child && this.#ipcClient && this.#ready) {
+      const result = await this.#ipcClient.request('daemon.ping', {}) as Record<string, unknown>;
+      if (result.daemonInstanceId !== this.#ready.instanceId || result.pid !== this.#ready.pid
+        || result.protocolVersion !== HOST_PROTOCOL_VERSION) {
+        throw new Error('Daemon identity changed during attached probe');
+      }
+      return {
+        type: 'daemon.status',
+        requestId: 'ipc-probe',
+        protocolVersion: HOST_PROTOCOL_VERSION,
+        daemonVersion: this.#ready.daemonVersion,
+        instanceId: this.#ready.instanceId,
+        pid: this.#ready.pid,
+      };
+    }
     const message = await this.#request({
       type: 'daemon.probe',
       requestId: randomUUID(),
@@ -209,9 +243,30 @@ export class DaemonSupervisor {
   }
 
   async stop(force = false): Promise<void> {
+    const child = this.#child;
+    const ready = this.#ready;
+    const ipcClient = this.#ipcClient;
+    if (ipcClient && ready) {
+      try {
+        if (!force) {
+          const result = await ipcClient.request('daemon.shutdown', {
+            expectedVersion: this.#options.expectedVersion,
+          }) as Record<string, unknown>;
+          if (result.accepted !== true || result.daemonInstanceId !== ready.instanceId) {
+            throw new Error('Daemon rejected authenticated shutdown');
+          }
+          await this.#waitForProcessExit(ready.pid);
+        } else if (this.#isProcessAlive(ready.pid)) {
+          process.kill(ready.pid, 'SIGTERM');
+          await this.#waitForProcessExit(ready.pid);
+        }
+      } finally {
+        this.#reset();
+      }
+      return;
+    }
     this.#ipcClient?.close();
     this.#ipcClient = null;
-    const child = this.#child;
     if (!child || child.exitCode !== null) {
       this.#reset();
       return;
@@ -252,6 +307,109 @@ export class DaemonSupervisor {
       if (stopTimeout) clearTimeout(stopTimeout);
     }
     this.#reset();
+  }
+
+  async release(policy: 'keep' | 'stop' = this.#options.exitPolicy): Promise<void> {
+    if (policy === 'stop') {
+      await this.stop();
+      return;
+    }
+    this.#ipcClient?.close();
+    this.#ipcClient = null;
+    this.#reader?.close();
+    this.#reader = null;
+    if (this.#child) {
+      this.#child.stdin.end();
+      this.#child.stdout.destroy();
+      this.#child.stderr.destroy();
+      this.#child.unref();
+    }
+    this.#child = null;
+    this.#ready = null;
+    this.#bootstrapToken = '';
+  }
+
+  async #attachFromLease(): Promise<boolean> {
+    const leaseFile = this.#options.leaseFile;
+    if (!leaseFile || !existsSync(leaseFile)) return false;
+    let lease: DaemonLease;
+    try {
+      lease = this.#parseLease(JSON.parse(readFileSync(leaseFile, 'utf8')));
+    } catch {
+      unlinkSync(leaseFile);
+      return false;
+    }
+    if (!this.#isProcessAlive(lease.pid)) {
+      unlinkSync(leaseFile);
+      return false;
+    }
+    if (lease.daemonVersion !== this.#options.expectedVersion
+      || lease.protocolVersion !== HOST_PROTOCOL_VERSION
+      || lease.ipcProtocolVersion !== IPC_PROTOCOL_VERSION) {
+      throw new Error('Running Daemon lease is incompatible; refusing duplicate start');
+    }
+    const client = new NamedPipeClient({
+      pipeName: lease.pipeName,
+      daemonInstanceId: lease.instanceId,
+      protocolVersion: lease.ipcProtocolVersion,
+      bootstrapToken: lease.bootstrapToken,
+    });
+    try {
+      await client.connect();
+      const ping = await client.request('daemon.ping', {}) as Record<string, unknown>;
+      if (ping.daemonInstanceId !== lease.instanceId || ping.pid !== lease.pid
+        || ping.protocolVersion !== HOST_PROTOCOL_VERSION) {
+        throw new Error('Running Daemon lease identity mismatch');
+      }
+    } catch (error) {
+      client.close();
+      throw new Error('Running Daemon could not be safely authenticated; refusing duplicate start', {
+        cause: error,
+      });
+    }
+    this.#bootstrapToken = lease.bootstrapToken;
+    this.#ready = {
+      type: 'daemon.ready',
+      protocolVersion: HOST_PROTOCOL_VERSION,
+      daemonVersion: DAEMON_VERSION,
+      instanceId: lease.instanceId,
+      pid: lease.pid,
+      pipeName: lease.pipeName,
+      ipcProtocolVersion: IPC_PROTOCOL_VERSION,
+    };
+    this.#ipcClient = client;
+    return true;
+  }
+
+  #parseLease(value: unknown): DaemonLease {
+    if (!value || typeof value !== 'object') throw new Error('Invalid Daemon lease');
+    const item = value as Record<string, unknown>;
+    if (item.schemaVersion !== 1 || typeof item.daemonVersion !== 'string'
+      || typeof item.protocolVersion !== 'number' || typeof item.ipcProtocolVersion !== 'number'
+      || typeof item.instanceId !== 'string' || typeof item.pid !== 'number'
+      || !Number.isInteger(item.pid) || item.pid <= 0 || typeof item.pipeName !== 'string'
+      || typeof item.bootstrapToken !== 'string' || item.bootstrapToken.length < 32
+      || typeof item.createdAt !== 'number') {
+      throw new Error('Invalid Daemon lease');
+    }
+    return item as unknown as DaemonLease;
+  }
+
+  #isProcessAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async #waitForProcessExit(pid: number): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (this.#isProcessAlive(pid)) {
+      if (Date.now() >= deadline) throw new Error('Timed out waiting for Daemon process exit');
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+    }
   }
 
   #onLine(line: string): void {

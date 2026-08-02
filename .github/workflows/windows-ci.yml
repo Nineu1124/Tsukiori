@@ -61,3 +61,4 @@ jobs:
           npm run test:dual-runtime
           npm run test:gate3
           npm run test:gate4
+          npm run test:recovery

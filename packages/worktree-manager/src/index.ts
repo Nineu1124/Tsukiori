@@ -41,7 +41,7 @@ type WorktreeOperationPayload = {
 
 type WorktreeFact = { path: string; branch?: string; head?: string };
 
-type ObservedProcessIdentity = {
+export type ObservedProcessIdentity = {
   pid: number;
   daemonBootId: string;
   processStartTime: number;

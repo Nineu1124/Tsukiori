@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -65,4 +67,40 @@ test('Desktop rejects and terminates a Daemon with an unexpected version', async
     /Daemon version mismatch/,
   );
   assert.equal(supervisor.snapshot().state, 'stopped');
+});
+
+test('keep policy survives GUI release, reauthenticates the same Daemon, and stop removes its lease', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'tsukiori-daemon-lease-'));
+  const leaseFile = join(directory, 'daemon-lease.json');
+  t.after(() => {
+    if (existsSync(leaseFile)) {
+      try {
+        const lease = JSON.parse(readFileSync(leaseFile, 'utf8'));
+        process.kill(lease.pid, 'SIGTERM');
+      } catch {}
+    }
+    rmSync(directory, { recursive: true, force: true });
+  });
+  const first = new DaemonSupervisor({
+    daemonEntry, executable: process.execPath, expectedVersion: DAEMON_VERSION,
+    leaseFile, exitPolicy: 'keep',
+  });
+  const started = await first.start();
+  assert.equal(existsSync(leaseFile), true);
+  await first.release();
+  assert.equal(first.snapshot().state, 'stopped');
+
+  const second = new DaemonSupervisor({
+    daemonEntry, executable: process.execPath, expectedVersion: DAEMON_VERSION,
+    leaseFile, exitPolicy: 'stop',
+  });
+  const attached = await second.start();
+  assert.equal(attached.instanceId, started.instanceId);
+  assert.equal(attached.pid, started.pid);
+  const probe = await second.probe();
+  assert.equal(probe.instanceId, started.instanceId);
+  assert.equal(probe.pid, started.pid);
+  await second.release();
+  assert.equal(second.snapshot().state, 'stopped');
+  assert.equal(existsSync(leaseFile), false);
 });

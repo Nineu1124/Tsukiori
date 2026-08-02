@@ -1,0 +1,35 @@
+{
+  "task": "T5.1",
+  "schemaVersion": 1,
+  "daemonPolicy": ["keep", "stop"],
+  "reconnect": {
+    "currentUserOnly": true,
+    "challengeResponse": true,
+    "instanceAndPidVerified": true,
+    "duplicateStartRefusedWhenLiveLeaseCannotAuthenticate": true
+  },
+  "durableRecovery": [
+    "runtime_session_create",
+    "worktree_create",
+    "worktree_remove",
+    "commit",
+    "merge",
+    "rebase"
+  ],
+  "fullProcessIdentity": [
+    "pid",
+    "daemonBootId",
+    "processStartTime",
+    "spawnNonce",
+    "executable",
+    "processFingerprint"
+  ],
+  "killMatrix": {
+    "gui": "renderer_killed_daemon_and_runtime_survived",
+    "daemon": "daemon_killed_durable_facts_reconciled_without_replay",
+    "runtime": "one_runtime_killed_peer_runtime_remained_healthy"
+  },
+  "autoReplayCount": 0,
+  "containsCredentials": false,
+  "containsPromptOrSource": false
+}

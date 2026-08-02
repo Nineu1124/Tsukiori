@@ -212,6 +212,16 @@ export class LocalDatabase {
     }}).run();
   }
 
+  readProcess(id: string): ProcessRecord | null {
+    const row = this.sqlite.prepare('SELECT * FROM process_records WHERE id=?').get(id) as Record<string, unknown> | undefined;
+    return row ? this.#process(row) : null;
+  }
+
+  listProcesses(statuses?: readonly ProcessRecord['status'][]): ProcessRecord[] {
+    const rows = this.sqlite.prepare('SELECT * FROM process_records ORDER BY started_at, id').all() as Record<string, unknown>[];
+    const allowed = statuses ? new Set(statuses) : null;
+    return rows.map((row) => this.#process(row)).filter((record) => !allowed || allowed.has(record.status));
+  }
   saveOperation(value: OperationRecord): void {
     this.#validate(value);
     this.orm.insert(schema.operations).values({
@@ -534,6 +544,28 @@ export class LocalDatabase {
     };
   }
 
+  #process(row: Record<string, unknown>): ProcessRecord {
+    return {
+      id: String(row.id),
+      ...(row.session_id === null ? {} : { sessionId: String(row.session_id) }),
+      ...(row.runtime_handle_id === null ? {} : { runtimeHandleId: String(row.runtime_handle_id) }),
+      executionEnvironmentId: String(row.execution_environment_id),
+      processType: String(row.process_type) as ProcessRecord['processType'],
+      pid: Number(row.pid),
+      ...(row.parent_pid === null ? {} : { parentPid: Number(row.parent_pid) }),
+      daemonBootId: String(row.daemon_boot_id),
+      processStartTime: Number(row.process_start_time),
+      ...(row.process_fingerprint === null ? {} : { processFingerprint: String(row.process_fingerprint) }),
+      spawnNonce: String(row.spawn_nonce),
+      ...(row.executable === null ? {} : { executable: String(row.executable) }),
+      ...(row.cwd === null ? {} : { cwd: String(row.cwd) }),
+      status: String(row.status) as ProcessRecord['status'],
+      startedAt: Number(row.started_at),
+      ...(row.exited_at === null ? {} : { exitedAt: Number(row.exited_at) }),
+      ...(row.exit_code === null ? {} : { exitCode: Number(row.exit_code) }),
+      ...(row.signal === null ? {} : { signal: String(row.signal) }),
+    };
+  }
   #runtimeHandle(row: Record<string, unknown>): RuntimeHandleRecord {
     return {
       id: String(row.id), profileId: String(row.profile_id),

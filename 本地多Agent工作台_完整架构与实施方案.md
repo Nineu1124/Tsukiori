@@ -3520,15 +3520,15 @@ src/helpers/
 
 ### T5.1 常驻 Daemon 与崩溃恢复
 
-- [ ] 完成 Daemon 常驻、重连、幂等和进程恢复
+- [x] 完成 Daemon 常驻、重连、幂等和进程恢复
 - 前置依赖：G4
 - 交付物：Recovery Manager、重连协议、故障注入报告
 - Checkpoints：
-  - [ ] GUI 退出后按用户策略保留或停止 Daemon，重新启动可安全握手
-  - [ ] Runtime、Worktree、Commit、Merge 和清理操作均有 Durable Operation 恢复结果
-  - [ ] 危险操作不会因重连或重启被自动重放
-  - [ ] ProcessRecord 完整身份可识别 PID 复用
-  - [ ] GUI、Daemon、Runtime 强杀矩阵全部通过且状态可解释
+  - [x] GUI 退出后按用户策略保留或停止 Daemon，重新启动可安全握手
+  - [x] Runtime、Worktree、Commit、Merge 和清理操作均有 Durable Operation 恢复结果
+  - [x] 危险操作不会因重连或重启被自动重放
+  - [x] ProcessRecord 完整身份可识别 PID 复用
+  - [x] GUI、Daemon、Runtime 强杀矩阵全部通过且状态可解释
 
 ### T5.2 安全、权限规则与凭据
 

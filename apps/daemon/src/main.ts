@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -15,11 +16,40 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const instanceId = randomUUID();
 const pipeName = 'tsukiori-' + instanceId;
 const bootstrapToken = process.env.TSUKIORI_IPC_BOOTSTRAP_TOKEN;
+const leaseFile = process.env.TSUKIORI_DAEMON_LEASE_FILE;
 if (!bootstrapToken || bootstrapToken.length < 32) {
   throw new Error('Daemon requires a parent-provided IPC bootstrap token');
 }
 let stopping = false;
 let pipeHost: ChildProcess | null = null;
+
+function removeLease(): void {
+  if (!leaseFile || !existsSync(leaseFile)) return;
+  try {
+    const value = JSON.parse(readFileSync(leaseFile, 'utf8')) as Record<string, unknown>;
+    if (value.instanceId === instanceId) unlinkSync(leaseFile);
+  } catch {
+    // Never remove a lease that cannot be attributed to this exact Daemon instance.
+  }
+}
+
+function publishLease(): void {
+  if (!leaseFile) return;
+  mkdirSync(dirname(leaseFile), { recursive: true });
+  const temporary = leaseFile + '.' + instanceId + '.tmp';
+  writeFileSync(temporary, JSON.stringify({
+    schemaVersion: 1,
+    daemonVersion: DAEMON_VERSION,
+    protocolVersion: HOST_PROTOCOL_VERSION,
+    ipcProtocolVersion: IPC_PROTOCOL_VERSION,
+    instanceId,
+    pid: process.pid,
+    pipeName,
+    bootstrapToken,
+    createdAt: Date.now(),
+  }), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  renameSync(temporary, leaseFile);
+}
 
 function send(message: DaemonMessage, callback?: () => void): void {
   process.stdout.write(JSON.stringify(message) + '\n', callback);
@@ -41,6 +71,8 @@ async function startPipeHost(): Promise<void> {
       instanceId,
       '-ProtocolVersion',
       String(IPC_PROTOCOL_VERSION),
+      '-DaemonPid',
+      String(process.pid),
       '-MaxConnections',
       '256',
     ],
@@ -91,6 +123,12 @@ async function startPipeHost(): Promise<void> {
       rejectReady(error);
     });
   });
+  child.once('exit', (code) => {
+    if (!stopping) {
+      removeLease();
+      process.exit(code === 0 ? 0 : 1);
+    }
+  });
 }
 
 function stop(requestId: string): void {
@@ -106,7 +144,10 @@ function stop(requestId: string): void {
     requestId,
     daemonVersion: DAEMON_VERSION,
     instanceId,
-  }, () => process.exit(0));
+  }, () => {
+    removeLease();
+    process.exit(0);
+  });
 }
 
 process.title = 'tsukiori-daemon';
@@ -167,8 +208,10 @@ input.on('close', () => {
 });
 process.on('SIGTERM', () => stop('signal'));
 process.on('SIGINT', () => stop('signal'));
+process.on('exit', removeLease);
 
 await startPipeHost();
+publishLease();
 send({
   type: 'daemon.ready',
   protocolVersion: HOST_PROTOCOL_VERSION,
