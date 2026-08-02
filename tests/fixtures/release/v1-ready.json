@@ -11,12 +11,12 @@
     "allChecked": true
   },
   "g5ContinuousIntegration": {
-    "runId": 30751434838,
-    "headSha": "e71976fdd259c369c65a598a75b2a5e41f938d6f",
+    "runId": 30755866810,
+    "headSha": "c9d859da144d944f72bdb8b84f9d9c122dfa35fa",
     "conclusion": "success",
     "credentialFreeRegression": "success",
     "installerLifecycle": "success",
-    "url": "https://github.com/Nineu1124/Tsukiori/actions/runs/30751434838"
+    "url": "https://github.com/Nineu1124/Tsukiori/actions/runs/30755866810"
   },
   "releaseEvidence": [
     "tests/fixtures/release/t5.5-result.json",

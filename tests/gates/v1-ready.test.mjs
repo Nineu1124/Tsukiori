@@ -61,8 +61,8 @@ test('release candidate, matrix, report, known issues, and G5 evidence are archi
   }
   assert.equal(g5.gate, 'G5');
   assert.equal(g5.decision, 'pass');
-  assert.equal(ready.g5ContinuousIntegration.runId, 30751434838);
-  assert.equal(ready.g5ContinuousIntegration.headSha, 'e71976fdd259c369c65a598a75b2a5e41f938d6f');
+  assert.equal(ready.g5ContinuousIntegration.runId, 30755866810);
+  assert.equal(ready.g5ContinuousIntegration.headSha, 'c9d859da144d944f72bdb8b84f9d9c122dfa35fa');
   assert.equal(ready.g5ContinuousIntegration.conclusion, 'success');
   assert.equal(ready.g5ContinuousIntegration.credentialFreeRegression, 'success');
   assert.equal(ready.g5ContinuousIntegration.installerLifecycle, 'success');

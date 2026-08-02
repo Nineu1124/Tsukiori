@@ -9,7 +9,7 @@
 
 ## 决策摘要
 
-T0.1 至 T5.6 的全部顶层任务、G0 至 G4 和第 37.1–37.9 分类验收均已完成。原始 Windows CI `30750424400` 在干净 runner 上通过当时的无凭据回归和 NSIS 生命周期；T5.6 可交互产品纠正将在完成提交后以新的 Windows CI 重新签字。
+T0.1 至 T5.6 的全部顶层任务、G0 至 G4 和第 37.1–37.9 分类验收均已完成。T5.6 提交 `c9d859da144d944f72bdb8b84f9d9c122dfa35fa` 对应的 Windows CI `30755866810` 在干净 runner 上通过完整无凭据回归和 NSIS 生命周期，结论为 success。
 
 根据 ADR 0003，Local V1 采用与 `cc-haha` Windows 发布相同的可选 Authenticode 策略。未签名 NSIS 不显示为已验证发布者，必须明确提示 SmartScreen 风险；Artifact 完整性继续由 SHA-256、Ed25519 Release Manifest、HTTPS Origin、Channel、文件名和数据库 Schema 验证。未来 Verified Publisher 通道继续启用 `forceCodeSigning`，不计入 Local V1 完成率。
 
@@ -20,15 +20,14 @@ T0.1 至 T5.6 的全部顶层任务、G0 至 G4 和第 37.1–37.9 分类验收�
 - T2.1–T2.4：完成；
 - T3.1–T3.4：完成；
 - T4.1–T4.5：完成；
-- T5.1–T5.5：完成。
-- T5.6：完成；真实 Codex Thread/Turn 与无凭据交互测试均通过。
+- T5.1–T5.6：完成；真实 Codex Thread/Turn、UI/UX V1.0、Daemon 子进程回收与无凭据交互测试均通过。
 
 结果：通过。
 
 ## G5-C2 阶段 Gate 与阻塞项
 
 - G0–G4：已通过并分别归档 Gate 报告；
-- T5.5 后最终 Windows CI：success；
+- T5.6 后最终 Windows CI `30755866810`：success；
 - Local V1 未解决阻塞项：0；
 - Verified Publisher 缺少证书是可选通道状态，不是 Local V1 阻塞。
 
@@ -63,7 +62,7 @@ B1 Claude Adapter、B2 Generic ACP、B3 WSL/macOS/Linux 均保持未勾选，不
 | 签字维度 | 决策 | 证据 |
 | --- | --- | --- |
 | 架构依赖与 Gate | PASS | T0–T5、G0–G4 报告 |
-| Windows Installer | PASS | CI 30750424400、T5.5 Fixture |
+| Windows Installer | PASS | CI 30755866810、T5.5 Fixture |
 | 数据与恢复 | PASS | Migration Backup、Kill Matrix、Upgrade Recovery |
 | 安全与凭据 | PASS | Credential Broker、Secret Scan、严重问题计数 |
 | Local V1 签名策略 | PASS | ADR 0003、SmartScreen 风险声明、Verified Publisher fail closed |
@@ -82,6 +81,9 @@ npm run test:alpha
 npm run test:dual-runtime
 npm run test:release
 npm run test:release-candidate
+npm run test:host
+npm run test:interactive
+npm run test:ui
 npm run test:gate5
 pnpm run typecheck
 npm run check
@@ -91,5 +93,5 @@ git diff --check
 ## 结论
 
 - G5：通过。
-- 允许下一步：在 G5 提交、推送和 Windows CI 成功后勾选第 37.0 五项总门槛，标记 Local V1 Ready。
+- Local V1 Ready：已满足，T5.6 纠正后的干净 Windows CI 已重新签字。
 - 禁止声明：Verified Publisher、Claude、ACP、WSL、macOS 或 Linux 已随 Local V1 发布。

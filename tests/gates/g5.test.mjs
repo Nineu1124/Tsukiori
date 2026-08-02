@@ -86,7 +86,7 @@ test('severe issue counts are zero and B1 through B3 remain excluded', () => {
 });
 
 test('the final clean Windows CI evidence includes regression and installer success', () => {
-  assert.equal(evidence.continuousIntegration.runId, 30750424400);
+  assert.equal(evidence.continuousIntegration.runId, 30755866810);
   assert.match(evidence.continuousIntegration.headSha, /^[a-f0-9]{40}$/);
   assert.equal(evidence.continuousIntegration.credentialFreeRegression, 'success');
   assert.equal(evidence.continuousIntegration.installerLifecycle, 'success');

@@ -5,8 +5,8 @@
   "releaseStatus": "local_v1_ready_candidate",
   "platform": "windows-x64",
   "continuousIntegration": {
-    "runId": 30750424400,
-    "headSha": "a2ac6ecd14fe3dde1bf69a647fccd0bb87022d1c",
+    "runId": 30755866810,
+    "headSha": "c9d859da144d944f72bdb8b84f9d9c122dfa35fa",
     "credentialFreeRegression": "success",
     "installerLifecycle": "success"
   },
