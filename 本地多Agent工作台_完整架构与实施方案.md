@@ -3444,10 +3444,12 @@ src/helpers/
 
 ## 阶段 4：Codex 与可发布 V1
 
+> Codex-first 实施顺序：依据 ADR-0002，在 OpenCode 暂缓期间，T4.1 可由 G2 与 T0.2 解锁，继而按依赖执行 T4.2、T4.3。T3/G3、T4.4、T4.5 与 G4 的完成标准不变，仍保持未完成。
+
 ### T4.1 Codex app-server 生命周期与认证
 
 - [ ] 实现 Codex 发现、启动、初始化和认证探测
-- 前置依赖：G3、T0.2
+- 前置依赖：G2、T0.2
 - 交付物：Codex Adapter、Schema 锁定流程、认证状态 UI
 - Checkpoints：
   - [ ] 可发现 Codex 路径、版本、认证来源和兼容性状态
