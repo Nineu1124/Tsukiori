@@ -3953,11 +3953,11 @@ Runtime Native Protocol
 
 ## 37.0 Local V1 Ready 总门槛
 
-- [ ] [T0.*–T5.*] T0.1 至 T5.5 的全部顶层任务已完成
-- [ ] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
-- [ ] [37.1–37.8] 本章所有分类验收项均已勾选
-- [ ] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
-- [ ] [B1–B3] Claude、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
+- [x] [T0.*–T5.*] T0.1 至 T5.5 的全部顶层任务已完成
+- [x] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
+- [x] [37.1–37.8] 本章所有分类验收项均已勾选
+- [x] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
+- [x] [B1–B3] Claude、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
 
 只有以上五项全部通过，版本状态才能标记为 Local V1 Ready。Verified Publisher 是未来可选发布通道，不阻塞 Local V1。
 

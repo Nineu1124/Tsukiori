@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "decision": "local_v1_ready",
+  "releaseCandidate": "1.0.0-rc.1",
+  "platform": "windows-x64",
+  "completion": {
+    "tasks": 27,
+    "gates": 6,
+    "acceptanceItems": 67,
+    "readyChecks": 5,
+    "allChecked": true
+  },
+  "g5ContinuousIntegration": {
+    "runId": 30751434838,
+    "headSha": "e71976fdd259c369c65a598a75b2a5e41f938d6f",
+    "conclusion": "success",
+    "credentialFreeRegression": "success",
+    "installerLifecycle": "success",
+    "url": "https://github.com/Nineu1124/Tsukiori/actions/runs/30751434838"
+  },
+  "releaseEvidence": [
+    "tests/fixtures/release/t5.5-result.json",
+    "tests/fixtures/release/v1.0.0-rc.1-compatibility.json",
+    "tests/fixtures/release/v1-acceptance-evidence.json",
+    "docs/releases/V1.0.0-rc.1-known-issues.md",
+    "docs/releases/Local-V1-Ready.md",
+    "docs/gates/G5-stage-5.md"
+  ],
+  "publication": {
+    "channel": "local",
+    "authenticodeRequired": false,
+    "smartScreenWarningRequired": true,
+    "verifiedPublisherRemainsFailClosed": true
+  },
+  "backlogExcluded": [
+    "B1",
+    "B2",
+    "B3"
+  ],
+  "containsCredentials": false,
+  "containsPrivateSigningMaterial": false,
+  "containsUserSource": false
+}

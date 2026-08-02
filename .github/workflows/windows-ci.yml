@@ -67,6 +67,7 @@ jobs:
           npm run test:release
           npm run test:release-candidate
           npm run test:gate5
+          npm run test:v1-ready
 
       - name: Build and verify Windows release candidate installer
         run: .\scripts\verify-windows-release-candidate.ps1
