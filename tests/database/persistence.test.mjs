@@ -208,3 +208,33 @@ test('Secret fields and values are rejected before SQLite, WAL, or Blob writes',
   }
   repository.close();
 });
+test('migration creates a recoverable backup, retains it on failure, and blocks schema downgrade', (t) => {
+  const paths = fixture(t, 'migration.db');
+  const backupRoot = join(paths.root, 'migration-backups');
+  let database = new LocalDatabase({ ...paths, targetVersion: 5, backupRoot });
+  database.close();
+
+  assert.throws(() => new LocalDatabase({
+    ...paths,
+    targetVersion: 6,
+    backupRoot,
+    beforeMigration: (version) => {
+      if (version === 6) throw new Error('fixture migration failure');
+    },
+  }), /fixture migration failure/);
+  const backups = readdirSync(backupRoot).filter((name) => name.endsWith('.db'));
+  assert.equal(backups.length, 1);
+  const recovered = new LocalDatabase({
+    filePath: join(backupRoot, backups[0]),
+    blobRoot: join(paths.root, 'recovered-blobs'),
+    targetVersion: 5,
+  });
+  assert.deepEqual(recovered.schemaVersions, [1, 2, 3, 4, 5]);
+  recovered.close();
+
+  database = new LocalDatabase({ ...paths, targetVersion: 6, backupRoot });
+  assert.ok(database.lastMigrationBackup?.endsWith('.db'));
+  assert.deepEqual(database.schemaVersions, [1, 2, 3, 4, 5, 6]);
+  database.close();
+  assert.throws(() => new LocalDatabase({ ...paths, targetVersion: 5, backupRoot }), /newer than/);
+});

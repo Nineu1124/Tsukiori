@@ -1,8 +1,9 @@
 import Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import type {
   ActionAuditRecord,
   BlobObjectRecord,
@@ -38,6 +39,8 @@ export type LocalDatabaseOptions = {
   blobRoot: string;
   knownSecrets?: readonly string[];
   targetVersion?: number;
+  backupRoot?: string;
+  beforeMigration?: (version: number, name: string) => void;
 };
 
 export class LocalDatabase {
@@ -45,6 +48,7 @@ export class LocalDatabase {
   readonly orm: BetterSQLite3Database<typeof schema.databaseSchema>;
   readonly blobs: RestrictedBlobStore;
   readonly #guard: SecretGuard;
+  readonly lastMigrationBackup: string | null;
 
   constructor(options: LocalDatabaseOptions) {
     const filePath = options.filePath === ':memory:' ? ':memory:' : resolve(options.filePath);
@@ -56,7 +60,21 @@ export class LocalDatabase {
       this.sqlite.pragma('journal_mode = WAL');
       this.sqlite.pragma('synchronous = NORMAL');
     }
-    applyMigrations(this.sqlite, options.targetVersion ?? LATEST_SCHEMA_VERSION);
+    const targetVersion = options.targetVersion ?? LATEST_SCHEMA_VERSION;
+    const currentVersion = Number(this.sqlite.pragma('user_version', { simple: true }) ?? 0);
+    this.lastMigrationBackup = filePath !== ':memory:' && currentVersion > 0 && targetVersion > currentVersion
+      ? this.#backupBeforeMigration(filePath, options.backupRoot)
+      : null;
+    try {
+      applyMigrations(this.sqlite, targetVersion, {
+        ...(options.beforeMigration ? {
+          beforeMigration: (migration) => options.beforeMigration?.(migration.version, migration.name),
+        } : {}),
+      });
+    } catch (error) {
+      this.sqlite.close();
+      throw error;
+    }
     this.orm = drizzle(this.sqlite, { schema: schema.databaseSchema });
     this.#guard = new SecretGuard(
       options.knownSecrets ? { knownSecrets: options.knownSecrets } : {},
@@ -64,6 +82,21 @@ export class LocalDatabase {
     this.blobs = new RestrictedBlobStore(options.blobRoot, this.#guard);
   }
 
+  #backupBeforeMigration(filePath: string, backupRoot?: string): string {
+    const root = resolve(backupRoot ?? join(dirname(filePath), 'backups'));
+    mkdirSync(root, { recursive: true });
+    const token = Date.now() + '-' + randomUUID();
+    const backup = join(root, 'state-' + token + '.db');
+    const escaped = backup.replaceAll("'", "''");
+    this.sqlite.exec("VACUUM INTO '" + escaped + "'");
+    writeFileSync(join(root, 'state-' + token + '.json'), JSON.stringify({
+      schemaVersion: 1,
+      source: '<local-database>',
+      backupFile: 'state-' + token + '.db',
+      createdAt: '<timestamp>',
+    }), { encoding: 'utf8', mode: 0o600 });
+    return backup;
+  }
   get schemaVersions(): number[] {
     return readMigrationVersions(this.sqlite);
   }

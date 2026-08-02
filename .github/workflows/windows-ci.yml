@@ -64,3 +64,4 @@ jobs:
           npm run test:recovery
           npm run test:security
           npm run test:observability
+          npm run test:release

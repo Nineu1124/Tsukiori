@@ -10,6 +10,7 @@ coverage/
 temp/
 worktrees/
 artifacts/private/
+/apps/desktop/release/
 spike-results/raw/
 
 *.log

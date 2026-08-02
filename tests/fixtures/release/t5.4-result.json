@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "task": "T5.4",
+  "platform": "Windows x64",
+  "builder": {
+    "electron": "43.2.0",
+    "electronBuilder": "26.15.7",
+    "target": "nsis",
+    "architecture": "x64",
+    "oneClick": false
+  },
+  "artifact": {
+    "fileName": "Tsukiori-0.1.0-x64-setup.exe",
+    "byteLength": 214302847,
+    "sha256": "643376c98cb1e2fa9f546bd1d484710c5890728345eb8bdef5f810a9f393523a",
+    "committed": false,
+    "publishable": false
+  },
+  "lifecycle": {
+    "install": "passed",
+    "packagedSmoke": "passed",
+    "upgrade": "passed",
+    "uninstall": "passed",
+    "reinstall": "passed",
+    "finalUninstall": "passed",
+    "userDataRetained": true
+  },
+  "trust": {
+    "detachedManifestAlgorithm": "Ed25519",
+    "temporaryPrivateKeyPersisted": false,
+    "sourcePolicy": "https-origin-channel-filename",
+    "authenticodeRequiredForRelease": true,
+    "unsignedReleaseRejected": true
+  },
+  "migration": {
+    "backupMethod": "sqlite-vacuum-into",
+    "failureBackupRecoverable": true,
+    "newerSchemaDowngradeBlocked": true
+  },
+  "containsCredentials": false,
+  "containsPrivateKey": false,
+  "containsUserSource": false
+}

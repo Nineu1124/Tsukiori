@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import {
@@ -60,7 +60,14 @@ function send(message: DaemonMessage, callback?: () => void): void {
 }
 
 async function startPipeHost(): Promise<void> {
-  const script = resolve(currentDirectory, 'windows', 'named-pipe-host.ps1');
+  const archivedScript = resolve(currentDirectory, 'windows', 'named-pipe-host.ps1');
+  const unpackedScript = archivedScript.replace(
+    sep + 'app.asar' + sep,
+    sep + 'app.asar.unpacked' + sep,
+  );
+  const script = unpackedScript !== archivedScript && existsSync(unpackedScript)
+    ? unpackedScript
+    : archivedScript;
   const child = spawn(
     process.env.TSUKIORI_PWSH_EXECUTABLE ?? 'pwsh.exe',
     [

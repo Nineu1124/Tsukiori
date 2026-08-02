@@ -217,6 +217,7 @@ export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;
 export function applyMigrations(
   database: Database.Database,
   targetVersion = LATEST_SCHEMA_VERSION,
+  options: { beforeMigration?: (migration: Migration) => void } = {},
 ): number[] {
   if (!Number.isInteger(targetVersion) || targetVersion < 0 || targetVersion > LATEST_SCHEMA_VERSION) {
     throw new Error('Invalid database target version');
@@ -232,9 +233,14 @@ export function applyMigrations(
     database.prepare('SELECT version FROM schema_migrations').all()
       .map((row) => (row as { version: number }).version),
   );
+  const highestApplied = Math.max(0, ...applied);
+  if (highestApplied > targetVersion) {
+    throw new Error('Database schema is newer than this application supports');
+  }
   const newlyApplied: number[] = [];
   for (const migration of migrations) {
     if (migration.version > targetVersion || applied.has(migration.version)) continue;
+    options.beforeMigration?.(migration);
     database.transaction(() => {
       database.exec(migration.sql);
       database.prepare(

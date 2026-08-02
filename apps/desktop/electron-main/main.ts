@@ -6,7 +6,9 @@ import { FakeRuntimeAdapter } from '@tsukiori/adapter-fake';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
-const daemonEntry = resolve(currentDirectory, '..', '..', '..', 'daemon', 'dist', 'main.js');
+const daemonEntry = app.isPackaged
+  ? resolve(app.getAppPath(), 'dist', 'daemon', 'main.js')
+  : resolve(currentDirectory, '..', '..', '..', 'daemon', 'dist', 'main.js');
 const preloadEntry = resolve(currentDirectory, '..', 'preload', 'index.cjs');
 const rendererEntry = resolve(currentDirectory, '..', 'renderer', 'index.html');
 const smokeMode = process.env.TSUKIORI_DESKTOP_SMOKE === '1';

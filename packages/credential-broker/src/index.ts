@@ -1,10 +1,18 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
-const helper = resolve(currentDirectory, 'windows', 'credential-store.ps1');
+const archivedHelper = resolve(currentDirectory, 'windows', 'credential-store.ps1');
+const unpackedHelper = archivedHelper.replace(
+  sep + 'app.asar' + sep,
+  sep + 'app.asar.unpacked' + sep,
+);
+const helper = unpackedHelper !== archivedHelper && existsSync(unpackedHelper)
+  ? unpackedHelper
+  : archivedHelper;
 const allowedEnvironmentVariables = new Set([
   'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY',
   'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'TSUKIORI_IPC_BOOTSTRAP_TOKEN',
