@@ -32,6 +32,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@tsukiori/adapter-fake':
+        specifier: workspace:*
+        version: link:../../packages/adapter-fake
       '@tsukiori/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -63,6 +66,15 @@ importers:
         version: 7.6.13
 
   packages/domain: {}
+
+  packages/permission-broker:
+    dependencies:
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/protocol: {}
 

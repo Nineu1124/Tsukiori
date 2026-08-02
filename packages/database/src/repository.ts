@@ -266,6 +266,13 @@ export class LocalDatabase {
     return { worktreeId, state: row.state as WorkspaceState, sourceEventId: row.sourceEventId, updatedAt: row.updatedAt };
   }
 
+  serializeForPersistence(value: unknown): string {
+    return this.#guard.serializeJson(value);
+  }
+
+  assertPersistenceSafe(value: unknown): void {
+    this.#validate(value);
+  }
   count(tableName: string): number {
     if (!/^[a-z_]+$/.test(tableName)) throw new Error('Invalid table name');
     const row = this.sqlite.prepare('SELECT COUNT(*) AS count FROM ' + tableName).get() as { count: number };

@@ -203,6 +203,36 @@ export const workspaceStateProjections = sqliteTable('workspace_state_projection
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const permissionRules = sqliteTable('permission_rules', {
+  id: text('id').primaryKey(), projectId: text('project_id').notNull(),
+  sessionId: text('session_id'), category: text('category').notNull(),
+  enforcementLevel: text('enforcement_level').notNull(), matcherJson: text('matcher_json').notNull(),
+  decision: text('decision').notNull(), sourceRequestId: text('source_request_id').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
+  createdAt: integer('created_at').notNull(), updatedAt: integer('updated_at').notNull(),
+});
+
+export const permissionAudit = sqliteTable('permission_audit', {
+  id: text('id').primaryKey(), requestId: text('request_id').notNull(),
+  sessionId: text('session_id').notNull(), projectId: text('project_id').notNull(),
+  connectionEpoch: text('connection_epoch').notNull(), category: text('category').notNull(),
+  risk: text('risk').notNull(), enforcementLevel: text('enforcement_level').notNull(),
+  decision: text('decision').notNull(), decisionScope: text('decision_scope').notNull(),
+  ruleId: text('rule_id'), reason: text('reason'), createdAt: integer('created_at').notNull(),
+});
+
+export const attentionItems = sqliteTable(
+  'attention_items',
+  {
+    id: text('id').primaryKey(), sessionId: text('session_id').notNull(),
+    projectId: text('project_id').notNull(), kind: text('kind').notNull(),
+    status: text('status').notNull(), title: text('title').notNull(), risk: text('risk'),
+    sourceRef: text('source_ref').notNull(), payloadJson: text('payload_json').notNull(),
+    createdAt: integer('created_at').notNull(), updatedAt: integer('updated_at').notNull(),
+    resolvedAt: integer('resolved_at'),
+  },
+  (table) => [uniqueIndex('attention_items_kind_source_uq').on(table.kind, table.sourceRef)],
+);
 export const databaseSchema = {
   executionEnvironments,
   projects,
@@ -218,4 +248,7 @@ export const databaseSchema = {
   sessionActivityProjections,
   sessionHealthProjections,
   workspaceStateProjections,
+  permissionRules,
+  permissionAudit,
+  attentionItems,
 };

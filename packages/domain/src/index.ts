@@ -194,6 +194,66 @@ export type PermissionRequestRecord = {
   resolvedAt?: number;
 };
 
+export type PermissionCategory =
+  | 'file_read' | 'file_write' | 'file_delete' | 'shell' | 'network'
+  | 'external_directory' | 'credential' | 'mcp' | 'git_push' | 'process'
+  | 'clipboard' | 'browser' | 'other';
+export type PermissionRisk = 'low' | 'medium' | 'high' | 'critical';
+export type EnforcementLevel =
+  | 'runtime_sandbox' | 'os_sandbox' | 'interceptable' | 'observable_only' | 'opaque';
+export type PermissionDecision =
+  | 'allow_once' | 'allow_session' | 'allow_project'
+  | 'deny_once' | 'deny_session' | 'cancel_turn';
+export type PermissionDecisionScope = 'once' | 'session' | 'project' | 'turn';
+
+export type PermissionRuleRecord = {
+  id: string;
+  projectId: string;
+  sessionId?: string;
+  category: PermissionCategory;
+  enforcementLevel: EnforcementLevel;
+  matcher: JsonValue;
+  decision: 'allow' | 'deny';
+  sourceRequestId: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type PermissionAuditRecord = {
+  id: string;
+  requestId: string;
+  sessionId: string;
+  projectId: string;
+  connectionEpoch: string;
+  category: PermissionCategory;
+  risk: PermissionRisk;
+  enforcementLevel: EnforcementLevel;
+  decision: PermissionDecision | 'invalidated';
+  decisionScope: PermissionDecisionScope | 'connection';
+  ruleId?: string;
+  reason?: string;
+  createdAt: number;
+};
+
+export type AttentionKind =
+  | 'waiting_permission' | 'waiting_input' | 'completed' | 'failed'
+  | 'conflict' | 'recovery_uncertain';
+export type AttentionStatus = 'open' | 'resolved';
+export type AttentionItemRecord = {
+  id: string;
+  sessionId: string;
+  projectId: string;
+  kind: AttentionKind;
+  status: AttentionStatus;
+  title: string;
+  risk?: PermissionRisk;
+  sourceRef: string;
+  payload: JsonValue;
+  createdAt: number;
+  updatedAt: number;
+  resolvedAt?: number;
+};
 export type BlobObjectRecord = {
   id: string;
   contentHash: string;

@@ -2,20 +2,65 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'"
-    />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tsukiori</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main>
-      <p class="eyebrow">LOCAL-FIRST MULTI-AGENT WORKSPACE</p>
-      <h1>Tsukiori</h1>
-      <p id="status">正在连接本机 Daemon…</p>
-    </main>
+    <div class="app-shell">
+      <aside class="session-rail" aria-label="Sessions">
+        <div class="brand"><span class="brand-mark">月</span><strong>Tsukiori</strong></div>
+        <p class="section-label">SESSIONS</p>
+        <button class="session-row active" type="button">
+          <span class="presence running"></span><span><strong>Local workspace</strong><small>Fake Runtime · active</small></span>
+        </button>
+        <div class="daemon-pill"><span class="presence" id="daemon-dot"></span><span id="status">连接 Daemon…</span></div>
+      </aside>
+
+      <main class="workspace">
+        <header class="workspace-header">
+          <div><p class="eyebrow">SESSION / LOCAL WORKSPACE</p><h1>多 Agent 工作台</h1></div>
+          <div class="workspace-meta"><span>isolated-worktree</span><span id="version">Protocol —</span></div>
+        </header>
+
+        <section id="session-timeline" class="timeline" aria-label="Session timeline">
+          <article class="message-card">
+            <div class="card-kicker">HOST</div>
+            <h2>本地会话已准备</h2>
+            <p>Runtime 工具调用、权限请求和恢复事件会在这里按时间显示。</p>
+          </article>
+          <div id="tool-list"></div>
+          <div id="permission-list"></div>
+        </section>
+      </main>
+
+      <aside id="attention-center" class="attention-panel" aria-label="Attention Center">
+        <header><p class="eyebrow">ATTENTION CENTER</p><h2>需要关注</h2><span id="attention-count" class="count">0</span></header>
+        <nav class="attention-filters" aria-label="Attention 类型">
+          <span>等待权限</span><span>等待输入</span><span>已完成</span><span>失败</span><span>冲突</span><span>恢复不确定</span>
+        </nav>
+        <div id="attention-list" class="attention-list">
+          <p class="empty-state">暂无待处理事项</p>
+        </div>
+      </aside>
+    </div>
+
+    <template id="tool-card-template">
+      <article class="tool-card"><div class="card-kicker">TOOL</div><h3 data-field="title"></h3><pre data-field="summary"></pre></article>
+    </template>
+    <template id="permission-card-template">
+      <article class="permission-card">
+        <div class="card-kicker">PERMISSION REQUEST</div><h3 data-field="title"></h3><p data-field="description"></p>
+        <dl>
+          <div><dt>类别</dt><dd data-field="category"></dd></div>
+          <div><dt>风险</dt><dd data-field="risk"></dd></div>
+          <div><dt>范围</dt><dd data-field="scope"></dd></div>
+          <div><dt>Enforcement Level</dt><dd data-field="enforcement"></dd></div>
+        </dl>
+        <div class="permission-actions"><button type="button">拒绝</button><button type="button" class="primary">允许一次</button></div>
+      </article>
+    </template>
     <script type="module" src="./renderer.js"></script>
   </body>
 </html>

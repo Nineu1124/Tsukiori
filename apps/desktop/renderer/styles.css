@@ -1,33 +1,31 @@
-:root {
-  color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  background: #10131a;
-  color: #f4f7fb;
-}
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-}
-
-main {
-  width: min(720px, calc(100vw - 64px));
-}
-
-.eyebrow {
-  color: #83b9ff;
-  font-size: 12px;
-  letter-spacing: 0.18em;
-}
-
-h1 {
-  margin: 8px 0;
-  font-size: clamp(48px, 10vw, 104px);
-  letter-spacing: -0.06em;
-}
-
-#status {
-  color: #aab6c8;
-}
+:root { color-scheme: dark; font-family: Inter, "Segoe UI", sans-serif; background: #0b0e12; color: #edf1f7; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 960px; min-height: 100vh; background: radial-gradient(circle at 55% -10%, #202b3a 0, #0b0e12 42%); }
+button { font: inherit; color: inherit; }
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: 230px minmax(480px, 1fr) 310px; }
+.session-rail, .attention-panel { background: rgba(10, 13, 18, .91); padding: 24px 18px; }
+.session-rail { border-right: 1px solid #242a34; display: flex; flex-direction: column; }
+.attention-panel { border-left: 1px solid #242a34; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 18px; padding: 0 8px 26px; }
+.brand-mark { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 11px; background: linear-gradient(145deg,#b6d6ff,#7f78ff); color: #10131a; }
+.section-label, .eyebrow, .card-kicker { margin: 0; color: #8090a5; font-size: 10px; font-weight: 700; letter-spacing: .15em; }
+.session-row { width: 100%; display: grid; grid-template-columns: 10px 1fr; gap: 10px; border: 1px solid #29313d; border-radius: 12px; padding: 12px; text-align: left; background: #171c24; }
+.session-row small { display: block; margin-top: 4px; color: #8490a0; }
+.presence { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: #718097; box-shadow: 0 0 0 3px #252c37; }
+.presence.running, .presence.healthy { background: #57d397; }.presence.failed { background: #ef6d73; }
+.daemon-pill { margin-top: auto; display: flex; align-items: center; gap: 9px; color: #8793a4; font-size: 12px; }
+.workspace { padding: 30px clamp(28px,5vw,72px); overflow: auto; }
+.workspace-header { display: flex; justify-content: space-between; align-items: end; border-bottom: 1px solid #2a303a; padding-bottom: 20px; }
+h1 { margin: 5px 0 0; font-size: 28px; letter-spacing: -.035em; }.workspace-meta { display: flex; gap: 8px; }
+.workspace-meta span, .attention-filters span { border: 1px solid #303744; border-radius: 999px; color: #9da9b9; font-size: 11px; padding: 5px 9px; }
+.timeline { width: min(760px,100%); margin: 34px auto; display: grid; gap: 16px; }
+.message-card, .tool-card, .permission-card { padding: 20px; border: 1px solid #29313d; border-radius: 16px; background: rgba(22,27,35,.88); box-shadow: 0 12px 35px rgba(0,0,0,.12); }
+.message-card h2, .permission-card h3, .tool-card h3 { margin: 8px 0; }.message-card p, .permission-card p { color: #9ba7b7; line-height: 1.6; }
+.tool-card { border-left: 3px solid #6ba8ff; }.tool-card pre { color: #afbdd0; white-space: pre-wrap; }
+.permission-card { border-color: #574a31; background: linear-gradient(140deg,rgba(58,48,29,.46),rgba(22,27,35,.9)); }
+dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }dl div { padding: 10px; border-radius: 10px; background: rgba(8,10,14,.38); }dt { color: #768499; font-size: 10px; text-transform: uppercase; }dd { margin: 4px 0 0; font-size: 13px; }
+.permission-actions { display: flex; justify-content: end; gap: 8px; margin-top: 16px; }.permission-actions button { border: 1px solid #3b4451; border-radius: 9px; background: #1d232d; padding: 8px 12px; }.permission-actions .primary { border-color: #6d8cc0; background: #41689f; }
+.attention-panel header { position: relative; }.attention-panel h2 { margin: 5px 0 18px; font-size: 20px; }.count { position: absolute; top: 2px; right: 2px; min-width: 25px; text-align: center; border-radius: 99px; padding: 3px 7px; background: #29374a; color: #a9ccff; }
+.attention-filters { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 18px; border-bottom: 1px solid #252b35; }.attention-list { display: grid; gap: 10px; margin-top: 18px; }
+.attention-item { display: grid; gap: 5px; padding: 13px; border: 1px solid #2d3541; border-radius: 11px; background: #151a21; }.attention-kind { color: #8090a5; font-size: 10px; text-transform: uppercase; }.empty-state { color: #687588; font-size: 13px; text-align: center; padding: 40px 0; }
+@media (max-width: 1100px) { .app-shell { grid-template-columns: 190px 1fr 260px; }.workspace { padding-inline: 24px; } }

@@ -7,6 +7,9 @@ const api = Object.freeze({
   daemon: Object.freeze({
     status: () => ipcRenderer.invoke('daemon:status'),
   }),
+  workspace: Object.freeze({
+    snapshot: () => ipcRenderer.invoke('workspace:snapshot'),
+  }),
 });
 
 contextBridge.exposeInMainWorld('tsukiori', api);

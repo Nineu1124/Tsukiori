@@ -1,0 +1,9 @@
+{
+  "task": "T1.5",
+  "databaseSchemaVersion": 3,
+  "decisions": ["allow_once", "allow_session", "allow_project", "deny_once", "deny_session", "cancel_turn"],
+  "attentionKinds": ["waiting_permission", "waiting_input", "completed", "failed", "conflict", "recovery_uncertain"],
+  "projectAllowRequiresStructuredMatcher": true,
+  "oldConnectionEpochResponsesRejected": true,
+  "containsCredentials": false
+}

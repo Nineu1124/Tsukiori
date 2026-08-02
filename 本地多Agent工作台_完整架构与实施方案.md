@@ -3301,15 +3301,15 @@ src/helpers/
 
 ### T1.5 Permission Broker、Attention Center 与基础 UI
 
-- [ ] 实现基础权限流和待处理工作台
+- [x] 实现基础权限流和待处理工作台
 - 前置依赖：T1.3、T1.4
 - 交付物：Permission Broker、Attention Center、Session 页面、Tool/Permission Card
 - Checkpoints：
-  - [ ] Runtime 权限请求可显示类别、风险、范围和 Enforcement Level
-  - [ ] 一次允许、Session 允许、项目规则和拒绝均可审计
-  - [ ] Attention Center 可显示等待权限、等待输入、完成、失败和恢复不确定状态
-  - [ ] GUI 重启后历史和待处理事项仍可恢复
-  - [ ] Renderer 崩溃不影响 Daemon 或 Fake Runtime 的活动 Session
+  - [x] Runtime 权限请求可显示类别、风险、范围和 Enforcement Level
+  - [x] 一次允许、Session 允许、项目规则和拒绝均可审计
+  - [x] Attention Center 可显示等待权限、等待输入、完成、失败和恢复不确定状态
+  - [x] GUI 重启后历史和待处理事项仍可恢复
+  - [x] Renderer 崩溃不影响 Daemon 或 Fake Runtime 的活动 Session
 
 ### G1 阶段 1 Gate
 

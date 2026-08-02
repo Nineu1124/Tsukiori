@@ -57,6 +57,12 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
   assert.equal(result.sandbox, true);
   assert.equal(result.rendererGoneReason, 'crashed');
   assert.equal(result.daemonAliveAfterRendererCrash, true);
+  assert.equal(result.fakeRuntimeAliveAfterRendererCrash, true);
+  assert.equal(result.fakeRuntimeEventCount, 1);
+  assert.deepEqual(result.rendererState, {
+    permissionCards: 1, toolCards: 1, attentionItems: 1,
+    permissionCategory: 'shell', enforcementLevel: 'interceptable',
+  });
   assert.equal(result.daemonVersion, '0.1.0');
   assert.equal(result.protocolVersion, 1);
 });

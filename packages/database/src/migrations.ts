@@ -107,9 +107,42 @@ CREATE TABLE workspace_state_projections (
 );
 `;
 
+const migration3 = `
+CREATE TABLE permission_rules (
+  id TEXT PRIMARY KEY, project_id TEXT NOT NULL, session_id TEXT,
+  category TEXT NOT NULL, enforcement_level TEXT NOT NULL, matcher_json TEXT NOT NULL,
+  decision TEXT NOT NULL, source_request_id TEXT NOT NULL, enabled INTEGER NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id),
+  FOREIGN KEY (session_id) REFERENCES sessions(id)
+);
+CREATE INDEX permission_rules_lookup_idx
+  ON permission_rules(project_id, session_id, category, enabled);
+CREATE TABLE permission_audit (
+  id TEXT PRIMARY KEY, request_id TEXT NOT NULL, session_id TEXT NOT NULL, project_id TEXT NOT NULL,
+  connection_epoch TEXT NOT NULL, category TEXT NOT NULL, risk TEXT NOT NULL,
+  enforcement_level TEXT NOT NULL, decision TEXT NOT NULL, decision_scope TEXT NOT NULL,
+  rule_id TEXT, reason TEXT, created_at INTEGER NOT NULL,
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (project_id) REFERENCES projects(id),
+  FOREIGN KEY (rule_id) REFERENCES permission_rules(id)
+);
+CREATE INDEX permission_audit_request_idx ON permission_audit(request_id, created_at);
+CREATE TABLE attention_items (
+  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, project_id TEXT NOT NULL,
+  kind TEXT NOT NULL, status TEXT NOT NULL, title TEXT NOT NULL, risk TEXT,
+  source_ref TEXT NOT NULL, payload_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, resolved_at INTEGER,
+  UNIQUE(kind, source_ref),
+  FOREIGN KEY (session_id) REFERENCES sessions(id),
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE INDEX attention_items_inbox_idx ON attention_items(status, updated_at DESC);
+`;
 export const migrations: readonly Migration[] = [
   { version: 1, name: 'core_records', sql: migration1 },
   { version: 2, name: 'orthogonal_state_projections', sql: migration2 },
+  { version: 3, name: 'permission_and_attention', sql: migration3 },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;
