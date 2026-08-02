@@ -32,6 +32,32 @@ function renderTool(tool) {
   toolList.append(card);
 }
 
+function renderNativeCapability(list, capability) {
+  const item = document.createElement('li');
+  item.className = 'native-capability support-' + capability.supportLevel;
+  item.dataset.capability = String(capability.id ?? 'unknown');
+
+  const heading = document.createElement('div');
+  const label = document.createElement('strong');
+  label.textContent = String(capability.label ?? capability.id ?? 'Unknown capability');
+  const support = document.createElement('span');
+  support.className = 'support-level';
+  support.dataset.field = 'supportLevel';
+  support.textContent = String(capability.supportLevel ?? 'unknown');
+  heading.append(label, support);
+
+  const detail = document.createElement('small');
+  detail.textContent = String(capability.summary ?? '—');
+  const boundary = document.createElement('small');
+  boundary.className = 'capability-boundary';
+  boundary.dataset.field = 'enforcement';
+  boundary.textContent = String(capability.scope ?? 'runtime_native')
+    + ' · enforcement=' + String(capability.enforcementLevel ?? 'unknown');
+
+  item.append(heading, detail, boundary);
+  list.append(item);
+}
+
 function renderRuntime(runtime) {
   const template = document.querySelector('#runtime-card-template');
   const card = template.content.firstElementChild.cloneNode(true);
@@ -40,6 +66,10 @@ function renderRuntime(runtime) {
   setField(card, 'state', runtime.state);
   setField(card, 'authSource', runtime.authenticated ? runtime.authSource : '未登录');
   setField(card, 'compatibility', runtime.compatibility);
+  const capabilityList = card.querySelector('[data-field="nativeCapabilities"]');
+  for (const capability of runtime.nativeCapabilities ?? []) {
+    renderNativeCapability(capabilityList, capability);
+  }
   runtimeList.append(card);
 }
 function renderAttention(item) {

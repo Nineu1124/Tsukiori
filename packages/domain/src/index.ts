@@ -218,7 +218,8 @@ export type RuntimeAuditRecord = {
   runtimeType: string;
   profileId?: string;
   handleId?: string;
-  action: 'discover' | 'probe' | 'schema_lock' | 'start' | 'initialize' | 'auth_probe' | 'stop' | 'exit' | 'reprobe';
+  action: 'discover' | 'probe' | 'schema_lock' | 'start' | 'initialize' | 'auth_probe'
+    | 'capability_probe' | 'stop' | 'exit' | 'reprobe';
   outcome: 'started' | 'succeeded' | 'failed' | 'degraded';
   detail: JsonValue;
   createdAt: number;
@@ -280,8 +281,11 @@ export type PermissionCategory =
   | 'external_directory' | 'credential' | 'mcp' | 'git_push' | 'process'
   | 'clipboard' | 'browser' | 'other';
 export type PermissionRisk = 'low' | 'medium' | 'high' | 'critical';
+export type SupportLevel =
+  | 'supported' | 'experimental' | 'degraded' | 'unsupported' | 'unknown';
 export type EnforcementLevel =
-  | 'runtime_sandbox' | 'os_sandbox' | 'interceptable' | 'observable_only' | 'opaque';
+  | 'runtime_sandbox' | 'os_sandbox' | 'interceptable'
+  | 'observable_only' | 'opaque' | 'unknown';
 export type PermissionDecision =
   | 'allow_once' | 'allow_session' | 'allow_project'
   | 'deny_once' | 'deny_session' | 'cancel_turn';

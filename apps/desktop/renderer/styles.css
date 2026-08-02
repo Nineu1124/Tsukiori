@@ -25,6 +25,18 @@ h1 { margin: 5px 0 0; font-size: 28px; letter-spacing: -.035em; }.workspace-meta
 .permission-card { border-color: #574a31; background: linear-gradient(140deg,rgba(58,48,29,.46),rgba(22,27,35,.9)); }
 dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }dl div { padding: 10px; border-radius: 10px; background: rgba(8,10,14,.38); }dt { color: #768499; font-size: 10px; text-transform: uppercase; }dd { margin: 4px 0 0; font-size: 13px; }
 .permission-actions { display: flex; justify-content: end; gap: 8px; margin-top: 16px; }.permission-actions button { border: 1px solid #3b4451; border-radius: 9px; background: #1d232d; padding: 8px 12px; }.permission-actions .primary { border-color: #6d8cc0; background: #41689f; }
+.native-capability-panel { margin-top: 18px; padding-top: 16px; border-top: 1px solid #2b3340; }
+.native-capability-panel ul { display: grid; gap: 8px; margin: 10px 0; padding: 0; list-style: none; }
+.native-capability { display: grid; gap: 5px; padding: 10px; border: 1px solid #303948; border-radius: 10px; background: rgba(8,10,14,.35); }
+.native-capability div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.native-capability small { color: #8f9bad; }.capability-boundary { font-family: ui-monospace,Consolas,monospace; }
+.support-level { border-radius: 99px; padding: 3px 7px; color: #c6d0dc; background: #303948; font-size: 10px; }
+.support-supported .support-level { color: #7ce0aa; background: #183b2b; }
+.support-experimental .support-level { color: #d7bdff; background: #35264a; }
+.support-degraded .support-level { color: #ffd18a; background: #49371c; }
+.support-unsupported .support-level { color: #f49b9f; background: #4a2227; }
+.support-unknown .support-level { color: #aeb8c6; background: #303640; }
+.native-boundary-note { margin: 8px 0 0; color: #768499; font-size: 11px; }
 .attention-panel header { position: relative; }.attention-panel h2 { margin: 5px 0 18px; font-size: 20px; }.count { position: absolute; top: 2px; right: 2px; min-width: 25px; text-align: center; border-radius: 99px; padding: 3px 7px; background: #29374a; color: #a9ccff; }
 .attention-filters { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 18px; border-bottom: 1px solid #252b35; }.attention-list { display: grid; gap: 10px; margin-top: 18px; }
 .attention-item { display: grid; gap: 5px; padding: 13px; border: 1px solid #2d3541; border-radius: 11px; background: #151a21; }.attention-kind { color: #8090a5; font-size: 10px; text-transform: uppercase; }.empty-state { color: #687588; font-size: 13px; text-align: center; padding: 40px 0; }

@@ -9,6 +9,10 @@ import type {
   RuntimeCompatibility, RuntimeHandleRecord, RuntimeProfileRecord,
 } from '@tsukiori/domain';
 import { ExecutionEnvironmentRegistry } from '@tsukiori/project-manager';
+import {
+  probeCodexNativeCapabilities,
+  type CodexNativeCapabilitySnapshot,
+} from './capability-probe.js';
 import { CodexSessionBridge } from './protocol-bridge.js';
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -67,6 +71,10 @@ export class CodexRuntimeHandle {
 
   request(method: string, params: JsonValue = {}): Promise<unknown> {
     return this.adapter.request(this.id, method, params);
+  }
+
+  probeCapabilities(cwd: string): Promise<CodexNativeCapabilitySnapshot> {
+    return this.adapter.probeCapabilities(this.id, cwd);
   }
 
   stop(): Promise<void> { return this.adapter.stop(this.id); }
@@ -291,6 +299,32 @@ export class CodexRuntimeAdapter {
       throw new CodexAdapterError('Runtime Handle is not ready');
     }
     return this.#request(internal, method, params);
+  }
+
+  async probeCapabilities(handleId: string, cwd: string): Promise<CodexNativeCapabilitySnapshot> {
+    const internal = this.#handles.get(handleId);
+    if (!internal || internal.closed || internal.record.state !== 'ready') {
+      throw new CodexAdapterError('Runtime Handle is not ready');
+    }
+    const profile = this.#database.readRuntimeProfile(internal.record.profileId);
+    if (!profile || !profile.discoveredVersion) {
+      throw new CodexAdapterError('Runtime Profile version is unavailable');
+    }
+    const snapshot = await probeCodexNativeCapabilities({
+      request: (method, params) => this.#request(internal, method, params === undefined ? {} : params),
+    }, {
+      cwd,
+      runtimeVersion: profile.discoveredVersion,
+      authenticated: profile.authenticated,
+      authSource: profile.authSource,
+      now: this.#now,
+    });
+    this.#audit('capability_probe', 'succeeded', {
+      capabilityCount: snapshot.capabilities.length,
+      supportLevels: snapshot.capabilities.map((item) => item.supportLevel),
+      sandboxEnforcement: snapshot.sandbox.enforcementLevel,
+    }, profile.id, handleId);
+    return snapshot;
   }
 
   bindProtocolBridge(handleId: string, bridge: CodexSessionBridge): void {
@@ -525,6 +559,7 @@ export function defaultCodexCandidates(): CodexLaunchCandidate[] {
   return candidates;
 }
 
+export * from './capability-probe.js';
 export * from './protocol-bridge.js';
 
 function compareSemver(left: string, right: string): number {

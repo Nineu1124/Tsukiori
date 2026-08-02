@@ -27,6 +27,18 @@ const workspaceSnapshot = smokeMode ? {
   runtimes: [{
     id: 'runtime-codex', runtimeType: 'codex', version: '0.146.0', state: 'ready',
     authenticated: true, authSource: 'chatgpt', requiresOpenaiAuth: true, compatibility: 'supported',
+    nativeCapabilities: [
+      { id: 'configuration', label: 'Codex 配置', supportLevel: 'supported',
+        enforcementLevel: 'unknown', scope: 'runtime_native', summary: 'sandbox=workspace-write' },
+      { id: 'mcp', label: 'MCP', supportLevel: 'experimental',
+        enforcementLevel: 'unknown', scope: 'runtime_native', summary: 'experimental presentation fixture' },
+      { id: 'skills', label: 'Skills', supportLevel: 'degraded',
+        enforcementLevel: 'unknown', scope: 'runtime_native', summary: '1 parse error' },
+      { id: 'sandbox', label: 'Sandbox', supportLevel: 'unsupported',
+        enforcementLevel: 'unknown', scope: 'runtime_native', summary: 'readiness method unavailable' },
+      { id: 'authentication', label: '认证来源', supportLevel: 'unknown',
+        enforcementLevel: 'unknown', scope: 'runtime_native', summary: 'not verified' },
+    ],
   }],
 } : { permissions: [], attention: [], tools: [], runtimes: [] };
 let quitting = false;
@@ -79,10 +91,18 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
           toolCards: document.querySelectorAll('.tool-card').length,
           attentionItems: document.querySelectorAll('.attention-item').length,
           permissionCategory: document.querySelector('[data-field="category"]')?.textContent,
-          enforcementLevel: document.querySelector('[data-field="enforcement"]')?.textContent,
+          enforcementLevel: document.querySelector('.permission-card [data-field="enforcement"]')?.textContent,
           runtimeCards: document.querySelectorAll('.runtime-card').length,
           runtimeAuthSource: document.querySelector('.runtime-card [data-field="authSource"]')?.textContent,
           runtimeCompatibility: document.querySelector('.runtime-card [data-field="compatibility"]')?.textContent,
+          nativeCapabilityRows: document.querySelectorAll('.native-capability').length,
+          nativeCapabilityLevels: [...document.querySelectorAll('.native-capability [data-field="supportLevel"]')]
+            .map((element) => element.textContent),
+          nativeCapabilityScopes: [...document.querySelectorAll('.native-capability [data-field="enforcement"]')]
+            .map((element) => element.textContent?.split(' · ')[0]),
+          sandboxEnforcement: document.querySelector(
+            '.native-capability[data-capability="sandbox"] [data-field="enforcement"]',
+          )?.textContent,
         });
       } else if (++attempts >= 40) {
         clearInterval(timer);

@@ -19,9 +19,15 @@ test('Session workspace includes Attention, Tool, Permission, and Runtime auth p
   assert.match(html, /id="runtime-card-template"/);
   assert.match(html, /认证来源/);
   assert.match(html, /兼容性/);
+  assert.match(html, /CODEX NATIVE CAPABILITIES/);
+  assert.match(html, /不自动提升为公共 Adapter 能力/);
   for (const label of ['类别', '风险', '范围', 'Enforcement Level']) assert.match(html, new RegExp(label));
   assert.match(script, /window\.tsukiori\.workspace\.snapshot\(\)/);
   assert.match(script, /runtime\.authenticated/);
+  assert.match(script, /runtime\.nativeCapabilities/);
+  assert.match(script, /supportLevel/);
+  assert.match(script, /enforcementLevel/);
+  assert.match(script, /runtime_native/);
   assert.match(script, /textContent/);
   assert.doesNotMatch(script, /innerHTML|insertAdjacentHTML|eval\(/);
 });

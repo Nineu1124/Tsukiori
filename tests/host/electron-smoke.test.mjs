@@ -63,6 +63,12 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
     permissionCards: 1, toolCards: 1, attentionItems: 1,
     permissionCategory: 'shell', enforcementLevel: 'interceptable',
     runtimeCards: 1, runtimeAuthSource: 'chatgpt', runtimeCompatibility: 'supported',
+    nativeCapabilityRows: 5,
+    nativeCapabilityLevels: ['supported', 'experimental', 'degraded', 'unsupported', 'unknown'],
+    nativeCapabilityScopes: [
+      'runtime_native', 'runtime_native', 'runtime_native', 'runtime_native', 'runtime_native',
+    ],
+    sandboxEnforcement: 'runtime_native · enforcement=unknown',
   });
   assert.equal(result.daemonVersion, '0.1.0');
   assert.equal(result.protocolVersion, 1);

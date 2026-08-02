@@ -18,6 +18,13 @@ input.on('line', (line) => {
     lastClientResponse = message;
     return;
   }
+  if ((config.failCapabilityMethods ?? []).includes(message.method)) {
+    process.stdout.write(JSON.stringify({
+      id: message.id,
+      error: { code: -32601, message: 'fixture method unavailable' },
+    }) + '\n');
+    return;
+  }
   if (message.method === 'initialize') {
     const result = config.invalidInitialize
       ? { userAgent: 'fake-codex/' + config.version }
@@ -39,6 +46,69 @@ input.on('line', (line) => {
     process.stdout.write(JSON.stringify({
       id: message.id,
       result: { account, requiresOpenaiAuth: config.requiresOpenaiAuth ?? true },
+    }) + '\n');
+    return;
+  }
+  if (message.method === 'config/read') {
+    process.stdout.write(JSON.stringify({
+      id: message.id,
+      result: {
+        config: {
+          sandbox_mode: config.sandboxMode ?? 'workspace-write',
+          approval_policy: config.approvalPolicy ?? 'on-request',
+        },
+        origins: { sandbox_mode: { name: { type: 'user' }, version: 'fixture' } },
+        layers: [{ name: { type: 'user' }, version: 'fixture', config: {} }],
+      },
+    }) + '\n');
+    return;
+  }
+  if (message.method === 'skills/list') {
+    process.stdout.write(JSON.stringify({
+      id: message.id,
+      result: {
+        data: [{
+          cwd: 'C:\\fixture',
+          errors: Array.from({ length: config.skillErrors ?? 0 }, (_, index) => ({
+            path: 'C:\\fixture\\skill-' + index,
+            message: 'fixture parse error',
+          })),
+          skills: [
+            {
+              name: 'fixture-enabled',
+              description: 'sanitized fixture',
+              enabled: true,
+              path: 'C:\\fixture\\enabled\\SKILL.md',
+              scope: 'repo',
+            },
+            {
+              name: 'fixture-disabled',
+              description: 'sanitized fixture',
+              enabled: false,
+              path: 'C:\\fixture\\disabled\\SKILL.md',
+              scope: 'user',
+            },
+          ],
+        }],
+      },
+    }) + '\n');
+    return;
+  }
+  if (message.method === 'mcpServerStatus/list') {
+    const data = config.mcpServerCount === 0 ? [] : [{
+      name: 'fixture-mcp',
+      authStatus: config.mcpAuthStatus ?? 'oAuth',
+      tools: { read_fixture: { name: 'read_fixture', inputSchema: {} } },
+      resources: [],
+      resourceTemplates: [],
+    }];
+    process.stdout.write(JSON.stringify({ id: message.id, result: { data, nextCursor: null } }) + '\n');
+    return;
+  }
+  if (message.method === 'windowsSandbox/readiness') {
+    process.stdout.write(JSON.stringify({
+      id: message.id,
+      result: { status: config.sandboxReadiness ?? 'ready' },
     }) + '\n');
     return;
   }

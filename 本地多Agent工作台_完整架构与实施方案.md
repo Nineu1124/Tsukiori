@@ -3471,14 +3471,14 @@ src/helpers/
 
 ### T4.3 Codex 原生能力展示
 
-- [ ] 展示并保留 Codex 配置、MCP、Skills 和 Sandbox 能力
+- [x] 展示并保留 Codex 配置、MCP、Skills 和 Sandbox 能力
 - 前置依赖：T4.1、T4.2
 - 交付物：Capability Probe、Runtime 专属面板、降级规则
 - Checkpoints：
-  - [ ] MCP、Skills、Sandbox 和认证来源按 Probe 结果展示
-  - [ ] supported、experimental、degraded、unsupported 和 unknown 可区分
-  - [ ] 宿主不会覆盖或虚构 Codex 原生安全能力
-  - [ ] Runtime 专属能力不会被错误提升为公共 Adapter 能力
+  - [x] MCP、Skills、Sandbox 和认证来源按 Probe 结果展示
+  - [x] supported、experimental、degraded、unsupported 和 unknown 可区分
+  - [x] 宿主不会覆盖或虚构 Codex 原生安全能力
+  - [x] Runtime 专属能力不会被错误提升为公共 Adapter 能力
 
 ### T4.4 V1 Git 操作与 Integration Worktree Merge
 

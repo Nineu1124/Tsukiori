@@ -1,0 +1,88 @@
+{
+  "task": "T4.3",
+  "testedCodexSchemaVersion": "0.146.0",
+  "probeMethods": [
+    "config/read",
+    "skills/list",
+    "mcpServerStatus/list",
+    "windowsSandbox/readiness",
+    "account/read"
+  ],
+  "presentationSupportLevels": [
+    "supported",
+    "experimental",
+    "degraded",
+    "unsupported",
+    "unknown"
+  ],
+  "persistedSummariesOnly": {
+    "configuration": [
+      "sandboxMode",
+      "approvalPolicy",
+      "layerCount"
+    ],
+    "skills": [
+      "enabledCount",
+      "disabledCount",
+      "errorCount",
+      "scopeCounts"
+    ],
+    "mcp": [
+      "serverCount",
+      "toolCount",
+      "resourceCount",
+      "authStatusCounts"
+    ],
+    "authentication": [
+      "authenticated",
+      "authSource"
+    ]
+  },
+  "sandbox": {
+    "readinessProbe": "supported",
+    "enforcementLevel": "unknown",
+    "securityClaim": "not_inferred"
+  },
+  "nativeCapabilitiesPromotedToCommon": false,
+  "rawConfigPersisted": false,
+  "skillInstructionsPersisted": false,
+  "mcpToolSchemasPersisted": false,
+  "realLocalProbe": {
+    "configuration": {
+      "supportLevel": "supported",
+      "sandboxMode": "default",
+      "approvalPolicy": "default",
+      "layerCount": 2
+    },
+    "skills": {
+      "supportLevel": "supported",
+      "enabledCount": 22,
+      "disabledCount": 0,
+      "errorCount": 0,
+      "scopeCounts": {
+        "user": 16,
+        "system": 6
+      }
+    },
+    "mcp": {
+      "supportLevel": "supported",
+      "serverCount": 3,
+      "toolCount": 8,
+      "resourceCount": 0,
+      "authStatusCounts": {
+        "bearerToken": 1,
+        "unsupported": 2
+      }
+    },
+    "sandboxReadiness": {
+      "supportLevel": "supported",
+      "status": "ready",
+      "enforcementLevel": "unknown"
+    },
+    "authentication": {
+      "authenticated": false,
+      "authSource": "none"
+    }
+  },
+  "containsCredentials": false
+}

@@ -31,12 +31,25 @@ try {
   });
   const profile = adapter.probe();
   const handle = await adapter.start(profile.id, root);
+  const capabilities = await handle.probeCapabilities(root);
   await handle.stop();
   process.stdout.write(JSON.stringify({
     runtime: 'codex', version: profile.discoveredVersion, compatibility: profile.compatibility,
     authenticated: handle.auth.authenticated, authSource: handle.auth.source,
     requiresOpenaiAuth: handle.auth.requiresOpenaiAuth,
     finalHandleState: database.readRuntimeHandle(handle.id)?.state,
+    nativeCapabilities: capabilities.capabilities.map((item) => ({
+      id: item.id,
+      supportLevel: item.supportLevel,
+      enforcementLevel: item.enforcementLevel,
+      scope: item.scope,
+    })),
+    capabilitySummary: {
+      config: capabilities.configuration,
+      skills: capabilities.skills,
+      mcp: capabilities.mcp,
+      sandbox: capabilities.sandbox,
+    },
     auditActions: [...new Set(database.listRuntimeAudits('codex').map((audit) => audit.action))],
     containsCredentials: false,
   }, null, 2) + '\n');
