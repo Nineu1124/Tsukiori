@@ -3277,15 +3277,15 @@ src/helpers/
 
 ### T1.3 领域模型与 SQLite 持久化
 
-- [ ] 实现核心领域模型、数据库和状态投影
+- [x] 实现核心领域模型、数据库和状态投影
 - 前置依赖：T1.1、T0.4
 - 交付物：数据库 Schema、Migration、Repository 和投影层
 - Checkpoints：
-  - [ ] ExecutionEnvironment、Project、HostSession、HostTurn、Worktree 和 ProcessRecord 可持久化
-  - [ ] OperationRecord、session_events、permission_requests 和 Blob 引用可持久化
-  - [ ] Lifecycle、Activity、Health、Workspace State 可独立投影
-  - [ ] Migration 可在空库和上一版测试库上重复验证
-  - [ ] Secret 字段不会写入 SQLite、WAL 或 Blob
+  - [x] ExecutionEnvironment、Project、HostSession、HostTurn、Worktree 和 ProcessRecord 可持久化
+  - [x] OperationRecord、session_events、permission_requests 和 Blob 引用可持久化
+  - [x] Lifecycle、Activity、Health、Workspace State 可独立投影
+  - [x] Migration 可在空库和上一版测试库上重复验证
+  - [x] Secret 字段不会写入 SQLite、WAL 或 Blob
 
 ### T1.4 Fake Runtime 与统一事件系统
 

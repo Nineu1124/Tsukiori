@@ -1,0 +1,27 @@
+{
+  "name": "@tsukiori/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@tsukiori/domain": "workspace:*",
+    "better-sqlite3": "12.8.0",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13"
+  }
+}

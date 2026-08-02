@@ -11,14 +11,20 @@ async function manifest(path) {
 }
 
 test('workspace package dependency direction follows the architecture boundary', async () => {
-  const [protocol, testkit, daemon, desktop] = await Promise.all([
+  const [protocol, domain, database, testkit, daemon, desktop] = await Promise.all([
     manifest('packages/protocol'),
+    manifest('packages/domain'),
+    manifest('packages/database'),
     manifest('packages/testkit'),
     manifest('apps/daemon'),
     manifest('apps/desktop'),
   ]);
 
   assert.deepEqual(protocol.dependencies ?? {}, {});
+  assert.deepEqual(domain.dependencies ?? {}, {});
+  assert.equal(database.dependencies['@tsukiori/domain'], 'workspace:*');
+  assert.equal(database.dependencies['better-sqlite3'], '12.8.0');
+  assert.equal(database.dependencies['drizzle-orm'], '0.45.2');
   assert.deepEqual(testkit.dependencies, {
     '@tsukiori/protocol': 'workspace:*',
   });
@@ -29,7 +35,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/protocol': 'workspace:*',
   });
 
-  const manifests = [protocol, testkit, daemon, desktop];
+  const manifests = [protocol, domain, database, testkit, daemon, desktop];
   for (const packageJson of manifests) {
     const dependencies = {
       ...packageJson.dependencies,

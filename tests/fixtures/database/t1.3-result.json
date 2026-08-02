@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "task": "T1.3",
+  "database": {
+    "engine": "SQLite 3.51.3",
+    "orm": "Drizzle 0.45.2",
+    "driver": "better-sqlite3 12.8.0",
+    "journalMode": "wal",
+    "foreignKeys": true,
+    "migrationVersions": [1, 2]
+  },
+  "persistedEntities": [
+    "ExecutionEnvironment",
+    "Project",
+    "HostSession",
+    "HostTurn",
+    "WorktreeRecord",
+    "ProcessRecord",
+    "OperationRecord",
+    "SessionEventRecord",
+    "PermissionRequestRecord",
+    "BlobObjectRecord"
+  ],
+  "independentProjections": [
+    "lifecycle",
+    "activity",
+    "health",
+    "workspace"
+  ],
+  "migrationFixtures": [
+    "empty-database",
+    "version-1-database",
+    "latest-version-reopen"
+  ],
+  "persistenceBoundary": {
+    "sinks": ["sqlite", "wal", "blob"],
+    "secretFieldsRejected": true,
+    "knownSecretValuesRejected": true,
+    "credentialPatternsRejected": true,
+    "jsonLimitBytes": 262144,
+    "blobLimitBytes": 10485760,
+    "containsCredentials": false
+  }
+}
