@@ -262,6 +262,35 @@ export const actionAudit = sqliteTable('action_audit', {
   timedOut: integer('timed_out', { mode: 'boolean' }), diagnosticJson: text('diagnostic_json').notNull(),
   startedAt: integer('started_at').notNull(), finishedAt: integer('finished_at'),
 });
+export const runtimeProfiles = sqliteTable('runtime_profiles', {
+  id: text('id').primaryKey(), runtimeType: text('runtime_type').notNull(),
+  executionEnvironmentId: text('execution_environment_id').notNull(),
+  executablePath: text('executable_path').notNull(), launchPrefixJson: text('launch_prefix_json').notNull(),
+  discoverySource: text('discovery_source').notNull(), discoveredVersion: text('discovered_version'),
+  minimumSupportedVersion: text('minimum_supported_version').notNull(),
+  maximumTestedVersion: text('maximum_tested_version').notNull(), schemaVersion: text('schema_version').notNull(),
+  schemaHash: text('schema_hash').notNull(), compatibility: text('compatibility').notNull(),
+  authenticated: integer('authenticated', { mode: 'boolean' }).notNull(), authSource: text('auth_source').notNull(),
+  requiresOpenaiAuth: integer('requires_openai_auth', { mode: 'boolean' }), probedAt: integer('probed_at').notNull(),
+  createdAt: integer('created_at').notNull(), updatedAt: integer('updated_at').notNull(),
+});
+
+export const runtimeHandles = sqliteTable('runtime_handles', {
+  id: text('id').primaryKey(), profileId: text('profile_id').notNull(),
+  executionEnvironmentId: text('execution_environment_id').notNull(),
+  connectionEpoch: text('connection_epoch').notNull(), state: text('state').notNull(), pid: integer('pid'),
+  userAgent: text('user_agent'), platformFamily: text('platform_family'), platformOs: text('platform_os'),
+  startedAt: integer('started_at').notNull(), updatedAt: integer('updated_at').notNull(),
+  exitedAt: integer('exited_at'), exitCode: integer('exit_code'),
+  expectedExit: integer('expected_exit', { mode: 'boolean' }),
+});
+
+export const runtimeAudit = sqliteTable('runtime_audit', {
+  id: text('id').primaryKey(), runtimeType: text('runtime_type').notNull(),
+  profileId: text('profile_id'), handleId: text('handle_id'), action: text('action').notNull(),
+  outcome: text('outcome').notNull(), detailJson: text('detail_json').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
 export const databaseSchema = {
   executionEnvironments,
   projects,
@@ -282,4 +311,7 @@ export const databaseSchema = {
   attentionItems,
   workspaceBindings,
   actionAudit,
+  runtimeProfiles,
+  runtimeHandles,
+  runtimeAudit,
 };

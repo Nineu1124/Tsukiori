@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const rendererRoot = join(root, 'apps', 'desktop', 'renderer');
 
-test('Session workspace includes Attention, Tool, and Permission presentation surfaces', async () => {
+test('Session workspace includes Attention, Tool, Permission, and Runtime auth presentation surfaces', async () => {
   const [html, script] = await Promise.all([
     readFile(join(rendererRoot, 'index.html'), 'utf8'),
     readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
@@ -16,8 +16,12 @@ test('Session workspace includes Attention, Tool, and Permission presentation su
   assert.match(html, /id="session-timeline"/);
   assert.match(html, /id="tool-card-template"/);
   assert.match(html, /id="permission-card-template"/);
+  assert.match(html, /id="runtime-card-template"/);
+  assert.match(html, /认证来源/);
+  assert.match(html, /兼容性/);
   for (const label of ['类别', '风险', '范围', 'Enforcement Level']) assert.match(html, new RegExp(label));
   assert.match(script, /window\.tsukiori\.workspace\.snapshot\(\)/);
+  assert.match(script, /runtime\.authenticated/);
   assert.match(script, /textContent/);
   assert.doesNotMatch(script, /innerHTML|insertAdjacentHTML|eval\(/);
 });

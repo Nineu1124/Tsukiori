@@ -11,12 +11,13 @@ async function manifest(path) {
 }
 
 test('workspace package dependency direction follows the architecture boundary', async () => {
-  const [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, testkit, daemon, desktop] = await Promise.all([
+  const [protocol, domain, database, runtimeCore, fakeAdapter, codexAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, testkit, daemon, desktop] = await Promise.all([
     manifest('packages/protocol'),
     manifest('packages/domain'),
     manifest('packages/database'),
     manifest('packages/runtime-core'),
     manifest('packages/adapter-fake'),
+    manifest('packages/adapter-codex'),
     manifest('packages/permission-broker'),
     manifest('packages/project-manager'),
     manifest('packages/worktree-manager'),
@@ -34,6 +35,11 @@ test('workspace package dependency direction follows the architecture boundary',
   assert.equal(database.dependencies['drizzle-orm'], '0.45.2');
   assert.deepEqual(runtimeCore.dependencies, { '@tsukiori/domain': 'workspace:*' });
   assert.deepEqual(fakeAdapter.dependencies, { '@tsukiori/runtime-core': 'workspace:*' });
+  assert.deepEqual(codexAdapter.dependencies, {
+    '@tsukiori/database': 'workspace:*',
+    '@tsukiori/domain': 'workspace:*',
+    '@tsukiori/project-manager': 'workspace:*',
+  });
   assert.deepEqual(permissionBroker.dependencies, {
     '@tsukiori/database': 'workspace:*',
     '@tsukiori/domain': 'workspace:*',
@@ -69,7 +75,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/protocol': 'workspace:*',
   });
 
-  const manifests = [protocol, domain, database, runtimeCore, fakeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, testkit, daemon, desktop];
+  const manifests = [protocol, domain, database, runtimeCore, fakeAdapter, codexAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, testkit, daemon, desktop];
   for (const packageJson of manifests) {
     const dependencies = {
       ...packageJson.dependencies,

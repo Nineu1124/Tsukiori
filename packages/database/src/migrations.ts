@@ -175,12 +175,41 @@ CREATE TABLE action_audit (
 );
 CREATE INDEX action_audit_workspace_idx ON action_audit(worktree_id, phase, started_at);
 `;
-export const migrations: readonly Migration[] = [
+const migration6 = `
+CREATE TABLE runtime_profiles (
+  id TEXT PRIMARY KEY, runtime_type TEXT NOT NULL, execution_environment_id TEXT NOT NULL,
+  executable_path TEXT NOT NULL, launch_prefix_json TEXT NOT NULL, discovery_source TEXT NOT NULL,
+  discovered_version TEXT, minimum_supported_version TEXT NOT NULL, maximum_tested_version TEXT NOT NULL,
+  schema_version TEXT NOT NULL, schema_hash TEXT NOT NULL, compatibility TEXT NOT NULL,
+  authenticated INTEGER NOT NULL, auth_source TEXT NOT NULL, requires_openai_auth INTEGER,
+  probed_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  FOREIGN KEY (execution_environment_id) REFERENCES execution_environments(id)
+);
+CREATE INDEX runtime_profiles_lookup_idx ON runtime_profiles(runtime_type, execution_environment_id, updated_at);
+CREATE TABLE runtime_handles (
+  id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, execution_environment_id TEXT NOT NULL,
+  connection_epoch TEXT NOT NULL, state TEXT NOT NULL, pid INTEGER,
+  user_agent TEXT, platform_family TEXT, platform_os TEXT,
+  started_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, exited_at INTEGER,
+  exit_code INTEGER, expected_exit INTEGER,
+  FOREIGN KEY (profile_id) REFERENCES runtime_profiles(id),
+  FOREIGN KEY (execution_environment_id) REFERENCES execution_environments(id)
+);
+CREATE INDEX runtime_handles_state_idx ON runtime_handles(state, updated_at);
+CREATE TABLE runtime_audit (
+  id TEXT PRIMARY KEY, runtime_type TEXT NOT NULL, profile_id TEXT, handle_id TEXT,
+  action TEXT NOT NULL, outcome TEXT NOT NULL, detail_json TEXT NOT NULL, created_at INTEGER NOT NULL,
+  FOREIGN KEY (profile_id) REFERENCES runtime_profiles(id),
+  FOREIGN KEY (handle_id) REFERENCES runtime_handles(id)
+);
+CREATE INDEX runtime_audit_timeline_idx ON runtime_audit(runtime_type, created_at, id);
+`;export const migrations: readonly Migration[] = [
   { version: 1, name: 'core_records', sql: migration1 },
   { version: 2, name: 'orthogonal_state_projections', sql: migration2 },
   { version: 3, name: 'permission_and_attention', sql: migration3 },
   { version: 4, name: 'project_git_probe_metadata', sql: migration4 },
   { version: 5, name: 'workspace_binding_and_action_audit', sql: migration5 },
+  { version: 6, name: 'runtime_profile_handle_and_audit', sql: migration6 },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

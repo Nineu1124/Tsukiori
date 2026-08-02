@@ -5,6 +5,7 @@ const attentionList = document.querySelector('#attention-list');
 const attentionCount = document.querySelector('#attention-count');
 const permissionList = document.querySelector('#permission-list');
 const toolList = document.querySelector('#tool-list');
+const runtimeList = document.querySelector('#runtime-list');
 
 function setField(root, name, value) {
   const target = root.querySelector('[data-field="' + name + '"]');
@@ -31,6 +32,16 @@ function renderTool(tool) {
   toolList.append(card);
 }
 
+function renderRuntime(runtime) {
+  const template = document.querySelector('#runtime-card-template');
+  const card = template.content.firstElementChild.cloneNode(true);
+  setField(card, 'runtimeType', runtime.runtimeType);
+  setField(card, 'version', runtime.version);
+  setField(card, 'state', runtime.state);
+  setField(card, 'authSource', runtime.authenticated ? runtime.authSource : '未登录');
+  setField(card, 'compatibility', runtime.compatibility);
+  runtimeList.append(card);
+}
 function renderAttention(item) {
   const card = document.createElement('article');
   card.className = 'attention-item ' + item.kind;
@@ -53,6 +64,7 @@ try {
   daemonDot.classList.add('healthy');
   version.textContent = 'Protocol ' + versions.protocol;
   for (const tool of snapshot.tools) renderTool(tool);
+  for (const runtime of snapshot.runtimes) renderRuntime(runtime);
   for (const permission of snapshot.permissions) renderPermission(permission);
   const openAttention = snapshot.attention.filter((item) => item.status === 'open');
   if (openAttention.length > 0) attentionList.textContent = '';

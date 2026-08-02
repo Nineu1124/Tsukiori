@@ -19,9 +19,9 @@ button { font: inherit; color: inherit; }
 h1 { margin: 5px 0 0; font-size: 28px; letter-spacing: -.035em; }.workspace-meta { display: flex; gap: 8px; }
 .workspace-meta span, .attention-filters span { border: 1px solid #303744; border-radius: 999px; color: #9da9b9; font-size: 11px; padding: 5px 9px; }
 .timeline { width: min(760px,100%); margin: 34px auto; display: grid; gap: 16px; }
-.message-card, .tool-card, .permission-card { padding: 20px; border: 1px solid #29313d; border-radius: 16px; background: rgba(22,27,35,.88); box-shadow: 0 12px 35px rgba(0,0,0,.12); }
-.message-card h2, .permission-card h3, .tool-card h3 { margin: 8px 0; }.message-card p, .permission-card p { color: #9ba7b7; line-height: 1.6; }
-.tool-card { border-left: 3px solid #6ba8ff; }.tool-card pre { color: #afbdd0; white-space: pre-wrap; }
+.message-card, .tool-card, .permission-card, .runtime-card { padding: 20px; border: 1px solid #29313d; border-radius: 16px; background: rgba(22,27,35,.88); box-shadow: 0 12px 35px rgba(0,0,0,.12); }
+.message-card h2, .permission-card h3, .tool-card h3, .runtime-card h3 { margin: 8px 0; }.message-card p, .permission-card p { color: #9ba7b7; line-height: 1.6; }
+.tool-card { border-left: 3px solid #6ba8ff; }.runtime-card { border-left: 3px solid #9b8cff; margin-top: 10px; }.tool-card pre { color: #afbdd0; white-space: pre-wrap; }
 .permission-card { border-color: #574a31; background: linear-gradient(140deg,rgba(58,48,29,.46),rgba(22,27,35,.9)); }
 dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }dl div { padding: 10px; border-radius: 10px; background: rgba(8,10,14,.38); }dt { color: #768499; font-size: 10px; text-transform: uppercase; }dd { margin: 4px 0 0; font-size: 13px; }
 .permission-actions { display: flex; justify-content: end; gap: 8px; margin-top: 16px; }.permission-actions button { border: 1px solid #3b4451; border-radius: 9px; background: #1d232d; padding: 8px 12px; }.permission-actions .primary { border-color: #6d8cc0; background: #41689f; }

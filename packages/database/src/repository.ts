@@ -14,6 +14,9 @@ import type {
   PermissionRequestRecord,
   ProcessRecord,
   Project,
+  RuntimeAuditRecord,
+  RuntimeHandleRecord,
+  RuntimeProfileRecord,
   SessionActivity,
   SessionEventRecord,
   SessionHealth,
@@ -296,7 +299,84 @@ export class LocalDatabase {
     return (this.sqlite.prepare('SELECT * FROM action_audit WHERE worktree_id=? ORDER BY started_at, action_index, id')
       .all(worktreeId) as Record<string, unknown>[]).map((row) => this.#actionAudit(row));
   }
-  appendSessionEvent(value: SessionEventRecord): void {
+  saveRuntimeProfile(value: RuntimeProfileRecord): void {
+    this.#validate(value);
+    this.orm.insert(schema.runtimeProfiles).values({
+      id: value.id, runtimeType: value.runtimeType, executionEnvironmentId: value.executionEnvironmentId,
+      executablePath: value.executablePath, launchPrefixJson: this.#json(value.launchPrefix),
+      discoverySource: value.discoverySource, discoveredVersion: value.discoveredVersion ?? null,
+      minimumSupportedVersion: value.minimumSupportedVersion, maximumTestedVersion: value.maximumTestedVersion,
+      schemaVersion: value.schemaVersion, schemaHash: value.schemaHash, compatibility: value.compatibility,
+      authenticated: value.authenticated, authSource: value.authSource,
+      requiresOpenaiAuth: value.requiresOpenaiAuth ?? null, probedAt: value.probedAt,
+      createdAt: value.createdAt, updatedAt: value.updatedAt,
+    }).onConflictDoUpdate({ target: schema.runtimeProfiles.id, set: {
+      executablePath: value.executablePath, launchPrefixJson: this.#json(value.launchPrefix),
+      discoverySource: value.discoverySource, discoveredVersion: value.discoveredVersion ?? null,
+      schemaVersion: value.schemaVersion, schemaHash: value.schemaHash, compatibility: value.compatibility,
+      authenticated: value.authenticated, authSource: value.authSource,
+      requiresOpenaiAuth: value.requiresOpenaiAuth ?? null, probedAt: value.probedAt, updatedAt: value.updatedAt,
+    }}).run();
+  }
+
+  readRuntimeProfile(id: string): RuntimeProfileRecord | null {
+    const row = this.sqlite.prepare('SELECT * FROM runtime_profiles WHERE id=?').get(id) as Record<string, unknown> | undefined;
+    return row ? this.#runtimeProfile(row) : null;
+  }
+
+  listRuntimeProfiles(runtimeType?: string): RuntimeProfileRecord[] {
+    const rows = (runtimeType === undefined
+      ? this.sqlite.prepare('SELECT * FROM runtime_profiles ORDER BY updated_at DESC, id').all()
+      : this.sqlite.prepare('SELECT * FROM runtime_profiles WHERE runtime_type=? ORDER BY updated_at DESC, id').all(runtimeType)
+    ) as Record<string, unknown>[];
+    return rows.map((row) => this.#runtimeProfile(row));
+  }
+
+  saveRuntimeHandle(value: RuntimeHandleRecord): void {
+    this.#validate(value);
+    this.orm.insert(schema.runtimeHandles).values({
+      id: value.id, profileId: value.profileId, executionEnvironmentId: value.executionEnvironmentId,
+      connectionEpoch: value.connectionEpoch, state: value.state, pid: value.pid ?? null,
+      userAgent: value.userAgent ?? null, platformFamily: value.platformFamily ?? null,
+      platformOs: value.platformOs ?? null, startedAt: value.startedAt, updatedAt: value.updatedAt,
+      exitedAt: value.exitedAt ?? null, exitCode: value.exitCode ?? null, expectedExit: value.expectedExit ?? null,
+    }).onConflictDoUpdate({ target: schema.runtimeHandles.id, set: {
+      state: value.state, pid: value.pid ?? null, userAgent: value.userAgent ?? null,
+      platformFamily: value.platformFamily ?? null, platformOs: value.platformOs ?? null,
+      updatedAt: value.updatedAt, exitedAt: value.exitedAt ?? null,
+      exitCode: value.exitCode ?? null, expectedExit: value.expectedExit ?? null,
+    }}).run();
+  }
+
+  readRuntimeHandle(id: string): RuntimeHandleRecord | null {
+    const row = this.sqlite.prepare('SELECT * FROM runtime_handles WHERE id=?').get(id) as Record<string, unknown> | undefined;
+    return row ? this.#runtimeHandle(row) : null;
+  }
+
+  listRuntimeHandles(profileId?: string): RuntimeHandleRecord[] {
+    const rows = (profileId === undefined
+      ? this.sqlite.prepare('SELECT * FROM runtime_handles ORDER BY started_at, id').all()
+      : this.sqlite.prepare('SELECT * FROM runtime_handles WHERE profile_id=? ORDER BY started_at, id').all(profileId)
+    ) as Record<string, unknown>[];
+    return rows.map((row) => this.#runtimeHandle(row));
+  }
+
+  saveRuntimeAudit(value: RuntimeAuditRecord): void {
+    this.#validate(value);
+    this.orm.insert(schema.runtimeAudit).values({
+      id: value.id, runtimeType: value.runtimeType, profileId: value.profileId ?? null,
+      handleId: value.handleId ?? null, action: value.action, outcome: value.outcome,
+      detailJson: this.#json(value.detail), createdAt: value.createdAt,
+    }).run();
+  }
+
+  listRuntimeAudits(runtimeType?: string): RuntimeAuditRecord[] {
+    const rows = (runtimeType === undefined
+      ? this.sqlite.prepare('SELECT * FROM runtime_audit ORDER BY created_at, id').all()
+      : this.sqlite.prepare('SELECT * FROM runtime_audit WHERE runtime_type=? ORDER BY created_at, id').all(runtimeType)
+    ) as Record<string, unknown>[];
+    return rows.map((row) => this.#runtimeAudit(row));
+  }  appendSessionEvent(value: SessionEventRecord): void {
     this.#validate(value);
     this.orm.insert(schema.sessionEvents).values({
       id: value.id, schemaVersion: value.schemaVersion, scope: value.scope,
@@ -436,6 +516,47 @@ export class LocalDatabase {
       ...(row.timed_out === null ? {} : { timedOut: Boolean(row.timed_out) }),
       diagnostic: JSON.parse(String(row.diagnostic_json)) as JsonValue,
       startedAt: Number(row.started_at), ...(row.finished_at === null ? {} : { finishedAt: Number(row.finished_at) }),
+    };
+  }
+  #runtimeProfile(row: Record<string, unknown>): RuntimeProfileRecord {
+    return {
+      id: String(row.id), runtimeType: String(row.runtime_type),
+      executionEnvironmentId: String(row.execution_environment_id), executablePath: String(row.executable_path),
+      launchPrefix: JSON.parse(String(row.launch_prefix_json)) as string[], discoverySource: String(row.discovery_source),
+      ...(row.discovered_version === null ? {} : { discoveredVersion: String(row.discovered_version) }),
+      minimumSupportedVersion: String(row.minimum_supported_version),
+      maximumTestedVersion: String(row.maximum_tested_version), schemaVersion: String(row.schema_version),
+      schemaHash: String(row.schema_hash), compatibility: String(row.compatibility) as RuntimeProfileRecord['compatibility'],
+      authenticated: Boolean(row.authenticated), authSource: String(row.auth_source) as RuntimeProfileRecord['authSource'],
+      ...(row.requires_openai_auth === null ? {} : { requiresOpenaiAuth: Boolean(row.requires_openai_auth) }),
+      probedAt: Number(row.probed_at), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
+    };
+  }
+
+  #runtimeHandle(row: Record<string, unknown>): RuntimeHandleRecord {
+    return {
+      id: String(row.id), profileId: String(row.profile_id),
+      executionEnvironmentId: String(row.execution_environment_id), connectionEpoch: String(row.connection_epoch),
+      state: String(row.state) as RuntimeHandleRecord['state'],
+      ...(row.pid === null ? {} : { pid: Number(row.pid) }),
+      ...(row.user_agent === null ? {} : { userAgent: String(row.user_agent) }),
+      ...(row.platform_family === null ? {} : { platformFamily: String(row.platform_family) }),
+      ...(row.platform_os === null ? {} : { platformOs: String(row.platform_os) }),
+      startedAt: Number(row.started_at), updatedAt: Number(row.updated_at),
+      ...(row.exited_at === null ? {} : { exitedAt: Number(row.exited_at) }),
+      ...(row.exit_code === null ? {} : { exitCode: Number(row.exit_code) }),
+      ...(row.expected_exit === null ? {} : { expectedExit: Boolean(row.expected_exit) }),
+    };
+  }
+
+  #runtimeAudit(row: Record<string, unknown>): RuntimeAuditRecord {
+    return {
+      id: String(row.id), runtimeType: String(row.runtime_type),
+      ...(row.profile_id === null ? {} : { profileId: String(row.profile_id) }),
+      ...(row.handle_id === null ? {} : { handleId: String(row.handle_id) }),
+      action: String(row.action) as RuntimeAuditRecord['action'],
+      outcome: String(row.outcome) as RuntimeAuditRecord['outcome'],
+      detail: JSON.parse(String(row.detail_json)) as JsonValue, createdAt: Number(row.created_at),
     };
   }
   #operation(row: Record<string, unknown>): OperationRecord {

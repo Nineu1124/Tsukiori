@@ -43,6 +43,18 @@ importers:
         specifier: 43.2.0
         version: 43.2.0
 
+  packages/adapter-codex:
+    dependencies:
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@tsukiori/project-manager':
+        specifier: workspace:*
+        version: link:../project-manager
+
   packages/adapter-fake:
     dependencies:
       '@tsukiori/runtime-core':

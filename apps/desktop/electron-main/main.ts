@@ -24,7 +24,11 @@ const workspaceSnapshot = smokeMode ? {
   }],
   attention: [{ id: 'smoke-attention', kind: 'waiting_permission', status: 'open', title: '等待权限确认' }],
   tools: [{ id: 'smoke-tool', title: 'Shell', summary: 'git status' }],
-} : { permissions: [], attention: [], tools: [] };
+  runtimes: [{
+    id: 'runtime-codex', runtimeType: 'codex', version: '0.146.0', state: 'ready',
+    authenticated: true, authSource: 'chatgpt', requiresOpenaiAuth: true, compatibility: 'supported',
+  }],
+} : { permissions: [], attention: [], tools: [], runtimes: [] };
 let quitting = false;
 
 function createWindow(): BrowserWindow {
@@ -76,6 +80,9 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
           attentionItems: document.querySelectorAll('.attention-item').length,
           permissionCategory: document.querySelector('[data-field="category"]')?.textContent,
           enforcementLevel: document.querySelector('[data-field="enforcement"]')?.textContent,
+          runtimeCards: document.querySelectorAll('.runtime-card').length,
+          runtimeAuthSource: document.querySelector('.runtime-card [data-field="authSource"]')?.textContent,
+          runtimeCompatibility: document.querySelector('.runtime-card [data-field="compatibility"]')?.textContent,
         });
       } else if (++attempts >= 40) {
         clearInterval(timer);

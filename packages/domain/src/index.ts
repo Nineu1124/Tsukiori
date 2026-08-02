@@ -159,6 +159,70 @@ export type ProcessRecord = {
   signal?: string;
 };
 
+export type RuntimeCompatibility =
+  | 'supported'
+  | 'unverified_newer'
+  | 'incompatible_older'
+  | 'schema_mismatch'
+  | 'unavailable';
+
+export type RuntimeAuthSource =
+  | 'chatgpt'
+  | 'apikey'
+  | 'chatgpt_external_tokens'
+  | 'amazon_bedrock'
+  | 'access_token'
+  | 'none'
+  | 'unknown';
+
+export type RuntimeProfileRecord = {
+  id: string;
+  runtimeType: string;
+  executionEnvironmentId: string;
+  executablePath: string;
+  launchPrefix: string[];
+  discoverySource: string;
+  discoveredVersion?: string;
+  minimumSupportedVersion: string;
+  maximumTestedVersion: string;
+  schemaVersion: string;
+  schemaHash: string;
+  compatibility: RuntimeCompatibility;
+  authenticated: boolean;
+  authSource: RuntimeAuthSource;
+  requiresOpenaiAuth?: boolean;
+  probedAt: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type RuntimeHandleRecord = {
+  id: string;
+  profileId: string;
+  executionEnvironmentId: string;
+  connectionEpoch: string;
+  state: 'starting' | 'ready' | 'stopping' | 'stopped' | 'exited' | 'failed';
+  pid?: number;
+  userAgent?: string;
+  platformFamily?: string;
+  platformOs?: string;
+  startedAt: number;
+  updatedAt: number;
+  exitedAt?: number;
+  exitCode?: number;
+  expectedExit?: boolean;
+};
+
+export type RuntimeAuditRecord = {
+  id: string;
+  runtimeType: string;
+  profileId?: string;
+  handleId?: string;
+  action: 'discover' | 'probe' | 'schema_lock' | 'start' | 'initialize' | 'auth_probe' | 'stop' | 'exit' | 'reprobe';
+  outcome: 'started' | 'succeeded' | 'failed' | 'degraded';
+  detail: JsonValue;
+  createdAt: number;
+};
 export type OperationRecord = {
   id: string;
   operationId: string;

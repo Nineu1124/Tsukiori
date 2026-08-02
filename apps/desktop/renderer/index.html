@@ -30,6 +30,10 @@
             <h2>本地会话已准备</h2>
             <p>Runtime 工具调用、权限请求和恢复事件会在这里按时间显示。</p>
           </article>
+          <section class="runtime-section" aria-label="Runtime status">
+            <p class="section-label">RUNTIMES</p>
+            <div id="runtime-list"></div>
+          </section>
           <div id="tool-list"></div>
           <div id="permission-list"></div>
         </section>
@@ -46,6 +50,17 @@
       </aside>
     </div>
 
+    <template id="runtime-card-template">
+      <article class="runtime-card">
+        <div class="card-kicker">RUNTIME</div><h3 data-field="runtimeType"></h3>
+        <dl>
+          <div><dt>版本</dt><dd data-field="version"></dd></div>
+          <div><dt>状态</dt><dd data-field="state"></dd></div>
+          <div><dt>认证来源</dt><dd data-field="authSource"></dd></div>
+          <div><dt>兼容性</dt><dd data-field="compatibility"></dd></div>
+        </dl>
+      </article>
+    </template>
     <template id="tool-card-template">
       <article class="tool-card"><div class="card-kicker">TOOL</div><h3 data-field="title"></h3><pre data-field="summary"></pre></article>
     </template>

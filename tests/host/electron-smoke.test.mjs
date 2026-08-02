@@ -62,6 +62,7 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
   assert.deepEqual(result.rendererState, {
     permissionCards: 1, toolCards: 1, attentionItems: 1,
     permissionCategory: 'shell', enforcementLevel: 'interceptable',
+    runtimeCards: 1, runtimeAuthSource: 'chatgpt', runtimeCompatibility: 'supported',
   });
   assert.equal(result.daemonVersion, '0.1.0');
   assert.equal(result.protocolVersion, 1);

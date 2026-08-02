@@ -3448,14 +3448,14 @@ src/helpers/
 
 ### T4.1 Codex app-server 生命周期与认证
 
-- [ ] 实现 Codex 发现、启动、初始化和认证探测
+- [x] 实现 Codex 发现、启动、初始化和认证探测
 - 前置依赖：G2、T0.2
 - 交付物：Codex Adapter、Schema 锁定流程、认证状态 UI
 - Checkpoints：
-  - [ ] 可发现 Codex 路径、版本、认证来源和兼容性状态
-  - [ ] app-server initialize/initialized 可按版本 Schema 校验
-  - [ ] Runtime Handle 启停、异常退出和重新 Probe 可审计
-  - [ ] 高于 maxTestedVersion 时进入未验证版本降级策略
+  - [x] 可发现 Codex 路径、版本、认证来源和兼容性状态
+  - [x] app-server initialize/initialized 可按版本 Schema 校验
+  - [x] Runtime Handle 启停、异常退出和重新 Probe 可审计
+  - [x] 高于 maxTestedVersion 时进入未验证版本降级策略
 
 ### T4.2 Codex Thread、Turn、Item 与 Approval
 
