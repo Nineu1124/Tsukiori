@@ -175,12 +175,22 @@ export class OpenCodeAlphaWorkflow {
 
   review(sessionId: string): AlphaWorkflowSnapshot['diff'] {
     this.#session(sessionId);
-    return this.#git.sessionDiff(sessionId);
+    return this.#git.reviewSessionDiff(sessionId);
   }
 
   stage(sessionId: string, filePaths: readonly string[]): GitStatusSnapshot {
     this.#active(sessionId);
     return this.#git.stage(sessionId, filePaths);
+  }
+
+  unstage(sessionId: string, filePaths: readonly string[]): GitStatusSnapshot {
+    this.#active(sessionId);
+    return this.#git.unstage(sessionId, filePaths);
+  }
+
+  revert(sessionId: string, filePaths: readonly string[]) {
+    this.#active(sessionId);
+    return this.#git.revert(sessionId, filePaths);
   }
 
   commit(sessionId: string, subject: string): GitCommitResult {

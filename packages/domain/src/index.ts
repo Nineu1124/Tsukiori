@@ -228,7 +228,8 @@ export type RuntimeAuditRecord = {
 export type OperationRecord = {
   id: string;
   operationId: string;
-  type: 'worktree_create' | 'runtime_session_create' | 'permission_response' | 'commit' | 'merge' | 'worktree_remove';
+  type: 'worktree_create' | 'runtime_session_create' | 'permission_response'
+    | 'git_review' | 'git_stage' | 'git_unstage' | 'git_revert' | 'commit' | 'merge' | 'rebase' | 'worktree_remove';
   sessionId?: string;
   status: 'prepared' | 'running' | 'committed' | 'failed' | 'uncertain';
   requestPayload: JsonValue;

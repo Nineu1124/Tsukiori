@@ -1,8 +1,9 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
-import { isAbsolute, posix, win32 } from 'node:path';
+import { existsSync, mkdirSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { isAbsolute, join, posix, resolve, win32 } from 'node:path';
 import type { LocalDatabase } from '@tsukiori/database';
-import type { Project, WorkspaceBindingRecord, WorktreeRecord } from '@tsukiori/domain';
+import type { JsonValue, OperationRecord, Project, WorkspaceBindingRecord, WorktreeRecord } from '@tsukiori/domain';
 import { ExecutionEnvironmentRegistry, ProjectManager } from '@tsukiori/project-manager';
 
 const DEFAULT_DIFF_LIMIT = 256 * 1024;
@@ -69,6 +70,15 @@ export type GitCommitResult = {
   stagedPaths: string[];
 };
 
+export type GitRevertResult = {
+  sessionId: string;
+  worktreeId: string;
+  snapshotRef: string;
+  snapshotCommit: string;
+  revertedPaths: string[];
+  status: GitStatusSnapshot;
+};
+
 type GitContext = {
   sessionId: string;
   project: Project;
@@ -84,13 +94,19 @@ class StructuredGitRunner {
 
   constructor(observe?: (invocation: GitInvocation) => void) { this.#observe = observe; }
 
-  run(executable: string, cwd: string, args: readonly string[], maxBuffer = METADATA_LIMIT): CommandResult {
+  run(
+    executable: string,
+    cwd: string,
+    args: readonly string[],
+    maxBuffer = METADATA_LIMIT,
+    environment: Readonly<Record<string, string>> = {},
+  ): CommandResult {
     const invocation: GitInvocation = { executable, args: [...args], cwd, shell: false };
     this.#observe?.(invocation);
     const result = spawnSync(executable, [...args], {
       cwd, encoding: 'utf8', windowsHide: true, shell: false, timeout: 30_000, maxBuffer,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, GIT_PAGER: 'cat', GIT_TERMINAL_PROMPT: '0' },
+      env: { ...process.env, GIT_PAGER: 'cat', GIT_TERMINAL_PROMPT: '0', ...environment },
     });
     const errorCode = (result.error as NodeJS.ErrnoException | undefined)?.code;
     const truncated = errorCode === 'ENOBUFS';
@@ -108,6 +124,9 @@ export class GitDiffService {
   readonly #runner: StructuredGitRunner;
   readonly #maxDiffBytes: number;
   readonly #maxFileBytes: number;
+  readonly #now: () => number;
+  readonly #id: () => string;
+  readonly #faultInjector: ((point: 'after_revert_snapshot') => void) | undefined;
 
   constructor(
     database: LocalDatabase,
@@ -117,6 +136,9 @@ export class GitDiffService {
       maxDiffBytes?: number;
       maxFileBytes?: number;
       observeInvocation?: (invocation: GitInvocation) => void;
+      now?: () => number;
+      id?: () => string;
+      faultInjector?: (point: 'after_revert_snapshot') => void;
     } = {},
   ) {
     this.#database = database;
@@ -125,6 +147,9 @@ export class GitDiffService {
     this.#maxDiffBytes = this.#positiveLimit(options.maxDiffBytes ?? DEFAULT_DIFF_LIMIT, 'Diff');
     this.#maxFileBytes = this.#positiveLimit(options.maxFileBytes ?? DEFAULT_FILE_LIMIT, 'File');
     this.#runner = new StructuredGitRunner(options.observeInvocation);
+    this.#now = options.now ?? Date.now;
+    this.#id = options.id ?? randomUUID;
+    this.#faultInjector = options.faultInjector;
   }
 
   status(sessionId: string): GitStatusSnapshot {
@@ -182,18 +207,99 @@ export class GitDiffService {
     };
   }
 
+  reviewSessionDiff(sessionId: string): {
+    commit: DiffResult;
+    staged: DiffResult;
+    working: DiffResult;
+  } {
+    const context = this.#context(sessionId);
+    const operation = this.#begin('git_review', sessionId, {
+      schemaVersion: 1, worktreeId: context.worktree.id, scopes: ['session-commit', 'staged', 'working'],
+    });
+    try {
+      const diff = this.sessionDiff(sessionId);
+      this.#complete(operation, {
+        headCommit: diff.commit.headCommit,
+        baseCommit: diff.commit.baseCommit ?? context.binding.baseCommit,
+        commitAvailable: diff.commit.available,
+        stagedAvailable: diff.staged.available,
+        workingAvailable: diff.working.available,
+        persistedDiffContent: false,
+      });
+      return diff;
+    } catch (error) {
+      this.#fail(operation, 'git_review_failed');
+      throw error;
+    }
+  }
+
   stage(sessionId: string, filePaths: readonly string[]): GitStatusSnapshot {
     const context = this.#context(sessionId);
-    if (filePaths.length === 0 || filePaths.length > 256) {
-      throw new GitServiceError('Stage requires between 1 and 256 paths');
+    const paths = this.#mutationPaths(sessionId, filePaths, 'Stage');
+    const operation = this.#begin('git_stage', sessionId, {
+      schemaVersion: 1, worktreeId: context.worktree.id, paths,
+    });
+    try {
+      this.#git(context, ['add', '--', ...paths]);
+      const status = this.status(sessionId);
+      this.#complete(operation, { headCommit: status.headCommit, stagedPathCount: status.files.filter((file) => file.staged).length });
+      return status;
+    } catch (error) {
+      this.#fail(operation, 'git_stage_failed');
+      throw error;
     }
-    const paths = [...new Set(filePaths.map((value) => this.#relativePath(value)))];
-    const changed = new Set(this.status(sessionId).files.map((file) => file.path));
-    if (paths.some((path) => !changed.has(path))) {
-      throw new GitServiceError('Stage path is not present in the Session change set');
+  }
+
+  unstage(sessionId: string, filePaths: readonly string[]): GitStatusSnapshot {
+    const context = this.#context(sessionId);
+    const paths = this.#mutationPaths(sessionId, filePaths, 'Unstage', true);
+    const operation = this.#begin('git_unstage', sessionId, {
+      schemaVersion: 1, worktreeId: context.worktree.id, paths,
+    });
+    try {
+      this.#git(context, ['restore', '--staged', '--', ...paths]);
+      const status = this.status(sessionId);
+      this.#complete(operation, { headCommit: status.headCommit, stagedPathCount: status.files.filter((file) => file.staged).length });
+      return status;
+    } catch (error) {
+      this.#fail(operation, 'git_unstage_failed');
+      throw error;
     }
-    this.#git(context, ['add', '--', ...paths]);
-    return this.status(sessionId);
+  }
+
+  revert(sessionId: string, filePaths: readonly string[]): GitRevertResult {
+    const context = this.#context(sessionId);
+    const paths = this.#mutationPaths(sessionId, filePaths, 'Revert');
+    const operation = this.#begin('git_revert', sessionId, {
+      schemaVersion: 1, worktreeId: context.worktree.id, paths,
+    });
+    let snapshot: { ref: string; commit: string } | undefined;
+    try {
+      snapshot = this.#recoverySnapshot(context);
+      this.#faultInjector?.('after_revert_snapshot');
+      const changed = new Map(this.status(sessionId).files.map((file) => [file.path, file]));
+      const tracked = paths.filter((path) => changed.get(path)?.untracked !== true);
+      const untracked = paths.filter((path) => changed.get(path)?.untracked === true);
+      if (tracked.length > 0) this.#git(context, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...tracked]);
+      if (untracked.length > 0) this.#git(context, ['clean', '-f', '--', ...untracked]);
+      const status = this.status(sessionId);
+      this.#complete(operation, {
+        snapshotRef: snapshot.ref, snapshotCommit: snapshot.commit, revertedPathCount: paths.length,
+      });
+      return {
+        sessionId,
+        worktreeId: context.worktree.id,
+        snapshotRef: snapshot.ref,
+        snapshotCommit: snapshot.commit,
+        revertedPaths: paths,
+        status,
+      };
+    } catch (error) {
+      this.#fail(operation, 'git_revert_failed', snapshot ? {
+        snapshotRef: snapshot.ref, snapshotCommit: snapshot.commit,
+      } : undefined);
+      throw error;
+    }
   }
 
   commit(sessionId: string, subjectValue: string): GitCommitResult {
@@ -207,27 +313,44 @@ export class GitDiffService {
     const stagedPaths = before.files.filter((file) => file.staged).map((file) => file.path);
     if (stagedPaths.length === 0) throw new GitServiceError('Commit requires staged changes');
     const previousHead = before.headCommit;
-    this.#git(context, [
-      '-c', 'core.hooksPath=NUL',
-      '-c', 'commit.gpgSign=false',
-      'commit', '--no-gpg-sign', '--no-verify', '-m', subject,
-    ]);
-    const commitHash = this.#head(context);
-    if (commitHash === previousHead) throw new GitServiceError('Commit did not advance HEAD');
-    const at = Date.now();
-    this.#database.saveWorkspaceBinding({
-      ...context.binding,
-      lastKnownCommit: commitHash,
-      updatedAt: Math.max(at, context.binding.updatedAt + 1),
-    });
-    return {
-      sessionId,
+    const operation = this.#begin('commit', sessionId, {
+      schemaVersion: 1,
       worktreeId: context.worktree.id,
-      branch: this.#git(context, ['branch', '--show-current']).stdout.trim(),
-      commitHash,
-      subject,
       stagedPaths,
-    };
+      subjectHash: 'sha256:' + createHash('sha256').update(subject).digest('hex'),
+      hooksDisabled: true,
+      signingDisabled: true,
+    });
+    try {
+      this.#git(context, [
+        '-c', 'core.hooksPath=NUL',
+        '-c', 'commit.gpgSign=false',
+        'commit', '--no-gpg-sign', '--no-verify', '-m', subject,
+      ]);
+      const commitHash = this.#head(context);
+      if (commitHash === previousHead) throw new GitServiceError('Commit did not advance HEAD');
+      const at = this.#now();
+      this.#database.saveWorkspaceBinding({
+        ...context.binding,
+        lastKnownCommit: commitHash,
+        updatedAt: Math.max(at, context.binding.updatedAt + 1),
+      });
+      const result = {
+        sessionId,
+        worktreeId: context.worktree.id,
+        branch: this.#git(context, ['branch', '--show-current']).stdout.trim(),
+        commitHash,
+        subject,
+        stagedPaths,
+      };
+      this.#complete(operation, {
+        commitHash, previousHead, worktreeId: context.worktree.id, stagedPathCount: stagedPaths.length,
+      });
+      return result;
+    } catch (error) {
+      this.#fail(operation, 'git_commit_failed');
+      throw error;
+    }
   }
 
   #context(sessionId: string): GitContext {
@@ -252,8 +375,52 @@ export class GitDiffService {
     return { sessionId, project, binding, worktree, executable: environment.gitExecutable };
   }
 
-  #git(context: GitContext, args: readonly string[], maxBuffer?: number): CommandResult {
-    return this.#runner.run(context.executable, context.worktree.path, ['-C', context.worktree.path, ...args], maxBuffer);
+  #git(
+    context: GitContext,
+    args: readonly string[],
+    maxBuffer?: number,
+    environment?: Readonly<Record<string, string>>,
+  ): CommandResult {
+    return this.#runner.run(
+      context.executable,
+      context.worktree.path,
+      ['-C', context.worktree.path, ...args],
+      maxBuffer,
+      environment,
+    );
+  }
+
+  #recoverySnapshot(context: GitContext): { ref: string; commit: string } {
+    const commonValue = this.#git(context, ['rev-parse', '--git-common-dir']).stdout.trim();
+    const commonCandidate = isAbsolute(commonValue) || win32.isAbsolute(commonValue)
+      ? commonValue
+      : resolve(context.worktree.path, commonValue);
+    const common = realpathSync.native(commonCandidate);
+    if (context.project.canonicalGitDir
+      && win32.normalize(common).toLowerCase() !== win32.normalize(context.project.canonicalGitDir).toLowerCase()) {
+      throw new GitServiceError('Recovery snapshot Git directory does not match Project');
+    }
+    mkdirSync(join(common, 'tsukiori-recovery'), { recursive: true });
+    const token = this.#id().replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64) || randomUUID();
+    const indexPath = join(common, 'tsukiori-recovery', 'index-' + token);
+    const environment = { GIT_INDEX_FILE: indexPath };
+    try {
+      this.#git(context, ['read-tree', 'HEAD'], undefined, environment);
+      this.#git(context, ['add', '-A', '--', '.'], undefined, environment);
+      const tree = this.#git(context, ['write-tree'], undefined, environment).stdout.trim();
+      if (!/^[a-f0-9]{40,64}$/i.test(tree)) throw new GitServiceError('Recovery snapshot tree is invalid');
+      const commit = this.#git(context, [
+        '-c', 'commit.gpgSign=false', 'commit-tree', tree, '-p', 'HEAD', '-m', 'Tsukiori recovery snapshot',
+      ], undefined, environment).stdout.trim();
+      if (!/^[a-f0-9]{40,64}$/i.test(commit)) throw new GitServiceError('Recovery snapshot commit is invalid');
+      const ref = 'refs/tsukiori/recovery/' + token;
+      this.#git(context, ['update-ref', ref, commit]);
+      return { ref, commit };
+    } finally {
+      for (const value of [indexPath, indexPath + '.lock']) {
+        if (existsSync(value)) rmSync(value, { force: true });
+      }
+    }
   }
 
   #head(context: GitContext): string {
@@ -357,8 +524,64 @@ export class GitDiffService {
     };
   }
 
+  #mutationPaths(
+    sessionId: string,
+    filePaths: readonly string[],
+    label: string,
+    requireStaged = false,
+  ): string[] {
+    if (filePaths.length === 0 || filePaths.length > 256) {
+      throw new GitServiceError(label + ' requires between 1 and 256 paths');
+    }
+    const paths = [...new Set(filePaths.map((value) => this.#relativePath(value)))];
+    const changed = new Map(this.status(sessionId).files.map((file) => [file.path, file]));
+    if (paths.some((path) => !changed.has(path))) {
+      throw new GitServiceError(label + ' path is not present in the Session change set');
+    }
+    if (requireStaged && paths.some((path) => changed.get(path)?.staged !== true)) {
+      throw new GitServiceError('Unstage path is not staged');
+    }
+    return paths;
+  }
+
+  #begin(type: OperationRecord['type'], sessionId: string, requestPayload: JsonValue): OperationRecord {
+    const at = this.#now();
+    const operation: OperationRecord = {
+      id: 'record:' + this.#id(),
+      operationId: 'operation:' + this.#id(),
+      type,
+      sessionId,
+      status: 'prepared',
+      requestPayload,
+      createdAt: at,
+      updatedAt: at,
+    };
+    this.#database.saveOperation(operation);
+    const running = { ...operation, status: 'running' as const, updatedAt: this.#now() };
+    this.#database.saveOperation(running);
+    return running;
+  }
+
+  #complete(operation: OperationRecord, resultPayload: JsonValue): void {
+    this.#database.saveOperation({
+      ...operation, status: 'committed', resultPayload, updatedAt: this.#now(),
+    });
+  }
+
+  #fail(operation: OperationRecord, code: string, resultPayload?: JsonValue): void {
+    this.#database.saveOperation({
+      ...operation,
+      status: 'failed',
+      ...(resultPayload === undefined ? {} : { resultPayload }),
+      error: { code },
+      updatedAt: this.#now(),
+    });
+  }
+
   #positiveLimit(value: number, label: string): number {
     if (!Number.isInteger(value) || value < 64) throw new GitServiceError(label + ' limit is invalid');
     return value;
   }
 }
+
+export * from './v1.js';

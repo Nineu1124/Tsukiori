@@ -7,6 +7,7 @@ const permissionList = document.querySelector('#permission-list');
 const toolList = document.querySelector('#tool-list');
 const runtimeList = document.querySelector('#runtime-list');
 const alphaWorkflow = document.querySelector('#alpha-workflow');
+const v1GitWorkflow = document.querySelector('#v1-git-workflow');
 
 function setField(root, name, value) {
   const target = root.querySelector('[data-field="' + name + '"]');
@@ -179,6 +180,33 @@ function renderAlphaWorkflow(workflow) {
   cleanup.addEventListener('click', () => runAction(cleanup, () => window.tsukiori.workspace.archive('run')));
 }
 
+function renderV1GitWorkflow(v1Git) {
+  if (!v1Git?.available) return;
+  v1GitWorkflow.hidden = false;
+  setField(v1GitWorkflow, 'recoverySnapshot', v1Git.recoverySnapshot);
+  setField(v1GitWorkflow, 'integrationLocation', v1Git.integrationLocation);
+  setField(v1GitWorkflow, 'targetRef', v1Git.targetRef);
+  setField(v1GitWorkflow, 'integrationStrategy', v1Git.strategy);
+  const status = v1GitWorkflow.querySelector('[data-field="v1ActionStatus"]');
+  const selectedPaths = () => [...alphaWorkflow.querySelectorAll('[data-field="changedFiles"] input:checked')]
+    .map((input) => input.dataset.path);
+  const bind = (name, operation) => {
+    const button = v1GitWorkflow.querySelector('[data-v1-action="' + name + '"]');
+    button.addEventListener('click', () => runAction(button, async () => {
+      const result = await operation();
+      status.textContent = result?.ok === false ? '操作不可用' : '请求已提交';
+      return result;
+    }));
+  };
+  bind('unstage', () => window.tsukiori.workspace.unstage(selectedPaths()));
+  bind('revert', () => window.tsukiori.workspace.revert(selectedPaths()));
+  bind('integrate', () => window.tsukiori.workspace.integrate(
+    v1Git.sourceSessionId, v1Git.targetRef, v1Git.strategy,
+  ));
+  bind('continue', () => window.tsukiori.workspace.continueIntegration(v1Git.conflictOperationId));
+  bind('external-editor', () => window.tsukiori.workspace.openExternalEditor(v1Git.conflictOperationId));
+}
+
 function renderAttention(item) {
   const card = document.createElement('article');
   card.className = 'attention-item ' + item.kind;
@@ -220,6 +248,7 @@ try {
   daemonDot.classList.add('healthy');
   version.textContent = 'Protocol ' + versions.protocol;
   renderAlphaWorkflow(snapshot.workflow);
+  renderV1GitWorkflow(snapshot.v1Git);
   for (const tool of snapshot.tools) renderTool(tool);
   for (const runtime of snapshot.runtimes) renderRuntime(runtime);
   for (const permission of snapshot.permissions) renderPermission(permission);

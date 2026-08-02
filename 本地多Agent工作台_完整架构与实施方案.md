@@ -3482,15 +3482,15 @@ src/helpers/
 
 ### T4.4 V1 Git 操作与 Integration Worktree Merge
 
-- [ ] 实现 V1 Review、Stage、Revert 和安全合并流程
+- [x] 实现 V1 Review、Stage、Revert 和安全合并流程
 - 前置依赖：T2.4、T3.4
 - 交付物：Stage/Unstage、恢复快照 Revert、Integration Worktree Merge
 - Checkpoints：
-  - [ ] Stage、Unstage、Commit 和 Session Commit Diff 可审计
-  - [ ] Revert 前创建恢复快照，失败时不会静默丢代码
-  - [ ] Merge 默认在 Integration Worktree 验证，不直接修改主工作区
-  - [ ] 冲突会进入 Attention Center，并支持打开外部编辑器处理
-  - [ ] Merge、Rebase、Submodule 和签名程序场景有集成测试
+  - [x] Stage、Unstage、Commit 和 Session Commit Diff 可审计
+  - [x] Revert 前创建恢复快照，失败时不会静默丢代码
+  - [x] Merge 默认在 Integration Worktree 验证，不直接修改主工作区
+  - [x] 冲突会进入 Attention Center，并支持打开外部编辑器处理
+  - [x] Merge、Rebase、Submodule 和签名程序场景有集成测试
 
 ### T4.5 OpenCode/Codex 双 Runtime 闭环
 

@@ -56,6 +56,27 @@
               <span data-field="actionStatus" aria-live="polite"></span>
             </div>
           </section>
+          <section id="v1-git-workflow" class="v1-git-workflow" aria-label="V1 Git integration" hidden>
+            <div class="alpha-heading">
+              <div><p class="card-kicker">V1 GIT</p><h2>安全 Review 与 Integration</h2></div>
+              <span class="alpha-phase">explicit promotion</span>
+            </div>
+            <dl>
+              <div><dt>Revert 保护</dt><dd data-field="recoverySnapshot"></dd></div>
+              <div><dt>Integration 位置</dt><dd data-field="integrationLocation"></dd></div>
+              <div><dt>目标分支</dt><dd data-field="targetRef"></dd></div>
+              <div><dt>策略</dt><dd data-field="integrationStrategy"></dd></div>
+            </dl>
+            <p class="v1-boundary">合并先在临时 Integration Worktree 验证；更新目标分支需要再次明确确认。</p>
+            <div class="alpha-actions">
+              <button type="button" data-v1-action="unstage">Unstage selected</button>
+              <button type="button" data-v1-action="revert">Revert with snapshot</button>
+              <button type="button" data-v1-action="integrate" class="primary">Verify Integration</button>
+              <button type="button" data-v1-action="continue">Continue resolved conflict</button>
+              <button type="button" data-v1-action="external-editor">Open external editor</button>
+              <span data-field="v1ActionStatus" aria-live="polite"></span>
+            </div>
+          </section>
           <section class="runtime-section" aria-label="Runtime status">
             <p class="section-label">RUNTIMES</p>
             <div id="runtime-list"></div>

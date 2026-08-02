@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "task": "T4.4",
+  "auditedOperations": ["git_review", "git_stage", "git_unstage", "commit", "git_revert", "merge", "rebase"],
+  "sessionCommitDiffContentPersisted": false,
+  "commitSubjectPersisted": false,
+  "revert": {
+    "snapshot": "refs/tsukiori/recovery/<opaque-id>",
+    "trackedBytesRecoverable": true,
+    "untrackedBytesRecoverable": true,
+    "failureRetainsSnapshot": true
+  },
+  "integration": {
+    "root": "temporary-integration-worktree",
+    "mainWorkspaceModified": false,
+    "targetPromotion": "explicit-required",
+    "mergeVerified": true,
+    "rebaseVerified": true,
+    "conflictRetained": true,
+    "externalEditorInvocationStructured": true,
+    "submodulePolicy": "unsupported-fail-closed",
+    "hooksDisabled": true,
+    "signingDisabled": true
+  },
+  "uiActions": ["unstage", "revert", "integrate", "continue", "external-editor"],
+  "containsCredentials": false,
+  "containsSourceOrDiff": false
+}

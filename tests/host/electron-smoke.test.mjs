@@ -77,9 +77,15 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
     alphaActionNames: ['stage', 'commit', 'archive', 'safeCleanup'],
     attentionKinds: ['waiting_permission', 'waiting_input', 'completed', 'failed'],
     prohibitedActionCount: 0,
+    v1GitVisible: true,
+    v1GitActions: ['unstage', 'revert', 'integrate', 'continue', 'external-editor'],
+    recoverySnapshot: 'required',
+    integrationLocation: 'temporary-worktree',
   });
   assert.deepEqual(result.alphaCommandResult, { ok: true, command: 'stage', sequence: 1 });
-  assert.equal(result.smokeCommandCount, 1);
+  assert.deepEqual(result.integrationCommandResult, { ok: true, command: 'integrate', sequence: 2 });
+  assert.deepEqual(result.editorCommandResult, { ok: true, command: 'open_external_editor', sequence: 3 });
+  assert.equal(result.smokeCommandCount, 3);
   assert.equal(result.daemonVersion, '0.1.0');
   assert.equal(result.protocolVersion, 1);
 });

@@ -70,7 +70,17 @@ const workspaceSnapshot = smokeMode ? {
     diff: { scope: 'working', content: '+ sanitized fake Runtime change' },
     actions: { stage: true, commit: true, archive: true, safeCleanup: false },
   },
-} : { permissions: [], attention: [], tools: [], runtimes: [], workflow: null };
+  v1Git: {
+    available: true,
+    sourceSessionId: 'smoke-session',
+    targetRef: 'main',
+    strategy: 'merge',
+    recoverySnapshot: 'required',
+    integrationLocation: 'temporary-worktree',
+    promotion: 'explicit-required',
+    conflictOperationId: 'operation:smoke-conflict',
+  },
+} : { permissions: [], attention: [], tools: [], runtimes: [], workflow: null, v1Git: null };
 let quitting = false;
 let smokeCommandCount = 0;
 
@@ -161,6 +171,11 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
           prohibitedActionCount: document.querySelectorAll(
             '[data-action="merge"],[data-runtime="claude"],[data-runtime="acp"],[data-platform]',
           ).length,
+          v1GitVisible: document.querySelector('#v1-git-workflow')?.hidden === false,
+          v1GitActions: [...document.querySelectorAll('#v1-git-workflow [data-v1-action]')]
+            .map((element) => element.dataset.v1Action),
+          recoverySnapshot: document.querySelector('#v1-git-workflow [data-field="recoverySnapshot"]')?.textContent,
+          integrationLocation: document.querySelector('#v1-git-workflow [data-field="integrationLocation"]')?.textContent,
         });
       } else if (++attempts >= 40) {
         clearInterval(timer);
@@ -170,6 +185,14 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
   })`, true) as Record<string, unknown>;
   const alphaCommandResult = await window.webContents.executeJavaScript(
     `window.tsukiori.workspace.stage(['alpha-runtime.txt'])`,
+    true,
+  ) as Record<string, unknown>;
+  const integrationCommandResult = await window.webContents.executeJavaScript(
+    `window.tsukiori.workspace.integrate('smoke-session', 'main', 'merge')`,
+    true,
+  ) as Record<string, unknown>;
+  const editorCommandResult = await window.webContents.executeJavaScript(
+    `window.tsukiori.workspace.openExternalEditor('operation:smoke-conflict')`,
     true,
   ) as Record<string, unknown>;
   const crash = new Promise<Electron.RenderProcessGoneDetails>((resolveCrash) => {
@@ -191,6 +214,8 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
         fakeRuntimeEventCount: fakeRuntime.events.length,
         rendererState,
         alphaCommandResult,
+        integrationCommandResult,
+        editorCommandResult,
         smokeCommandCount,
         daemonVersion: status.daemonVersion,
         protocolVersion: status.protocolVersion,
@@ -215,7 +240,10 @@ ipcMain.handle('workspace:command', (_event, value: unknown) => {
     return { ok: false, code: 'workflow_unavailable' };
   }
   const command = value as Record<string, unknown>;
-  const allowed = new Set(['stage', 'commit', 'archive', 'permission', 'answer_input']);
+  const allowed = new Set([
+    'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
+    'integrate', 'continue_integration', 'open_external_editor',
+  ]);
   if (typeof command.type !== 'string' || !allowed.has(command.type)
     || Buffer.byteLength(JSON.stringify(command)) > 8192) {
     return { ok: false, code: 'invalid_command' };

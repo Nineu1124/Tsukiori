@@ -57,3 +57,20 @@ test('Windows Alpha UI exposes only implemented OpenCode workflow actions', asyn
   }
   assert.doesNotMatch(script, /child_process|node:fs|shell:/);
 });
+test('V1 Git UI exposes audited operations and Integration Worktree boundaries', async () => {
+  const [html, script] = await Promise.all([
+    readFile(join(rendererRoot, 'index.html'), 'utf8'),
+    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
+  ]);
+  assert.match(html, /id="v1-git-workflow"/);
+  for (const action of ['unstage', 'revert', 'integrate', 'continue', 'external-editor']) {
+    assert.match(html, new RegExp('data-v1-action="' + action + '"'));
+  }
+  assert.match(html, /Revert with snapshot/);
+  assert.match(html, /临时 Integration Worktree/);
+  assert.match(html, /更新目标分支需要再次明确确认/);
+  for (const method of ['unstage', 'revert', 'integrate', 'continueIntegration', 'openExternalEditor']) {
+    assert.match(script, new RegExp('workspace\\.' + method));
+  }
+  assert.doesNotMatch(script, /child_process|node:fs|spawn\(|exec\(/);
+});
