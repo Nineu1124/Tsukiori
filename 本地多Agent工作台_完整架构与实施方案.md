@@ -3289,15 +3289,15 @@ src/helpers/
 
 ### T1.4 Fake Runtime 与统一事件系统
 
-- [ ] 实现可脚本化 Fake Runtime 和事件标准化管线
+- [x] 实现可脚本化 Fake Runtime 和事件标准化管线
 - 前置依赖：T1.2、T1.3、T0.4
 - 交付物：Fake Runtime、Event Normalizer、Adapter Contract Test Harness
 - Checkpoints：
-  - [ ] 可创建多个 Session 并流式输出文本、工具调用和用户输入请求
-  - [ ] 可模拟重复、乱序、断线、背压、未知事件和 Runtime Scope 事件
-  - [ ] Connection Epoch 能阻止旧事件或旧响应改变当前状态
-  - [ ] 未知事件在脱敏和限额后保留，且不会阻断已知事件
-  - [ ] 不支持事件补发时可通过 Snapshot Recovery 恢复可解释状态
+  - [x] 可创建多个 Session 并流式输出文本、工具调用和用户输入请求
+  - [x] 可模拟重复、乱序、断线、背压、未知事件和 Runtime Scope 事件
+  - [x] Connection Epoch 能阻止旧事件或旧响应改变当前状态
+  - [x] 未知事件在脱敏和限额后保留，且不会阻断已知事件
+  - [x] 不支持事件补发时可通过 Snapshot Recovery 恢复可解释状态
 
 ### T1.5 Permission Broker、Attention Center 与基础 UI
 

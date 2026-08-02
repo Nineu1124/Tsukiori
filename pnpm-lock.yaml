@@ -40,6 +40,12 @@ importers:
         specifier: 43.2.0
         version: 43.2.0
 
+  packages/adapter-fake:
+    dependencies:
+      '@tsukiori/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
+
   packages/database:
     dependencies:
       '@tsukiori/domain':
@@ -59,6 +65,12 @@ importers:
   packages/domain: {}
 
   packages/protocol: {}
+
+  packages/runtime-core:
+    dependencies:
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/testkit:
     dependencies:

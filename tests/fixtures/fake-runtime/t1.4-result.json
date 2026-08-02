@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "task": "T1.4",
+  "adapter": "fake",
+  "oneReaderPerHandle": true,
+  "parallelSessions": 3,
+  "knownEvents": [
+    "assistant.text_delta",
+    "tool.started",
+    "tool.completed",
+    "user_input.requested"
+  ],
+  "faultInjection": [
+    "duplicate",
+    "out_of_order",
+    "disconnect",
+    "backpressure",
+    "unknown_event",
+    "runtime_scope_event",
+    "stale_connection_epoch"
+  ],
+  "unknownEvent": {
+    "retained": true,
+    "redacted": true,
+    "bounded": true,
+    "persisted": true,
+    "doesNotBlockKnownEvents": true
+  },
+  "recovery": {
+    "eventReplaySupported": false,
+    "mode": "snapshot_recovery",
+    "automaticPromptReplay": false,
+    "explainableWarning": true
+  },
+  "containsCredentials": false
+}

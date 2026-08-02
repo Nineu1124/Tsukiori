@@ -41,6 +41,7 @@ jobs:
           npm run test:host
           npm run test:ipc
           npm run test:database
+          npm run test:runtime
           npm run test:codex
           npm run test:windows
           npm run test:opencode
