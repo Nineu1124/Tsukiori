@@ -100,6 +100,14 @@ export class OpenCodeRuntimeHandle {
     return this.adapter.startTurn(this.id, hostSessionId, text);
   }
 
+  answerQuestion(hostSessionId: string, requestId: string, answers: readonly (readonly string[])[]): Promise<void> {
+    return this.adapter.answerQuestion(this.id, hostSessionId, requestId, answers);
+  }
+
+  rejectQuestion(hostSessionId: string, requestId: string): Promise<void> {
+    return this.adapter.rejectQuestion(this.id, hostSessionId, requestId);
+  }
+
   recoverEventStream(): Promise<OpenCodeRecoveryResult> {
     return this.adapter.recoverEventStream(this.id);
   }
@@ -406,6 +414,19 @@ export class OpenCodeRuntimeAdapter {
 
   startTurn(handleId: string, hostSessionId: string, text: string): Promise<HostTurn> {
     return this.#bridge(handleId).startTurn(hostSessionId, text);
+  }
+
+  answerQuestion(
+    handleId: string,
+    hostSessionId: string,
+    requestId: string,
+    answers: readonly (readonly string[])[],
+  ): Promise<void> {
+    return this.#bridge(handleId).answerQuestion(hostSessionId, requestId, answers);
+  }
+
+  rejectQuestion(handleId: string, hostSessionId: string, requestId: string): Promise<void> {
+    return this.#bridge(handleId).rejectQuestion(hostSessionId, requestId);
   }
 
   async recoverEventStream(handleId: string): Promise<OpenCodeRecoveryResult> {

@@ -37,3 +37,23 @@ test('Session workspace includes Attention, Tool, Permission, and Runtime auth p
   assert.match(script, /textContent/);
   assert.doesNotMatch(script, /innerHTML|insertAdjacentHTML|eval\(/);
 });
+test('Windows Alpha UI exposes only implemented OpenCode workflow actions', async () => {
+  const [html, script] = await Promise.all([
+    readFile(join(rendererRoot, 'index.html'), 'utf8'),
+    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
+  ]);
+  assert.match(html, /id="alpha-workflow"/);
+  for (const step of ['project', 'worktree', 'runtime', 'review', 'archive']) {
+    assert.match(html, new RegExp('data-step="' + step + '"'));
+  }
+  for (const action of ['stage', 'commit', 'archive', 'safeCleanup']) {
+    assert.match(html, new RegExp('data-action="' + action + '"'));
+  }
+  for (const method of ['stage', 'commit', 'archive', 'decidePermission', 'answerInput']) {
+    assert.match(script, new RegExp('workspace\\.' + method));
+  }
+  for (const unavailable of ['data-action="merge"', 'data-runtime="claude"', 'data-runtime="acp"', 'data-platform=']) {
+    assert.doesNotMatch(html, new RegExp(unavailable));
+  }
+  assert.doesNotMatch(script, /child_process|node:fs|shell:/);
+});

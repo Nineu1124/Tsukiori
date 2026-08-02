@@ -60,7 +60,7 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
   assert.equal(result.fakeRuntimeAliveAfterRendererCrash, true);
   assert.equal(result.fakeRuntimeEventCount, 1);
   assert.deepEqual(result.rendererState, {
-    permissionCards: 1, toolCards: 1, attentionItems: 1,
+    permissionCards: 1, toolCards: 1, attentionItems: 4,
     permissionCategory: 'shell', enforcementLevel: 'interceptable',
     runtimeCards: 2, runtimeAuthSource: 'chatgpt', runtimeCompatibility: 'supported',
     nativeCapabilityRows: 5,
@@ -72,7 +72,14 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
     openCodeProvider: 'dpsk', openCodeModel: 'deepseek-v4-flash',
     openCodeDestination: 'api.deepseek.com', modelRequestStarted: 'false',
     modelRequestState: '模型请求尚未启动',
+    alphaVisible: true, alphaPhase: 'review', alphaDestination: 'api.deepseek.com',
+    workflowSteps: 5, changedFiles: 1,
+    alphaActionNames: ['stage', 'commit', 'archive', 'safeCleanup'],
+    attentionKinds: ['waiting_permission', 'waiting_input', 'completed', 'failed'],
+    prohibitedActionCount: 0,
   });
+  assert.deepEqual(result.alphaCommandResult, { ok: true, command: 'stage', sequence: 1 });
+  assert.equal(result.smokeCommandCount, 1);
   assert.equal(result.daemonVersion, '0.1.0');
   assert.equal(result.protocolVersion, 1);
 });

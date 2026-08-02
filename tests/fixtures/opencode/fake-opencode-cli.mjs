@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 const configPath = process.argv[2];
 if (!configPath) process.exit(2);
@@ -141,7 +141,7 @@ const server = createServer(async (request, response) => {
     const id = 'session-fixture-' + (sessions.size + 1);
     const session = {
       id, title: input.title, input, messages: [], status: 'idle',
-      promptCount: 0, pendingPermission: null,
+      promptCount: 0, pendingPermission: null, pendingQuestion: null,
     };
     sessions.set(id, session);
     publish(event('session.created', { sessionID: id, info: { id, title: input.title } }));
@@ -174,6 +174,44 @@ const server = createServer(async (request, response) => {
     session.status = 'idle';
     session.pendingPermission = null;
     publish(event('session.idle', { sessionID: session.id }));
+    send(response, 200, true);
+    return;
+  }
+  const questionReplyMatch = url.pathname.match(/^\/question\/([^/]+)\/reply$/);
+  if (request.method === 'POST' && questionReplyMatch) {
+    const input = await body(request);
+    const session = [...sessions.values()].find(
+      (item) => item.pendingQuestion === questionReplyMatch[1],
+    );
+    if (!session || !Array.isArray(input.answers)) {
+      send(response, 404, { error: 'missing' });
+      return;
+    }
+    publish(event('question.replied', {
+      sessionID: session.id,
+      requestID: questionReplyMatch[1],
+      answers: input.answers.map(() => ['<sanitized>']),
+    }));
+    session.pendingQuestion = null;
+    completeSession(session);
+    send(response, 200, true);
+    return;
+  }
+  const questionRejectMatch = url.pathname.match(/^\/question\/([^/]+)\/reject$/);
+  if (request.method === 'POST' && questionRejectMatch) {
+    const session = [...sessions.values()].find(
+      (item) => item.pendingQuestion === questionRejectMatch[1],
+    );
+    if (!session) {
+      send(response, 404, { error: 'missing' });
+      return;
+    }
+    publish(event('question.rejected', {
+      sessionID: session.id,
+      requestID: questionRejectMatch[1],
+    }));
+    session.pendingQuestion = null;
+    completeSession(session);
     send(response, 200, true);
     return;
   }
@@ -236,9 +274,36 @@ const server = createServer(async (request, response) => {
       sessionID: session.id, time: Date.now(),
       part: { id: 'part-tool', sessionID: session.id, messageID: 'message-assistant', type: 'tool', tool: 'fixture', state: { status: 'completed' } },
     }));
+    if (config.writeFixtureFile) {
+      writeFileSync('alpha-runtime.txt', 'sanitized fake Runtime change\n', 'utf8');
+    }
     if (config.holdFirstTurn && session.promptCount === 1) {
       send(response, 204, '');
       return;
+    }
+    if (config.emitQuestionFlow || config.holdQuestion) {
+      session.pendingQuestion = 'question-fixture-' + session.id;
+      publish(event('question.asked', {
+        id: session.pendingQuestion,
+        sessionID: session.id,
+        questions: [{
+          question: '<sanitized>',
+          header: 'Fixture',
+          options: [{ label: 'Continue', description: '<sanitized>' }],
+          multiple: false,
+          custom: true,
+        }],
+      }));
+      if (config.holdQuestion) {
+        send(response, 204, '');
+        return;
+      }
+      publish(event('question.replied', {
+        sessionID: session.id,
+        requestID: session.pendingQuestion,
+        answers: [['<sanitized>']],
+      }));
+      session.pendingQuestion = null;
     }
     if (config.emitPermissionFlow || config.holdPermission) {
       session.pendingPermission = 'permission-fixture-' + session.id;

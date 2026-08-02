@@ -3420,15 +3420,15 @@ src/helpers/
 
 ### T3.4 OpenCode Alpha 用户闭环
 
-- [ ] 完成 OpenCode Windows Alpha UI 与 E2E
+- [x] 完成 OpenCode Windows Alpha UI 与 E2E
 - 前置依赖：T3.2、T3.3、T2.4
 - 交付物：Alpha UI、Diff/Commit/Archive 流程、E2E 报告
 - Checkpoints：
-  - [ ] 用户可完成“项目 → Worktree → OpenCode + DeepSeek → 修改”
-  - [ ] Attention Center 可处理权限、输入、完成和失败事项
-  - [ ] 用户可 Review Diff、Commit、归档并安全清理
-  - [ ] Alpha 不展示尚未实现的 Merge、Claude、ACP 或跨平台可操作入口
-  - [ ] Windows Alpha E2E 在干净环境中可重复通过
+  - [x] 用户可完成“项目 → Worktree → OpenCode + DeepSeek → 修改”
+  - [x] Attention Center 可处理权限、输入、完成和失败事项
+  - [x] 用户可 Review Diff、Commit、归档并安全清理
+  - [x] Alpha 不展示尚未实现的 Merge、Claude、ACP 或跨平台可操作入口
+  - [x] Windows Alpha E2E 在干净环境中可重复通过
 
 ### G3 阶段 3 Gate
 

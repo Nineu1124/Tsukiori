@@ -6,6 +6,7 @@ const attentionCount = document.querySelector('#attention-count');
 const permissionList = document.querySelector('#permission-list');
 const toolList = document.querySelector('#tool-list');
 const runtimeList = document.querySelector('#runtime-list');
+const alphaWorkflow = document.querySelector('#alpha-workflow');
 
 function setField(root, name, value) {
   const target = root.querySelector('[data-field="' + name + '"]');
@@ -21,6 +22,13 @@ function renderPermission(permission) {
   setField(card, 'risk', permission.risk);
   setField(card, 'scope', permission.scope);
   setField(card, 'enforcement', permission.enforcementLevel);
+  const [deny, allow] = card.querySelectorAll('.permission-actions button');
+  deny.addEventListener('click', () => runAction(deny, () => window.tsukiori.workspace.decidePermission(
+    permission.id, permission.connectionEpoch, 'deny_once',
+  )));
+  allow.addEventListener('click', () => runAction(allow, () => window.tsukiori.workspace.decidePermission(
+    permission.id, permission.connectionEpoch, 'allow_once',
+  )));
   permissionList.append(card);
 }
 
@@ -113,6 +121,64 @@ function renderRuntime(runtime) {
   renderProviderSelection(card, runtime);
   runtimeList.append(card);
 }
+async function runAction(button, operation) {
+  const original = button.textContent;
+  button.disabled = true;
+  try {
+    const result = await operation();
+    button.textContent = result?.ok === false ? '不可用' : '已提交';
+  } catch {
+    button.textContent = '操作失败';
+  } finally {
+    setTimeout(() => { button.disabled = false; button.textContent = original; }, 800);
+  }
+}
+
+function renderAlphaWorkflow(workflow) {
+  if (!workflow) return;
+  alphaWorkflow.hidden = false;
+  setField(alphaWorkflow, 'phase', workflow.phase);
+  setField(alphaWorkflow, 'project', workflow.project.name + ' · ' + workflow.project.environment);
+  setField(alphaWorkflow, 'worktree', workflow.binding.type + ' · ' + workflow.binding.branch);
+  setField(alphaWorkflow, 'runtime', workflow.runtime.version + ' · ' + workflow.runtime.model);
+  setField(alphaWorkflow, 'alphaDestination', workflow.runtime.destinationHost);
+  const fileList = alphaWorkflow.querySelector('[data-field="changedFiles"]');
+  for (const file of workflow.files ?? []) {
+    const item = document.createElement('li');
+    const choice = document.createElement('input');
+    choice.type = 'checkbox';
+    choice.checked = Boolean(file.selected);
+    choice.dataset.path = String(file.path);
+    const label = document.createElement('span');
+    label.textContent = String(file.path) + ' · ' + String(file.state);
+    item.append(choice, label);
+    fileList.append(item);
+  }
+  setField(alphaWorkflow, 'diffPreview', workflow.diff?.content ?? 'Diff unavailable');
+  const status = alphaWorkflow.querySelector('[data-field="actionStatus"]');
+  const stage = alphaWorkflow.querySelector('[data-action="stage"]');
+  const commit = alphaWorkflow.querySelector('[data-action="commit"]');
+  const archive = alphaWorkflow.querySelector('[data-action="archive"]');
+  const cleanup = alphaWorkflow.querySelector('[data-action="safeCleanup"]');
+  stage.disabled = workflow.actions?.stage !== true;
+  commit.disabled = workflow.actions?.commit !== true;
+  cleanup.disabled = workflow.actions?.safeCleanup !== true;
+  stage.addEventListener('click', () => runAction(stage, async () => {
+    const paths = [...fileList.querySelectorAll('input:checked')].map((input) => input.dataset.path);
+    const result = await window.tsukiori.workspace.stage(paths);
+    status.textContent = result?.ok === false ? 'Stage 不可用' : 'Stage 已提交';
+    return result;
+  }));
+  commit.addEventListener('click', () => runAction(commit, async () => {
+    const subject = alphaWorkflow.querySelector('[data-field="commitSubject"]').value;
+    const result = await window.tsukiori.workspace.commit(subject);
+    status.textContent = result?.ok === false ? 'Commit 不可用' : 'Commit 已提交';
+    return result;
+  }));
+  archive.addEventListener('click', () => runAction(archive, () => window.tsukiori.workspace.archive('retain')));
+  cleanup.addEventListener('click', () => runAction(cleanup, () => window.tsukiori.workspace.archive('run')));
+}
+
 function renderAttention(item) {
   const card = document.createElement('article');
   card.className = 'attention-item ' + item.kind;
@@ -122,6 +188,25 @@ function renderAttention(item) {
   const title = document.createElement('strong');
   title.textContent = item.title;
   card.append(label, title);
+  if (item.kind === 'waiting_input') {
+    const input = document.createElement('input');
+    input.maxLength = 512;
+    input.placeholder = '输入回答';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = '提交输入';
+    button.addEventListener('click', () => runAction(button, () => window.tsukiori.workspace.answerInput(
+      item.sourceRef, [[input.value]],
+    )));
+    card.append(input, button);
+  }
+  if (item.kind === 'completed') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Review Diff';
+    button.addEventListener('click', () => alphaWorkflow.scrollIntoView({ block: 'start' }));
+    card.append(button);
+  }
   attentionList.append(card);
 }
 
@@ -134,6 +219,7 @@ try {
   status.textContent = 'Daemon ' + daemon.daemonVersion + ' · ' + daemon.state;
   daemonDot.classList.add('healthy');
   version.textContent = 'Protocol ' + versions.protocol;
+  renderAlphaWorkflow(snapshot.workflow);
   for (const tool of snapshot.tools) renderTool(tool);
   for (const runtime of snapshot.runtimes) renderRuntime(runtime);
   for (const permission of snapshot.permissions) renderPermission(permission);

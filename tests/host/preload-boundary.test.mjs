@@ -25,6 +25,11 @@ test('Renderer is sandboxed and receives only the fixed Preload API', async () =
   assert.match(preload, /contextBridge\.exposeInMainWorld\('tsukiori'/);
   assert.match(preload, /ipcRenderer\.invoke\('host:versions'\)/);
   assert.match(preload, /ipcRenderer\.invoke\('daemon:status'\)/);
+  assert.match(preload, /ipcRenderer\.invoke\('workspace:snapshot'\)/);
+  assert.match(preload, /ipcRenderer\.invoke\('workspace:command'/);
+  for (const command of ['stage', 'commit', 'archive', 'permission', 'answer_input']) {
+    assert.match(preload, new RegExp("type: '" + command + "'"));
+  }
   assert.doesNotMatch(preload, /ipcRenderer\.(send|sendSync|on|once)\(/);
   assert.doesNotMatch(preload, /child_process|node:fs|node:net/);
 });

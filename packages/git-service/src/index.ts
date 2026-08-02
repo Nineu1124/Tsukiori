@@ -60,6 +60,15 @@ export type DiffResult = {
   headCommit: string;
 };
 
+export type GitCommitResult = {
+  sessionId: string;
+  worktreeId: string;
+  branch: string;
+  commitHash: string;
+  subject: string;
+  stagedPaths: string[];
+};
+
 type GitContext = {
   sessionId: string;
   project: Project;
@@ -170,6 +179,54 @@ export class GitDiffService {
       commit: this.diff(sessionId, 'session-commit'),
       staged: this.diff(sessionId, 'staged'),
       working: this.diff(sessionId, 'working'),
+    };
+  }
+
+  stage(sessionId: string, filePaths: readonly string[]): GitStatusSnapshot {
+    const context = this.#context(sessionId);
+    if (filePaths.length === 0 || filePaths.length > 256) {
+      throw new GitServiceError('Stage requires between 1 and 256 paths');
+    }
+    const paths = [...new Set(filePaths.map((value) => this.#relativePath(value)))];
+    const changed = new Set(this.status(sessionId).files.map((file) => file.path));
+    if (paths.some((path) => !changed.has(path))) {
+      throw new GitServiceError('Stage path is not present in the Session change set');
+    }
+    this.#git(context, ['add', '--', ...paths]);
+    return this.status(sessionId);
+  }
+
+  commit(sessionId: string, subjectValue: string): GitCommitResult {
+    const context = this.#context(sessionId);
+    const subject = subjectValue.trim();
+    if (!subject || subject.length > 200 || /[\r\n\0]/.test(subject)) {
+      throw new GitServiceError('Commit subject must be one line between 1 and 200 characters');
+    }
+    const before = this.status(sessionId);
+    if (before.files.some((file) => file.conflict)) throw new GitServiceError('Conflicts block Commit');
+    const stagedPaths = before.files.filter((file) => file.staged).map((file) => file.path);
+    if (stagedPaths.length === 0) throw new GitServiceError('Commit requires staged changes');
+    const previousHead = before.headCommit;
+    this.#git(context, [
+      '-c', 'core.hooksPath=NUL',
+      '-c', 'commit.gpgSign=false',
+      'commit', '--no-gpg-sign', '--no-verify', '-m', subject,
+    ]);
+    const commitHash = this.#head(context);
+    if (commitHash === previousHead) throw new GitServiceError('Commit did not advance HEAD');
+    const at = Date.now();
+    this.#database.saveWorkspaceBinding({
+      ...context.binding,
+      lastKnownCommit: commitHash,
+      updatedAt: Math.max(at, context.binding.updatedAt + 1),
+    });
+    return {
+      sessionId,
+      worktreeId: context.worktree.id,
+      branch: this.#git(context, ['branch', '--show-current']).stdout.trim(),
+      commitHash,
+      subject,
+      stagedPaths,
     };
   }
 

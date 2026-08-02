@@ -178,6 +178,17 @@ export class PermissionBroker {
     return this.#upsertAttention({ ...input, id: input.id ?? 'attention:' + this.#id() });
   }
 
+  resolveAttention(kind: AttentionKind, sourceRef: string): boolean {
+    if (!attentionKinds.has(kind)) throw new Error('Unsupported attention kind');
+    if (!sourceRef.trim()) throw new Error('Attention source reference is required');
+    this.#database.assertPersistenceSafe({ kind, sourceRef });
+    const at = this.#now();
+    return this.#database.sqlite.prepare(`
+      UPDATE attention_items SET status='resolved', updated_at=?, resolved_at=?
+      WHERE kind=? AND source_ref=? AND status='open'
+    `).run(at, at, kind, sourceRef).changes === 1;
+  }
+
   invalidateEpoch(runtimeHandleId: string, connectionEpoch: string, reason = 'runtime_reconnected'): number {
     this.#database.assertPersistenceSafe({ reason });
     const rows = this.#database.sqlite.prepare(`

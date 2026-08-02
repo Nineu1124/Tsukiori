@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "task": "T3.4",
+  "platform": "windows-native",
+  "runtime": "opencode/1.18.4",
+  "provider": {
+    "id": "dpsk",
+    "model": "deepseek-v4-flash",
+    "destinationHost": "api.deepseek.com",
+    "realProviderEvidence": "tests/fixtures/opencode/t3.1-result.json"
+  },
+  "workflow": ["project", "isolated-worktree", "runtime-change", "attention", "diff", "stage", "commit", "archive", "safe-cleanup"],
+  "attentionKinds": ["waiting_permission", "waiting_input", "completed", "failed"],
+  "hiddenEntryPoints": ["merge", "claude", "acp", "wsl", "macos", "linux"],
+  "repeatableCleanEnvironmentRuns": 2,
+  "dirtyCleanupPreservesCode": true,
+  "containsCredentials": false,
+  "persistedPromptOrSource": false
+}

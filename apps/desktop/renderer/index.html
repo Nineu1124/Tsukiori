@@ -30,6 +30,32 @@
             <h2>本地会话已准备</h2>
             <p>Runtime 工具调用、权限请求和恢复事件会在这里按时间显示。</p>
           </article>
+          <section id="alpha-workflow" class="alpha-workflow" aria-label="OpenCode Alpha workflow" hidden>
+            <div class="alpha-heading">
+              <div><p class="card-kicker">WINDOWS ALPHA</p><h2>OpenCode 工作流</h2></div>
+              <span data-field="phase" class="alpha-phase"></span>
+            </div>
+            <ol class="workflow-steps" aria-label="Alpha workflow steps">
+              <li data-step="project"><strong>Project</strong><small data-field="project"></small></li>
+              <li data-step="worktree"><strong>Worktree</strong><small data-field="worktree"></small></li>
+              <li data-step="runtime"><strong>OpenCode + DeepSeek</strong><small data-field="runtime"></small></li>
+              <li data-step="review"><strong>Review &amp; Commit</strong><small>结构化 Git 操作</small></li>
+              <li data-step="archive"><strong>Archive</strong><small>干净状态才安全清理</small></li>
+            </ol>
+            <div class="alpha-provider-boundary">数据出口：<strong data-field="alphaDestination"></strong></div>
+            <div class="change-review">
+              <div><p class="section-label">CHANGED FILES</p><ul data-field="changedFiles"></ul></div>
+              <div><p class="section-label">DIFF PREVIEW</p><pre data-field="diffPreview"></pre></div>
+            </div>
+            <div class="alpha-actions">
+              <button type="button" data-action="stage">Stage selected</button>
+              <label>Commit subject<input data-field="commitSubject" value="feat: apply reviewed changes" maxlength="200" /></label>
+              <button type="button" data-action="commit" class="primary">Commit</button>
+              <button type="button" data-action="archive">Archive</button>
+              <button type="button" data-action="safeCleanup" disabled>Safe cleanup</button>
+              <span data-field="actionStatus" aria-live="polite"></span>
+            </div>
+          </section>
           <section class="runtime-section" aria-label="Runtime status">
             <p class="section-label">RUNTIMES</p>
             <div id="runtime-list"></div>

@@ -170,3 +170,43 @@ test('all Git calls use structured arguments, shell false, bound cwd, and path s
   assert.equal(pathCalls.every((invocation) => invocation.args.indexOf('--') < invocation.args.indexOf('README.md')), true);
   assert.throws(() => service.diff(f.sessionIds[0], 'working', '..\\outside.txt'), GitServiceError);
 });
+
+test('structured Stage and Commit stay inside the bound Worktree and update traceability', (t) => {
+  const f = fixture(t);
+  const binding = f.createWorkspace();
+  writeFileSync(join(binding.path, 'README.md'), '# alpha change\n');
+  writeFileSync(join(binding.path, 'alpha.txt'), 'alpha\n');
+  const invocations = [];
+  const service = f.service({ observeInvocation: (invocation) => invocations.push(invocation) });
+
+  let status = service.stage(f.sessionIds[0], ['README.md', 'alpha.txt']);
+  assert.equal(status.files.length, 2);
+  assert.equal(status.files.every((file) => file.staged), true);
+  assert.equal(service.diff(f.sessionIds[0], 'staged').available, true);
+
+  const committed = service.commit(f.sessionIds[0], 'feat: alpha workflow');
+  assert.match(committed.commitHash, /^[a-f0-9]{40,64}$/);
+  assert.equal(committed.worktreeId, binding.worktreeId);
+  assert.deepEqual(committed.stagedPaths, ['alpha.txt', 'README.md']);
+  status = service.status(f.sessionIds[0]);
+  assert.equal(status.clean, true);
+  assert.equal(f.database.readWorkspaceBinding(f.sessionIds[0]).lastKnownCommit, committed.commitHash);
+
+  const commitInvocation = invocations.find((item) => item.args.includes('commit'));
+  assert.equal(commitInvocation.shell, false);
+  assert.equal(commitInvocation.cwd.toLowerCase(), binding.path.toLowerCase());
+  assert.equal(commitInvocation.args.includes('core.hooksPath=NUL'), true);
+  assert.equal(commitInvocation.args.includes('commit.gpgSign=false'), true);
+  assert.throws(() => service.commit(f.sessionIds[0], 'nothing staged'), /staged changes/);
+});
+
+test('Stage and Commit reject path escapes, unchanged paths, conflicts, and multiline subjects', (t) => {
+  const f = fixture(t);
+  const binding = f.createWorkspace();
+  writeFileSync(join(binding.path, 'README.md'), '# guarded\n');
+  const service = f.service();
+  assert.throws(() => service.stage(f.sessionIds[0], ['..\\outside.txt']), GitServiceError);
+  assert.throws(() => service.stage(f.sessionIds[0], ['large.txt']), /change set/);
+  service.stage(f.sessionIds[0], ['README.md']);
+  assert.throws(() => service.commit(f.sessionIds[0], 'bad\nsubject'), /one line/);
+});

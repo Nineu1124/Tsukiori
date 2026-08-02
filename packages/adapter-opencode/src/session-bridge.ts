@@ -50,6 +50,10 @@ export class OpenCodeSessionBridge {
     runtimeSessionId: string;
     connectionEpoch: string;
   }>();
+  readonly #pendingQuestions = new Map<string, {
+    hostSessionId: string;
+    runtimeSessionId: string;
+  }>();
   readonly #cancellingSessions = new Set<string>();
   #connectionEpoch: string;
   #streamState: StreamState = 'stopped';
@@ -196,6 +200,41 @@ export class OpenCodeSessionBridge {
     return audit;
   }
 
+  async answerQuestion(
+    hostSessionId: string,
+    requestId: string,
+    answers: readonly (readonly string[])[],
+  ): Promise<void> {
+    const pending = this.#question(hostSessionId, requestId);
+    const normalized = answers.map((answer) => answer.map((value) => String(value)));
+    if (normalized.length === 0 || normalized.length > 32
+      || normalized.some((answer) => answer.length === 0 || answer.length > 16
+        || answer.some((value) => value.length === 0 || value.length > 512 || value.includes('\0')))) {
+      throw new OpenCodeBridgeError('OpenCode Question answers are invalid');
+    }
+    unwrap(await this.#client.question.reply({
+      directory: this.#directory,
+      requestID: requestId,
+      answers: normalized,
+    }), 'question.reply');
+    this.#pendingQuestions.delete(requestId);
+    this.#permissions.resolveAttention('waiting_input', requestId);
+    const host = this.#session(pending.hostSessionId);
+    this.#database.saveSession({ ...host, activity: 'running', updatedAt: this.#now() });
+  }
+
+  async rejectQuestion(hostSessionId: string, requestId: string): Promise<void> {
+    const pending = this.#question(hostSessionId, requestId);
+    unwrap(await this.#client.question.reject({
+      directory: this.#directory,
+      requestID: requestId,
+    }), 'question.reject');
+    this.#pendingQuestions.delete(requestId);
+    this.#permissions.resolveAttention('waiting_input', requestId);
+    const host = this.#session(pending.hostSessionId);
+    this.#database.saveSession({ ...host, activity: 'running', updatedAt: this.#now() });
+  }
+
   async cancelTurn(hostSessionId: string): Promise<void> {
     const host = this.#session(hostSessionId);
     if (!host.runtimeSessionId) throw new OpenCodeBridgeError('Host Session is not bound to OpenCode');
@@ -290,6 +329,7 @@ export class OpenCodeSessionBridge {
       expected ? 'runtime_stopped' : 'runtime_exited',
     );
     this.#pendingPermissions.clear();
+    this.#invalidateQuestions(expected ? 'runtime_stopped' : 'runtime_exited', !expected);
     for (const [runtimeSessionId, hostSessionId] of this.#runtimeToHost.entries()) {
       const host = this.#session(hostSessionId);
       const hostTurnId = this.#activeTurns.get(runtimeSessionId);
@@ -300,6 +340,16 @@ export class OpenCodeSessionBridge {
         health: expected ? host.health : 'interrupted_runtime',
         updatedAt: this.#now(),
       });
+      if (!expected) {
+        this.#permissions.addAttention({
+          projectId: host.projectId,
+          sessionId: host.id,
+          kind: 'failed',
+          title: 'OpenCode Runtime 意外退出',
+          sourceRef: 'runtime-exit:' + this.#handleId + ':' + host.id,
+          payload: { code: 'runtime_exited' },
+        });
+      }
     }
     this.#activeTurns.clear();
   }
@@ -316,6 +366,7 @@ export class OpenCodeSessionBridge {
       'runtime_reconnected',
     );
     this.#pendingPermissions.clear();
+    this.#invalidateQuestions('runtime_reconnected', true);
     this.#connectionEpoch = newConnectionEpoch;
     for (const event of this.#normalizer.changeConnectionEpoch(newConnectionEpoch)) this.#persist(event);
     const health = object(unwrap(await this.#client.global.health(), 'global.health(recovery)'));
@@ -583,23 +634,72 @@ export class OpenCodeSessionBridge {
       return;
     }
     if (type === 'question.asked' || type === 'question.v2.asked') {
+      const requestId = String(properties.id ?? properties.requestID ?? '');
+      if (requestId) {
+        this.#pendingQuestions.set(requestId, { hostSessionId, runtimeSessionId });
+        this.#permissions.addAttention({
+          projectId: host.projectId,
+          sessionId: host.id,
+          kind: 'waiting_input',
+          title: 'OpenCode 等待用户输入',
+          sourceRef: requestId,
+          payload: {
+            requestId,
+            questionCount: Array.isArray(properties.questions) ? properties.questions.length : 0,
+            persistedQuestionText: false,
+          },
+        });
+      }
       this.#database.saveSession({ ...host, activity: 'waiting_user_input', updatedAt: this.#now() });
       if (hostTurnId) this.#setTurn(hostTurnId, 'waiting_user_input');
       return;
     }
+    if (type === 'question.replied' || type === 'question.rejected'
+      || type === 'question.v2.replied' || type === 'question.v2.rejected') {
+      const requestId = String(properties.requestID ?? properties.id ?? '');
+      if (requestId) {
+        this.#pendingQuestions.delete(requestId);
+        this.#permissions.resolveAttention('waiting_input', requestId);
+      }
+      this.#database.saveSession({ ...host, activity: 'running', updatedAt: this.#now() });
+      if (hostTurnId) this.#setTurn(hostTurnId, 'running');
+      return;
+    }
     if (type === 'session.error') {
       const cancelling = this.#cancellingSessions.has(runtimeSessionId);
+      this.#resolveQuestionsForRuntime(runtimeSessionId);
       this.#database.saveSession({
         ...host, activity: 'idle', health: cancelling ? 'healthy' : 'error', updatedAt: this.#now(),
       });
       if (hostTurnId) this.#setTurn(hostTurnId, cancelling ? 'interrupted' : 'failed', true);
+      if (!cancelling && hostTurnId) {
+        this.#permissions.addAttention({
+          projectId: host.projectId,
+          sessionId: host.id,
+          kind: 'failed',
+          title: 'OpenCode Turn 执行失败',
+          sourceRef: 'turn:' + hostTurnId,
+          payload: { turnId: hostTurnId, code: 'runtime_session_error' },
+        });
+      }
       this.#activeTurns.delete(runtimeSessionId);
       return;
     }
     if (type === 'session.idle') {
       const cancelling = this.#cancellingSessions.has(runtimeSessionId);
+      this.#resolveQuestionsForRuntime(runtimeSessionId);
       this.#database.saveSession({ ...host, activity: 'idle', health: 'healthy', updatedAt: this.#now() });
       if (hostTurnId) this.#setTurn(hostTurnId, cancelling ? 'interrupted' : 'completed', true);
+      if (!cancelling && hostTurnId) {
+        this.#permissions.addAttention({
+          projectId: host.projectId,
+          sessionId: host.id,
+          kind: 'completed',
+          title: 'OpenCode Turn 已完成',
+          sourceRef: 'turn:' + hostTurnId,
+          payload: { turnId: hostTurnId },
+        });
+      }
       this.#activeTurns.delete(runtimeSessionId);
       return;
     }
@@ -647,6 +747,40 @@ export class OpenCodeSessionBridge {
     ).get('opencode', runtimeSessionId) as { id: string } | undefined;
     if (row) this.#runtimeToHost.set(runtimeSessionId, row.id);
     return row?.id;
+  }
+
+  #resolveQuestionsForRuntime(runtimeSessionId: string): void {
+    for (const [requestId, pending] of this.#pendingQuestions) {
+      if (pending.runtimeSessionId !== runtimeSessionId) continue;
+      this.#pendingQuestions.delete(requestId);
+      this.#permissions.resolveAttention('waiting_input', requestId);
+    }
+  }
+
+  #invalidateQuestions(reason: string, uncertain: boolean): void {
+    for (const [requestId, pending] of this.#pendingQuestions) {
+      this.#permissions.resolveAttention('waiting_input', requestId);
+      if (uncertain) {
+        const host = this.#session(pending.hostSessionId);
+        this.#permissions.addAttention({
+          projectId: host.projectId,
+          sessionId: host.id,
+          kind: 'recovery_uncertain',
+          title: '用户输入请求在 Runtime 连接变化后失效',
+          sourceRef: 'question-recovery:' + requestId,
+          payload: { requestId, reason },
+        });
+      }
+    }
+    this.#pendingQuestions.clear();
+  }
+
+  #question(hostSessionId: string, requestId: string): { hostSessionId: string; runtimeSessionId: string } {
+    const pending = this.#pendingQuestions.get(requestId);
+    if (!pending || pending.hostSessionId !== hostSessionId) {
+      throw new OpenCodeBridgeError('Pending OpenCode Question not found for Session');
+    }
+    return pending;
   }
 
   #session(id: string): HostSession {

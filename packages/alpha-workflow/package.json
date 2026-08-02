@@ -1,0 +1,23 @@
+{
+  "name": "@tsukiori/alpha-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@tsukiori/adapter-opencode": "workspace:*",
+    "@tsukiori/database": "workspace:*",
+    "@tsukiori/domain": "workspace:*",
+    "@tsukiori/git-service": "workspace:*",
+    "@tsukiori/permission-broker": "workspace:*",
+    "@tsukiori/project-manager": "workspace:*",
+    "@tsukiori/workspace-manager": "workspace:*"
+  }
+}

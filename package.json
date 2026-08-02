@@ -24,6 +24,7 @@
     "spike:windows": "node spikes/windows/harness.mjs",
     "test:opencode": "node --test spikes/opencode/*.test.mjs",
     "test:opencode-adapter": "pnpm run build && node --test tests/opencode-adapter/*.test.mjs",
+    "test:alpha": "pnpm run build && node --test tests/alpha-workflow/*.test.mjs",
     "probe:opencode-adapter": "pnpm run build && node scripts/probe-opencode-adapter.mjs",
     "spike:opencode": "node spikes/opencode/harness.mjs",
     "build": "turbo run build",

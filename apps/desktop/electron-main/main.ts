@@ -22,7 +22,19 @@ const workspaceSnapshot = smokeMode ? {
     id: 'smoke-permission', title: '运行 Git 状态检查', description: '无破坏的结构化命令探测',
     category: 'shell', risk: 'low', scope: 'git status', enforcementLevel: 'interceptable',
   }],
-  attention: [{ id: 'smoke-attention', kind: 'waiting_permission', status: 'open', title: '等待权限确认' }],
+  attention: [
+    { id: 'smoke-attention-permission', kind: 'waiting_permission', status: 'open',
+      title: '等待权限确认', sourceRef: 'smoke-permission',
+      actions: [{ id: 'allow_once', label: '允许一次' }, { id: 'deny_once', label: '拒绝' }] },
+    { id: 'smoke-attention-input', kind: 'waiting_input', status: 'open',
+      title: '等待用户输入', sourceRef: 'question-smoke',
+      actions: [{ id: 'answer_input', label: '提交输入' }] },
+    { id: 'smoke-attention-completed', kind: 'completed', status: 'open',
+      title: '上一轮已完成', sourceRef: 'turn-complete',
+      actions: [{ id: 'review_diff', label: 'Review Diff' }] },
+    { id: 'smoke-attention-failed', kind: 'failed', status: 'open',
+      title: '失败事项示例', sourceRef: 'turn-failed', actions: [] },
+  ],
   tools: [{ id: 'smoke-tool', title: 'Shell', summary: 'git status' }],
   runtimes: [{
     id: 'runtime-codex', runtimeType: 'codex', version: '0.146.0', state: 'ready',
@@ -48,8 +60,19 @@ const workspaceSnapshot = smokeMode ? {
     }],
     nativeCapabilities: [],
   }],
-} : { permissions: [], attention: [], tools: [], runtimes: [] };
+  workflow: {
+    phase: 'review',
+    project: { name: 'Local workspace', environment: 'Windows Native' },
+    binding: { type: 'isolated-worktree', branch: 'agent/opencode/alpha' },
+    runtime: { type: 'opencode', version: '1.18.4', provider: 'DeepSeek', model: 'deepseek-v4-flash',
+      destinationHost: 'api.deepseek.com' },
+    files: [{ path: 'alpha-runtime.txt', state: 'untracked', selected: true }],
+    diff: { scope: 'working', content: '+ sanitized fake Runtime change' },
+    actions: { stage: true, commit: true, archive: true, safeCleanup: false },
+  },
+} : { permissions: [], attention: [], tools: [], runtimes: [], workflow: null };
 let quitting = false;
+let smokeCommandCount = 0;
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -126,6 +149,18 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
           modelRequestState: document.querySelector(
             '.provider-panel[data-provider-id="dpsk"] [data-field="modelRequestState"]',
           )?.textContent,
+          alphaVisible: document.querySelector('#alpha-workflow')?.hidden === false,
+          alphaPhase: document.querySelector('#alpha-workflow [data-field="phase"]')?.textContent,
+          alphaDestination: document.querySelector('#alpha-workflow [data-field="alphaDestination"]')?.textContent,
+          workflowSteps: document.querySelectorAll('#alpha-workflow [data-step]').length,
+          changedFiles: document.querySelectorAll('#alpha-workflow [data-field="changedFiles"] li').length,
+          alphaActionNames: [...document.querySelectorAll('#alpha-workflow [data-action]')]
+            .map((element) => element.dataset.action),
+          attentionKinds: [...document.querySelectorAll('.attention-item')]
+            .map((element) => [...element.classList].find((name) => name !== 'attention-item')),
+          prohibitedActionCount: document.querySelectorAll(
+            '[data-action="merge"],[data-runtime="claude"],[data-runtime="acp"],[data-platform]',
+          ).length,
         });
       } else if (++attempts >= 40) {
         clearInterval(timer);
@@ -133,6 +168,10 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
       }
     }, 50);
   })`, true) as Record<string, unknown>;
+  const alphaCommandResult = await window.webContents.executeJavaScript(
+    `window.tsukiori.workspace.stage(['alpha-runtime.txt'])`,
+    true,
+  ) as Record<string, unknown>;
   const crash = new Promise<Electron.RenderProcessGoneDetails>((resolveCrash) => {
     window.webContents.once('render-process-gone', (_event, details) => resolveCrash(details));
   });
@@ -151,6 +190,8 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
         fakeRuntimeAliveAfterRendererCrash: fakeSession.activity === 'running' && fakeSession.health === 'healthy',
         fakeRuntimeEventCount: fakeRuntime.events.length,
         rendererState,
+        alphaCommandResult,
+        smokeCommandCount,
         daemonVersion: status.daemonVersion,
         protocolVersion: status.protocolVersion,
       }) +
@@ -169,6 +210,19 @@ ipcMain.handle('host:versions', () => ({
 }));
 
 ipcMain.handle('workspace:snapshot', () => workspaceSnapshot);
+ipcMain.handle('workspace:command', (_event, value: unknown) => {
+  if (!smokeMode || !value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, code: 'workflow_unavailable' };
+  }
+  const command = value as Record<string, unknown>;
+  const allowed = new Set(['stage', 'commit', 'archive', 'permission', 'answer_input']);
+  if (typeof command.type !== 'string' || !allowed.has(command.type)
+    || Buffer.byteLength(JSON.stringify(command)) > 8192) {
+    return { ok: false, code: 'invalid_command' };
+  }
+  smokeCommandCount += 1;
+  return { ok: true, command: command.type, sequence: smokeCommandCount };
+});
 ipcMain.handle('daemon:status', async () => {
   const status = await supervisor.probe();
   return {

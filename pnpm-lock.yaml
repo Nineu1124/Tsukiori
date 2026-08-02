@@ -88,6 +88,30 @@ importers:
         specifier: workspace:*
         version: link:../runtime-core
 
+  packages/alpha-workflow:
+    dependencies:
+      '@tsukiori/adapter-opencode':
+        specifier: workspace:*
+        version: link:../adapter-opencode
+      '@tsukiori/database':
+        specifier: workspace:*
+        version: link:../database
+      '@tsukiori/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@tsukiori/git-service':
+        specifier: workspace:*
+        version: link:../git-service
+      '@tsukiori/permission-broker':
+        specifier: workspace:*
+        version: link:../permission-broker
+      '@tsukiori/project-manager':
+        specifier: workspace:*
+        version: link:../project-manager
+      '@tsukiori/workspace-manager':
+        specifier: workspace:*
+        version: link:../workspace-manager
+
   packages/database:
     dependencies:
       '@tsukiori/domain':
