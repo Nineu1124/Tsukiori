@@ -11,9 +11,29 @@ const api = Object.freeze({
     snapshot: () => ipcRenderer.invoke('workspace:snapshot'),
     pickProject: () => ipcRenderer.invoke('workspace:command', { type: 'pick_project' }),
     refreshRuntimes: () => ipcRenderer.invoke('workspace:command', { type: 'refresh_runtimes' }),
-    createSession: (projectId) => ipcRenderer.invoke(
-      'workspace:command', { type: 'create_session', projectId },
+    createSession: (projectId, selection) => ipcRenderer.invoke(
+      'workspace:command', { type: 'create_session', projectId, ...(selection ?? {}) },
     ),
+    updateSessionOptions: (sessionId, selection) => ipcRenderer.invoke(
+      'workspace:command', { type: 'update_session_options', sessionId, ...(selection ?? {}) },
+    ),
+    updateSettings: (settings) => ipcRenderer.invoke(
+      'workspace:command', { type: 'update_settings', settings },
+    ),
+    saveProvider: (provider) => ipcRenderer.invoke(
+      'workspace:command', { type: 'save_provider', ...(provider ?? {}) },
+    ),
+    deleteProvider: (providerId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'delete_provider', providerId },
+    ),
+    testProvider: (providerId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'test_provider', providerId },
+    ),
+    exportSettings: () => ipcRenderer.invoke('workspace:command', { type: 'export_settings' }),
+    openWorktree: (sessionId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'open_worktree', sessionId },
+    ),
+    openUrl: (url) => ipcRenderer.invoke('workspace:command', { type: 'open_url', url }),
     sendPrompt: (sessionId, text) => ipcRenderer.invoke(
       'workspace:command', { type: 'send_prompt', sessionId, text },
     ),

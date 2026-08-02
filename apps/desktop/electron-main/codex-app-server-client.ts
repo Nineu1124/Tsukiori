@@ -20,6 +20,9 @@ export type CodexApproval = {
 export type CodexClientOptions = {
   cwd: string;
   launch: CodexLaunch;
+  environment?: Readonly<Record<string, string>>;
+  configArgs?: readonly string[];
+  model?: string;
   onNotification: (method: string, params: Record<string, unknown>) => void;
   onApproval: (approval: CodexApproval) => Promise<unknown>;
   onExit: (error: string | null) => void;
@@ -100,10 +103,10 @@ export class CodexAppServerClient {
     if (this.#child) throw new Error('Codex app-server 已启动');
     const child = spawn(
       this.#options.launch.executable,
-      [...this.#options.launch.prefixArgs, 'app-server'],
+      [...this.#options.launch.prefixArgs, 'app-server', ...(this.#options.configArgs ?? [])],
       {
         cwd: this.#options.cwd,
-        env: { ...process.env, NO_COLOR: '1', GIT_TERMINAL_PROMPT: '0' },
+        env: cleanProviderEnvironment(this.#options.environment),
         stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, shell: false,
       },
     );
@@ -136,6 +139,7 @@ export class CodexAppServerClient {
     const response = object(await this.request('thread/start', {
       cwd, sandbox: 'workspace-write', approvalPolicy: 'on-request',
       approvalsReviewer: 'user', ephemeral: false,
+      ...(this.#options.model ? { model: this.#options.model } : {}),
     }, 60_000));
     const id = object(response.thread).id;
     if (typeof id !== 'string') throw new Error('Codex thread/start 未返回 Thread ID');
@@ -241,4 +245,14 @@ function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function cleanProviderEnvironment(additions?: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
+  const environment = { ...process.env };
+  for (const key of [
+    'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
+    'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY',
+  ]) delete environment[key];
+  Object.assign(environment, additions ?? {}, { NO_COLOR: '1', GIT_TERMINAL_PROMPT: '0' });
+  return environment;
 }

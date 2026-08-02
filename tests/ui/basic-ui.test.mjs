@@ -7,137 +7,82 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const rendererRoot = join(root, 'apps', 'desktop', 'renderer');
 
-test('Session workspace includes Attention, Tool, Permission, and Runtime auth presentation surfaces', async () => {
-  const [html, script] = await Promise.all([
+async function rendererFiles() {
+  return Promise.all([
     readFile(join(rendererRoot, 'index.html'), 'utf8'),
     readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
-  ]);
-  assert.match(html, /id="attention-center"/);
-  assert.match(html, /id="session-timeline"/);
-  assert.match(html, /id="tool-card-template"/);
-  assert.match(html, /id="permission-card-template"/);
-  assert.match(html, /id="runtime-card-template"/);
-  assert.match(html, /认证来源/);
-  assert.match(html, /兼容性/);
-  assert.match(html, /CODEX NATIVE CAPABILITIES/);
-  assert.match(html, /PROVIDER &amp; DATA DESTINATION/);
-  assert.match(html, /数据出口/);
-  assert.match(html, /模型请求尚未启动/);
-  assert.match(html, /不自动提升为公共 Adapter 能力/);
-  for (const label of ['类别', '风险', '范围', 'Enforcement Level']) assert.match(html, new RegExp(label));
-  assert.match(script, /window\.tsukiori\.workspace\.snapshot\(\)/);
-  assert.match(script, /runtime\.authenticated/);
-  assert.match(script, /runtime\.nativeCapabilities/);
-  assert.match(script, /supportLevel/);
-  assert.match(script, /enforcementLevel/);
-  assert.match(script, /runtime_native/);
-  assert.match(script, /runtime\.providers/);
-  assert.match(script, /destinationHost/);
-  assert.match(script, /modelRequestStarted/);
-  assert.match(script, /textContent/);
-  assert.doesNotMatch(script, /innerHTML|insertAdjacentHTML|eval\(/);
-});
-
-test('interactive workspace exposes real project, Codex turn, Worktree review, and commit controls', async () => {
-  const [html, script, preload] = await Promise.all([
-    readFile(join(rendererRoot, 'index.html'), 'utf8'),
-    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
+    readFile(join(rendererRoot, 'styles.css'), 'utf8'),
     readFile(join(root, 'apps', 'desktop', 'preload', 'index.cjs'), 'utf8'),
   ]);
-  for (const id of [
-    'add-project', 'project-list', 'session-list', 'new-session', 'conversation',
-    'prompt-input', 'send-prompt', 'interrupt-turn', 'git-files', 'git-diff',
-    'stage-files', 'unstage-files', 'commit-files',
-  ]) assert.match(html, new RegExp(`id="${id}"`));
-  for (const method of [
-    'pickProject', 'createSession', 'sendPrompt', 'interruptTurn', 'gitStatus',
-    'gitDiff', 'stage', 'unstage', 'commit', 'pollEvents',
-  ]) assert.match(script + preload, new RegExp(`workspace\\.${method}`));
-  assert.match(script, /snapshot\?\.mode === 'interactive'/);
-  assert.match(html, /独立 Git Worktree/);
-});
+}
 
-test('interactive workspace follows the V1.0 four-region layout and light design tokens', async () => {
-  const [html, styles, script] = await Promise.all([
-    readFile(join(rendererRoot, 'index.html'), 'utf8'),
-    readFile(join(rendererRoot, 'styles.css'), 'utf8'),
-    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
-  ]);
-  for (const id of [
-    'toggle-left-panel', 'toggle-right-panel', 'toggle-terminal', 'terminal-panel',
-    'terminal-output', 'runtime-select', 'model-select', 'environment-select',
-    'permission-select', 'session-context-path',
-  ]) assert.match(html, new RegExp(`id="${id}"`));
-  for (const view of ['permissions', 'changes']) {
-    assert.match(html, new RegExp(`data-panel-tab="${view}"`));
-    assert.match(html, new RegExp(`data-panel-view="${view}"`));
+test('main workspace matches the V1.0 four-region information architecture', async () => {
+  const [html,, styles] = await rendererFiles();
+  for (const id of ['project-list','session-list','conversation','prompt-input','terminal-panel','attention-center']) {
+    assert.match(html, new RegExp(`id="${id}"`));
   }
-  for (const token of [
-    '--tsukiori-bg: #f5fbff', '--tsukiori-primary: #258fe8',
-    '--tsukiori-primary-300: #4bb9ef', '--tsukiori-text: #20364b',
-    '--tsukiori-success: #45c995', '--tsukiori-warning: #f3c94f',
-    '--tsukiori-danger: #ef6b7c', '--tsukiori-special: #8e7bef',
-  ]) assert.ok(styles.toLowerCase().includes(token));
+  for (const label of ['侧边对话','文件','全部变更','浏览器']) assert.match(html, new RegExp(label));
+  for (const token of ['#f5fbff','#258fe8','#4bb9ef','#20364b','#526b80','#45c995','#f3c94f','#ef6b7c','#8e7bef']) {
+    assert.ok(styles.toLowerCase().includes(token));
+  }
   assert.match(styles, /grid-template:\s*40px minmax\(0,1fr\) \/ 300px minmax\(480px,1fr\) 300px/);
-  assert.match(styles, /grid-template-rows:\s*38px minmax\(140px,1fr\) auto 220px/);
-  assert.match(styles, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  assert.match(styles, /grid-template-rows:\s*48px 28px minmax\(140px,1fr\) auto 220px/);
   assert.match(styles, /\.chat-message\.user[\s\S]*justify-self:\s*end/);
   assert.match(styles, /\.chat-message\.assistant[\s\S]*background:\s*transparent/);
   assert.match(styles, /prefers-reduced-motion/);
-  assert.match(script, /classifyToolEvent/);
-  assert.match(script, /activateWorkPanel/);
-  assert.match(script, /terminal-collapsed/);
 });
-test('Windows Alpha UI exposes only implemented OpenCode workflow actions', async () => {
-  const [html, script] = await Promise.all([
-    readFile(join(rendererRoot, 'index.html'), 'utf8'),
-    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
-  ]);
-  assert.match(html, /id="alpha-workflow"/);
-  for (const step of ['project', 'worktree', 'runtime', 'review', 'archive']) {
-    assert.match(html, new RegExp('data-step="' + step + '"'));
+
+test('settings center exposes all specification categories and functional controls', async () => {
+  const [html, script] = await rendererFiles();
+  assert.match(html, /id="open-settings"/);
+  assert.match(html, /id="settings-dialog"/);
+  for (const page of ['general','appearance','account','agent','usage','projects','devices','github','shortcuts','billing','about']) {
+    assert.match(html, new RegExp(`data-settings-page="${page}"`));
+    assert.match(html, new RegExp(`data-settings-view="${page}"`));
   }
-  for (const action of ['stage', 'commit', 'archive', 'safeCleanup']) {
-    assert.match(html, new RegExp('data-action="' + action + '"'));
+  for (const id of ['save-settings','new-provider','save-provider','test-provider','delete-provider','settings-refresh-runtimes','export-settings']) {
+    assert.match(html, new RegExp(`id="${id}"`));
   }
-  for (const method of ['stage', 'commit', 'archive', 'decidePermission', 'answerInput']) {
-    assert.match(script, new RegExp('workspace\\.' + method));
+  for (const method of ['updateSettings','saveProvider','testProvider','deleteProvider','refreshRuntimes','exportSettings']) {
+    assert.match(script, new RegExp(`workspace\.${method}`));
   }
-  for (const unavailable of ['data-action="merge"', 'data-runtime="claude"', 'data-runtime="acp"', 'data-platform=']) {
-    assert.doesNotMatch(html, new RegExp(unavailable));
-  }
-  assert.doesNotMatch(script, /child_process|node:fs|shell:/);
 });
-test('V1 Git UI exposes audited operations and Integration Worktree boundaries', async () => {
-  const [html, script] = await Promise.all([
-    readFile(join(rendererRoot, 'index.html'), 'utf8'),
-    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
-  ]);
-  assert.match(html, /id="v1-git-workflow"/);
-  for (const action of ['unstage', 'revert', 'integrate', 'continue', 'external-editor']) {
-    assert.match(html, new RegExp('data-v1-action="' + action + '"'));
+
+test('Provider and Runtime selection includes API providers and two executable runtimes', async () => {
+  const [html, script,, preload] = await rendererFiles();
+  for (const kind of ['openai','anthropic','deepseek','openai-compatible','anthropic-compatible']) assert.match(html, new RegExp(`value="${kind}"`));
+  for (const id of ['runtime-select','provider-select','model-select','environment-select','permission-select','create-runtime','create-provider','create-model','create-permission']) {
+    assert.match(html, new RegExp(`id="${id}"`));
   }
-  assert.match(html, /Revert with snapshot/);
-  assert.match(html, /临时 Integration Worktree/);
-  assert.match(html, /更新目标分支需要再次明确确认/);
-  for (const method of ['unstage', 'revert', 'integrate', 'continueIntegration', 'openExternalEditor']) {
-    assert.match(script, new RegExp('workspace\\.' + method));
-  }
-  assert.doesNotMatch(script, /child_process|node:fs|spawn\(|exec\(/);
+  assert.doesNotMatch(html, /id="(?:runtime|provider|model|environment|permission)-select"[^>]*disabled/);
+  assert.match(script, /\['codex','claude'\]/);
+  for (const method of ['createSession','updateSessionOptions','saveProvider','testProvider']) assert.match(preload, new RegExp(method));
 });
-test('Diagnostic UI defaults safe and shows re-sanitized opt-in size before export', async () => {
-  const [html, script, preload] = await Promise.all([
-    readFile(join(rendererRoot, 'index.html'), 'utf8'),
-    readFile(join(rendererRoot, 'renderer.js'), 'utf8'),
-    readFile(join(root, 'apps/desktop/preload/index.cjs'), 'utf8'),
-  ]);
-  assert.match(html, /id="diagnostic-bundle"/);
+
+test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/EXECUTE semantics', async () => {
+  const [, script, styles] = await rendererFiles();
+  const workspace = await readFile(join(root, 'apps', 'desktop', 'electron-main', 'interactive-workspace.ts'), 'utf8');
+  assert.match(workspace, /\['agentMessage', 'userMessage'\]\.includes\(itemType\)/);
+  assert.match(script, /event\.type === 'user\.message'/);
+  assert.match(script, /function classifyToolEvent/);
+  assert.match(script, /return 'execute'/);
+  assert.match(script, /return 'modify'/);
+  assert.match(script, /return 'read'/);
+  assert.match(styles, /data-tool-kind="modify"/);
+  assert.match(styles, /data-tool-kind="execute"/);
+});
+
+test('Renderer uses a fixed preload surface and does not gain Node or HTML injection primitives', async () => {
+  const [, script,, preload] = await rendererFiles();
+  for (const method of ['snapshot','pickProject','createSession','sendPrompt','interruptTurn','gitStatus','gitDiff','stage','unstage','commit','pollEvents','openWorktree','openUrl']) {
+    assert.match(preload, new RegExp(method));
+  }
+  assert.doesNotMatch(script + preload, /innerHTML|insertAdjacentHTML|eval\(|child_process|node:fs|spawn\(|exec\(/);
+});
+
+test('legacy smoke fixtures remain isolated from the interactive product surface', async () => {
+  const [html, script] = await rendererFiles();
+  for (const id of ['legacy-workspace','alpha-workflow','v1-git-workflow','diagnostic-bundle','runtime-card-template','tool-card-template','permission-card-template']) assert.match(html,new RegExp(`id="${id}"`));
+  assert.match(script, /snapshot\?\.mode==='interactive'/);
   assert.match(html, /默认排除源码、完整 Prompt、Raw Payload、凭据和认证存储/);
-  assert.match(html, /包含再次脱敏的敏感预览/);
-  assert.match(html, /diagnosticEstimatedBytes/);
-  assert.match(script, /sensitiveEstimatedBytes/);
-  assert.match(script, /defaultEstimatedBytes/);
-  assert.match(script, /exportDiagnostic\(checkbox\.checked\)/);
-  assert.match(preload, /type: 'export_diagnostic'/);
-  assert.doesNotMatch(script + preload, /child_process|node:fs|spawn\(|exec\(|innerHTML/);
 });

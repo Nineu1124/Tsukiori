@@ -9,232 +9,153 @@
   </head>
   <body>
     <div class="app-shell">
-      <header class="titlebar" aria-label="应用标题栏">
-        <div class="titlebar-brand"><span class="brand-mark compact">月</span><strong>Tsukiori</strong><span>本地多 Agent 开发工作台</span></div>
+      <header class="titlebar">
+        <div class="titlebar-brand"><span class="star-logo" aria-hidden="true">✣</span><strong>Tsukiori</strong></div>
+        <div class="titlebar-center" aria-hidden="true"><span></span><i></i><span></span></div>
         <div class="titlebar-actions">
-          <button id="toggle-left-panel" type="button" aria-label="折叠项目与会话栏" title="折叠项目与会话栏">☰</button>
-          <button id="toggle-terminal" type="button" aria-label="显示或隐藏运行日志" title="显示或隐藏运行日志">⌁</button>
-          <button id="toggle-right-panel" type="button" aria-label="显示或隐藏工作面板" title="显示或隐藏工作面板">◫</button>
+          <button id="toggle-left-panel" type="button" title="折叠左栏">☰</button>
+          <button id="toggle-terminal" type="button" title="折叠终端">⌁</button>
+          <button id="toggle-right-panel" type="button" title="折叠工作面板">▣</button>
         </div>
       </header>
-      <aside class="session-rail" aria-label="Sessions">
-        <div class="brand"><span class="brand-mark">月</span><strong>Tsukiori</strong></div>
-        <p class="section-label">项目与会话</p>
-        <button id="legacy-session" class="session-row active" type="button">
-          <span class="presence running"></span><span><strong>Local workspace</strong><small>Fake Runtime · active</small></span>
-        </button>
-        <div id="interactive-navigation" hidden>
-          <button id="add-project" class="rail-action primary" type="button">＋ 添加本地项目</button>
-          <div id="project-list" class="rail-list" aria-label="Projects"></div>
-          <p class="section-label rail-subheading">AGENT 会话</p>
-          <button id="rail-new-session" class="rail-action rail-new-session" type="button">＋ 新建会话</button>
-          <div id="session-list" class="rail-list" aria-label="Agent Sessions"></div>
-        </div>
-        <div class="daemon-pill"><span class="presence" id="daemon-dot"></span><span id="status">连接 Daemon…</span></div>
+
+      <aside class="session-rail" aria-label="项目与会话">
+        <section class="workspace-identity">
+          <span class="workspace-avatar">✣</span>
+          <div><strong>星辉学院开发组</strong><small>本地工作区 · <span class="online-dot"></span> 已连接</small></div>
+          <button type="button" title="编辑工作区">⌕</button>
+        </section>
+        <button id="rail-new-session" class="new-chat" type="button"><span>新对话</span><b>＋</b></button>
+        <section id="interactive-navigation" class="navigation-body">
+          <header class="rail-section-header"><span>本地项目</span><div><button id="add-project" type="button" title="添加项目">＋</button><button type="button" title="项目筛选">☷</button></div></header>
+          <div id="project-list" class="project-list"></div>
+          <header class="rail-section-header history-heading"><span>对话历史</span><button id="history-search" type="button" title="搜索会话">⌕</button></header>
+          <div id="session-list" class="session-list"></div>
+        </section>
+        <section class="rail-runtime">
+          <button id="runtime-quick-switch" type="button"><span class="runtime-orb codex">C</span><span><strong>Codex</strong><small>点击切换 Runtime</small></span><b>⌄</b></button>
+        </section>
+        <footer class="rail-footer">
+          <button id="open-settings" type="button" title="设置">⚙</button>
+          <button id="rail-files" type="button" title="文件">▧</button>
+          <button id="rail-attention" type="button" title="通知">♧<span id="rail-attention-dot"></span></button>
+          <div class="daemon-status"><span class="presence" id="daemon-dot"></span><span id="status">连接 Daemon…</span></div>
+        </footer>
       </aside>
 
       <main class="workspace">
-        <section id="interactive-workspace" hidden>
-          <header class="workspace-header interactive-header">
-            <div><p id="interactive-eyebrow" class="eyebrow">LOCAL-FIRST / WINDOWS</p><h1 id="interactive-title">选择一个本地 Git 项目</h1></div>
-            <div class="workspace-meta"><span id="runtime-badge">Codex —</span><span id="interactive-version">Protocol —</span><span class="local-data-badge">文件留在本机</span></div>
-          </header>
-
-          <section id="onboarding" class="onboarding-card">
-            <div><p class="card-kicker">GET STARTED</p><h2>连接真实项目和 Runtime</h2></div>
-            <p>项目文件保留在本机。每个 Agent Session 默认创建独立 Git Worktree；Prompt 发送到你选择的模型服务。</p>
-            <div class="onboarding-actions">
-              <button id="onboarding-add-project" class="primary" type="button">选择 Git 项目</button>
-              <button id="refresh-runtimes" type="button">重新探测 Runtime</button>
-            </div>
+        <section id="interactive-workspace">
+          <section id="onboarding" class="empty-workspace">
+            <div class="empty-geometry" aria-hidden="true"><span>✣</span></div>
+            <p class="kicker">LOCAL MULTI-AGENT WORKSPACE</p>
+            <h1>把本地项目交给你选择的 Agent</h1>
+            <p>文件与工作台数据保留在本机；模型请求由 Runtime 直连你配置的 Provider。</p>
+            <div class="empty-actions"><button id="onboarding-add-project" class="primary" type="button">选择 Git 项目</button><button id="refresh-runtimes" type="button">探测 Runtime</button></div>
             <div id="runtime-overview" class="runtime-overview"></div>
             <p id="onboarding-status" class="operation-status" aria-live="polite"></p>
           </section>
 
-          <section id="project-home" class="project-home" hidden>
-            <div class="project-summary">
-              <div><p class="card-kicker">PROJECT</p><h2 id="project-name"></h2><p id="project-path"></p></div>
-              <button id="new-session" class="primary" type="button">＋ 新建 Codex Session</button>
-            </div>
-            <p class="boundary-note">新 Session 会从当前 HEAD 创建独立 Worktree，不直接修改主工作区。</p>
+          <section id="project-home" class="project-dashboard" hidden>
+            <header><div><span class="page-index">05</span><h1>项目概览</h1><p>首页 / 项目仪表盘</p></div><button id="new-session" class="primary" type="button">＋ 新建 Agent 会话</button></header>
+            <div class="project-hero"><div><p class="kicker">CURRENT PROJECT</p><h2 id="project-name"></h2><p id="project-path"></p></div><span class="project-branch">main</span></div>
+            <div class="metric-grid"><article><i>▧</i><span>Worktree</span><strong id="metric-worktrees">0</strong></article><article><i>◫</i><span>变更文件</span><strong id="metric-changes">0</strong></article><article><i>▷</i><span>运行中</span><strong id="metric-running">0</strong></article><article><i>◇</i><span>待处理</span><strong id="metric-attention">0</strong></article></div>
+            <div class="dashboard-grid"><section><header><strong>最近会话</strong><button id="dashboard-new-session" type="button">新建</button></header><div id="dashboard-sessions"></div></section><section><header><strong>Runtime 状态</strong></header><div id="dashboard-runtimes"></div></section></div>
           </section>
 
           <section id="active-session" hidden>
-            <div class="session-context" aria-label="会话执行环境">
-              <span class="status-dot"></span><strong>隔离 Worktree</strong><span id="session-context-path" class="mono"></span>
-            </div>
+            <header class="session-header">
+              <div><button id="session-back" type="button" title="返回项目">‹</button><div><h1 id="interactive-title">Agent Session</h1><p id="interactive-eyebrow">会话 / 独立 Worktree</p></div><button type="button" title="收藏">☆</button></div>
+              <div class="session-header-actions"><button id="header-new-session" type="button">＋</button><button type="button">•••</button><button id="header-work-panel" type="button" class="active">▣</button></div>
+            </header>
+            <div class="session-context"><span class="status-dot"></span><span id="runtime-badge">Runtime</span><span id="provider-badge">Provider</span><span id="session-context-path" class="mono"></span><span id="interactive-version">Protocol —</span></div>
             <div id="conversation" class="conversation" aria-label="Conversation">
-              <article class="welcome-message"><p class="card-kicker">SESSION</p><h2>开始一个真实任务</h2><p>输入任务后，Codex app-server 会在该 Session 的隔离 Worktree 中执行。</p></article>
+              <article class="welcome-message"><span>✣</span><div><strong>会话已准备</strong><p>选择 Runtime、Provider 与 Model，然后输入任务。</p></div></article>
             </div>
             <form id="prompt-form" class="composer">
-              <textarea id="prompt-input" maxlength="64000" rows="3" placeholder="交给 Codex 一个任务。Enter 发送，Shift+Enter 换行。"></textarea>
-              <div class="composer-selectors" aria-label="运行参数">
-                <label>Runtime<select id="runtime-select" disabled><option>Codex</option></select></label>
-                <label>Model<select id="model-select" disabled><option>Auto</option></select></label>
-                <label>Environment<select id="environment-select" disabled><option>Session Worktree</option></select></label>
-                <label>Permission<select id="permission-select" disabled><option>每次询问</option></select></label>
-              </div>
-              <div class="composer-actions">
-                <span id="turn-status" class="operation-status" aria-live="polite">Ready</span>
-                <button id="interrupt-turn" class="danger-quiet" type="button" disabled>中断当前回合</button>
-                <button id="send-prompt" class="primary" type="submit">发送</button>
+              <textarea id="prompt-input" maxlength="64000" rows="2" placeholder="输入消息，或使用 / 命令…"></textarea>
+              <div class="composer-bottom">
+                <div class="composer-selectors">
+                  <label><span class="selector-dot runtime"></span><select id="runtime-select" aria-label="Runtime"></select></label>
+                  <label><select id="provider-select" aria-label="Provider"></select></label>
+                  <label><select id="model-select" aria-label="Model"></select></label>
+                  <label><select id="environment-select" aria-label="Environment"><option value="windows-native">本地环境</option></select></label>
+                  <label><select id="permission-select" aria-label="Permission"></select></label>
+                </div>
+                <div class="composer-actions"><span id="turn-status" class="operation-status">Ready</span><button id="interrupt-turn" type="button" title="中断" disabled>■</button><button id="send-prompt" class="send-button" type="submit" title="发送">➤</button></div>
               </div>
             </form>
             <section id="terminal-panel" class="terminal-panel" aria-label="运行日志">
-              <header><div><span class="terminal-dot red"></span><span class="terminal-dot yellow"></span><span class="terminal-dot green"></span><strong>运行日志</strong><small>只读 · Runtime 与工具事件</small></div><button id="clear-terminal" type="button">清空显示</button></header>
-              <pre id="terminal-output" tabindex="0">Tsukiori runtime log ready. Prompt 与源码不会写入此面板。 </pre>
+              <header><div><button class="terminal-tab active" type="button">终端⌄</button><button type="button">＋</button></div><div><span>只读运行日志</span><button id="clear-terminal" type="button">清空</button><button id="terminal-collapse" type="button">⌃</button></div></header>
+              <pre id="terminal-output" tabindex="0">PS &gt; Tsukiori runtime log ready.</pre>
+              <div class="terminal-circuit" aria-hidden="true"></div>
             </section>
           </section>
         </section>
-
-        <div id="legacy-workspace">
-        <header class="workspace-header">
-          <div><p class="eyebrow">SESSION / LOCAL WORKSPACE</p><h1>多 Agent 工作台</h1></div>
-          <div class="workspace-meta"><span>isolated-worktree</span><span id="version">Protocol —</span></div>
-        </header>
-
-        <section id="session-timeline" class="timeline" aria-label="Session timeline">
-          <article class="message-card">
-            <div class="card-kicker">HOST</div>
-            <h2>本地会话已准备</h2>
-            <p>Runtime 工具调用、权限请求和恢复事件会在这里按时间显示。</p>
-          </article>
-          <section id="alpha-workflow" class="alpha-workflow" aria-label="OpenCode Alpha workflow" hidden>
-            <div class="alpha-heading">
-              <div><p class="card-kicker">WINDOWS ALPHA</p><h2>OpenCode 工作流</h2></div>
-              <span data-field="phase" class="alpha-phase"></span>
-            </div>
-            <ol class="workflow-steps" aria-label="Alpha workflow steps">
-              <li data-step="project"><strong>Project</strong><small data-field="project"></small></li>
-              <li data-step="worktree"><strong>Worktree</strong><small data-field="worktree"></small></li>
-              <li data-step="runtime"><strong>OpenCode + DeepSeek</strong><small data-field="runtime"></small></li>
-              <li data-step="review"><strong>Review &amp; Commit</strong><small>结构化 Git 操作</small></li>
-              <li data-step="archive"><strong>Archive</strong><small>干净状态才安全清理</small></li>
-            </ol>
-            <div class="alpha-provider-boundary">数据出口：<strong data-field="alphaDestination"></strong></div>
-            <div class="change-review">
-              <div><p class="section-label">CHANGED FILES</p><ul data-field="changedFiles"></ul></div>
-              <div><p class="section-label">DIFF PREVIEW</p><pre data-field="diffPreview"></pre></div>
-            </div>
-            <div class="alpha-actions">
-              <button type="button" data-action="stage">Stage selected</button>
-              <label>Commit subject<input data-field="commitSubject" value="feat: apply reviewed changes" maxlength="200" /></label>
-              <button type="button" data-action="commit" class="primary">Commit</button>
-              <button type="button" data-action="archive">Archive</button>
-              <button type="button" data-action="safeCleanup" disabled>Safe cleanup</button>
-              <span data-field="actionStatus" aria-live="polite"></span>
-            </div>
-          </section>
-          <section id="v1-git-workflow" class="v1-git-workflow" aria-label="V1 Git integration" hidden>
-            <div class="alpha-heading">
-              <div><p class="card-kicker">V1 GIT</p><h2>安全 Review 与 Integration</h2></div>
-              <span class="alpha-phase">explicit promotion</span>
-            </div>
-            <dl>
-              <div><dt>Revert 保护</dt><dd data-field="recoverySnapshot"></dd></div>
-              <div><dt>Integration 位置</dt><dd data-field="integrationLocation"></dd></div>
-              <div><dt>目标分支</dt><dd data-field="targetRef"></dd></div>
-              <div><dt>策略</dt><dd data-field="integrationStrategy"></dd></div>
-            </dl>
-            <p class="v1-boundary">合并先在临时 Integration Worktree 验证；更新目标分支需要再次明确确认。</p>
-            <div class="alpha-actions">
-              <button type="button" data-v1-action="unstage">Unstage selected</button>
-              <button type="button" data-v1-action="revert">Revert with snapshot</button>
-              <button type="button" data-v1-action="integrate" class="primary">Verify Integration</button>
-              <button type="button" data-v1-action="continue">Continue resolved conflict</button>
-              <button type="button" data-v1-action="external-editor">Open external editor</button>
-              <span data-field="v1ActionStatus" aria-live="polite"></span>
-            </div>
-          </section>
-          <section id="diagnostic-bundle" class="runtime-section" aria-label="Diagnostic bundle" hidden>
-            <p class="section-label">DIAGNOSTIC BUNDLE</p>
-            <h2>导出脱敏诊断包</h2>
-            <p>默认排除源码、完整 Prompt、Raw Payload、凭据和认证存储。</p>
-            <label><input type="checkbox" data-field="includeSensitivePreviews" />包含再次脱敏的敏感预览</label>
-            <p>预计未压缩大小：<strong data-field="diagnosticEstimatedBytes">0</strong> bytes</p>
-            <button type="button" data-action="exportDiagnostic">导出 .json.gz</button>
-            <span data-field="diagnosticStatus" aria-live="polite"></span>
-          </section>          <section class="runtime-section" aria-label="Runtime status">
-            <p class="section-label">RUNTIMES</p>
-            <div id="runtime-list"></div>
-          </section>
-          <div id="tool-list"></div>
-          <div id="permission-list"></div>
-        </section>
-        </div>
       </main>
 
       <aside id="attention-center" class="attention-panel" aria-label="工作面板">
-        <header><p class="eyebrow">WORK PANEL</p><h2>工作面板</h2><span id="attention-count" class="count">0</span></header>
-        <nav class="work-panel-tabs" aria-label="工作面板视图">
-          <button type="button" data-panel-tab="permissions" class="active">权限</button>
-          <button type="button" data-panel-tab="changes">全部变更</button>
-        </nav>
-        <section data-panel-view="permissions">
-          <p class="panel-description">命令、文件和网络请求会在执行前显示具体范围。</p>
-          <div id="attention-list" class="attention-list"><p class="empty-state">暂无待处理事项</p></div>
+        <header><div><span>»</span><strong>工作面板</strong></div><div><button id="work-panel-back" type="button">‹</button><button id="work-panel-close" type="button">▯</button></div></header>
+        <section id="work-panel-home" class="work-panel-home">
+          <button type="button" data-panel-tab="chat"><i>▱</i><span><strong>侧边对话</strong><small>与 AI 进行并行交流，探索更多思路</small></span><b>›</b></button>
+          <button type="button" data-panel-tab="files"><i>▱</i><span><strong>文件</strong><small>浏览与管理项目文件结构</small></span><b>›</b></button>
+          <button type="button" data-panel-tab="changes"><i>♧</i><span><strong>全部变更</strong><small>查看当前所有代码变更</small></span><b>›</b></button>
+          <button type="button" data-panel-tab="browser"><i>◎</i><span><strong>浏览器</strong><small>在浏览器中预览与调试</small></span><b>›</b></button>
         </section>
+        <section data-panel-view="chat" hidden><div class="panel-title"><span>侧边对话</span><b id="attention-count">0</b></div><p class="panel-description">权限、失败和完成事件集中在这里。</p><div id="attention-list" class="attention-list"><p class="empty-state">暂无待处理事项</p></div></section>
+        <section data-panel-view="files" hidden><div class="panel-title"><span>文件</span><button id="open-worktree" type="button">在资源管理器打开</button></div><p id="worktree-path" class="mono boundary-note">选择会话后查看文件</p><div id="panel-file-list" class="panel-file-list"><p class="empty-state">暂无文件信息</p></div></section>
         <section data-panel-view="changes" hidden>
-          <section class="git-panel" aria-label="Session Git changes">
-            <div class="panel-heading">
-              <div><p class="card-kicker">WORKTREE CHANGES</p><h2>审查与提交</h2></div>
-              <button id="refresh-git" type="button">刷新</button>
-            </div>
-            <p id="worktree-path" class="mono boundary-note">选择会话后查看变更</p>
-            <div class="git-layout">
-              <div><p class="section-label">文件</p><div id="git-files" class="git-files"><p class="empty-state">暂无改动</p></div></div>
-              <div><p class="section-label">DIFF</p><pre id="git-diff" class="diff-preview">选择文件查看 Diff</pre></div>
-            </div>
-            <div class="git-actions">
-              <button id="stage-files" type="button">暂存所选</button>
-              <button id="unstage-files" type="button">撤销暂存</button>
-              <input id="commit-subject" maxlength="200" placeholder="提交说明" aria-label="提交说明" />
-              <button id="commit-files" class="primary" type="button">提交</button>
-              <span id="git-status" class="operation-status" aria-live="polite"></span>
-            </div>
-          </section>
+          <section class="git-panel"><div class="panel-title"><span>全部变更</span><button id="refresh-git" type="button">刷新</button></div><div id="git-files" class="git-files"><p class="empty-state">暂无改动</p></div><pre id="git-diff" class="diff-preview">选择文件查看 Diff</pre><div class="git-actions"><button id="stage-files" type="button">暂存</button><button id="unstage-files" type="button">取消暂存</button><input id="commit-subject" maxlength="200" placeholder="提交说明" /><button id="commit-files" class="primary" type="button">提交</button><span id="git-status" class="operation-status"></span></div></section>
         </section>
+        <section data-panel-view="browser" hidden><div class="panel-title"><span>浏览器</span></div><p class="panel-description">输入本地开发服务器或 HTTPS 地址，在系统浏览器中安全打开。</p><div class="browser-launch"><input id="browser-url" value="http://localhost:3000" aria-label="预览地址" /><button id="open-browser-url" class="primary" type="button">打开预览</button><span id="browser-status" class="operation-status"></span></div></section>
+        <div class="panel-illustration" aria-hidden="true"><span>TSUKIORI OS VER1.0</span></div>
       </aside>
     </div>
 
-    <template id="runtime-card-template">
-      <article class="runtime-card">
-        <div class="card-kicker">RUNTIME</div><h3 data-field="runtimeType"></h3>
-        <dl>
-          <div><dt>版本</dt><dd data-field="version"></dd></div>
-          <div><dt>状态</dt><dd data-field="state"></dd></div>
-          <div><dt>认证来源</dt><dd data-field="authSource"></dd></div>
-          <div><dt>兼容性</dt><dd data-field="compatibility"></dd></div>
-        </dl>
-        <div class="provider-panel" data-field="providerPanel" hidden>
-          <p class="section-label">PROVIDER &amp; DATA DESTINATION</p>
-          <label>Provider<select data-field="providerSelect" aria-label="OpenCode Provider"></select></label>
-          <label>Model<select data-field="modelSelect" aria-label="OpenCode Model"></select></label>
-          <p class="data-destination">数据出口：<strong data-field="destinationHost"></strong></p>
-          <p class="request-boundary" data-field="modelRequestState">模型请求尚未启动</p>
-        </div>
-        <div class="native-capability-panel">
-          <p class="section-label">CODEX NATIVE CAPABILITIES</p>
-          <ul data-field="nativeCapabilities" aria-label="Codex native capabilities"></ul>
-          <p class="native-boundary-note">Runtime 专属能力；不自动提升为公共 Adapter 能力。</p>
-        </div>
-      </article>
-    </template>
-    <template id="tool-card-template">
-      <article class="tool-card"><div class="card-kicker">TOOL</div><h3 data-field="title"></h3><pre data-field="summary"></pre></article>
-    </template>
-    <template id="permission-card-template">
-      <article class="permission-card">
-        <div class="card-kicker">PERMISSION REQUEST</div><h3 data-field="title"></h3><p data-field="description"></p>
-        <dl>
-          <div><dt>类别</dt><dd data-field="category"></dd></div>
-          <div><dt>风险</dt><dd data-field="risk"></dd></div>
-          <div><dt>范围</dt><dd data-field="scope"></dd></div>
-          <div><dt>Enforcement Level</dt><dd data-field="enforcement"></dd></div>
-        </dl>
-        <div class="permission-actions"><button type="button">拒绝</button><button type="button" class="primary">允许一次</button></div>
-      </article>
-    </template>
+    <dialog id="session-dialog" class="session-dialog">
+      <form method="dialog" id="session-create-form">
+        <header><div><p class="kicker">NEW AGENT SESSION</p><h2>创建独立会话</h2></div><button value="cancel" type="submit">×</button></header>
+        <p>每个会话会创建独立 Git Worktree；Runtime 与 Provider 在首个 Turn 后锁定。</p>
+        <div class="form-grid"><label>Runtime<select id="create-runtime"></select></label><label>Provider<select id="create-provider"></select></label><label>Model<select id="create-model"></select></label><label>权限模式<select id="create-permission"></select></label></div>
+        <p id="create-session-status" class="operation-status"></p>
+        <footer><button value="cancel" type="submit">取消</button><button id="confirm-create-session" value="default" class="primary" type="submit">创建会话</button></footer>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="settings-dialog">
+      <div class="settings-shell">
+        <aside><div class="settings-brand"><span>✣</span><strong>设置</strong></div><nav id="settings-nav">
+          <button data-settings-page="general" class="active">⚙ <span>通用</span></button><button data-settings-page="appearance">◩ <span>外观</span></button><button data-settings-page="account">♙ <span>账号</span></button><button data-settings-page="agent">✣ <span>Agent</span></button><button data-settings-page="usage">▥ <span>用量</span></button><button data-settings-page="projects">▧ <span>项目</span></button><button data-settings-page="devices">▣ <span>设备</span></button><button data-settings-page="github">◉ <span>GitHub</span></button><button data-settings-page="shortcuts">⌘ <span>键盘快捷键</span></button><button data-settings-page="billing">▤ <span>账单</span></button><button data-settings-page="about">ⓘ <span>关于</span></button>
+        </nav><button id="report-bug" type="button">☼ 报告 Bug <span>›</span></button></aside>
+        <main>
+          <header class="settings-header"><div><h2 id="settings-title">通用</h2><p id="settings-subtitle">启动行为、语言、更新与默认工作方式</p></div><button id="close-settings" type="button">×</button></header>
+          <div class="settings-content">
+            <section data-settings-view="general"><div class="settings-card"><h3>启动与更新</h3><label class="setting-row"><span><strong>界面语言</strong><small>更改 Tsukiori 的显示语言</small></span><select id="setting-language"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label><label class="setting-row"><span><strong>自动检查更新</strong><small>启动时检查可用的新版本</small></span><input id="setting-auto-update" type="checkbox" /></label><label class="setting-row"><span><strong>最小化启动</strong><small>启动后保持在后台</small></span><input id="setting-start-minimized" type="checkbox" /></label></div><div class="settings-card"><h3>默认会话</h3><label class="setting-row"><span><strong>默认 Runtime</strong><small>新建会话时的初始选择</small></span><select id="setting-default-runtime"></select></label><label class="setting-row"><span><strong>默认 Provider</strong><small>模型请求的数据出口</small></span><select id="setting-default-provider"></select></label></div></section>
+            <section data-settings-view="appearance" hidden><div class="settings-card"><h3>外观设置</h3><label class="setting-row"><span><strong>主题模式</strong><small>设计稿默认使用明亮模式</small></span><select id="setting-theme"><option value="light">明亮</option><option value="system">跟随系统</option></select></label><label class="setting-row"><span><strong>界面密度</strong><small>调整导航和列表间距</small></span><select id="setting-density"><option value="comfortable">舒适</option><option value="compact">紧凑</option></select></label><label class="setting-row"><span><strong>减少动态效果</strong><small>关闭扫光与面板位移动画</small></span><input id="setting-reduce-motion" type="checkbox" /></label><div class="accent-preview"><span></span><span></span><span></span><span></span><span></span><span></span></div></div></section>
+            <section data-settings-view="account" hidden><div class="settings-card account-card"><span class="profile-avatar">N</span><div><h3>本地个人工作区</h3><p>Tsukiori 不要求云端账号。Runtime 登录与 API Provider 分开管理。</p></div></div></section>
+            <section data-settings-view="agent" hidden><div class="agent-settings-grid"><section class="settings-card provider-list-card"><header><div><h3>Provider</h3><p>密钥保存到 Windows Credential Manager</p></div><button id="new-provider" class="primary" type="button">＋ 添加</button></header><div id="provider-settings-list"></div></section><section class="settings-card provider-editor"><header><div><h3 id="provider-editor-title">Provider 配置</h3><p>连接测试不会保存响应正文</p></div></header><input id="provider-id" type="hidden" /><label>名称<input id="provider-name" maxlength="64" /></label><label>类型<select id="provider-kind"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="deepseek">DeepSeek</option><option value="openai-compatible">自定义 OpenAI-compatible</option><option value="anthropic-compatible">自定义 Anthropic-compatible</option></select></label><label>Base URL<input id="provider-base-url" /></label><label>Models<input id="provider-models" placeholder="逗号分隔，例如 gpt-5.4, gpt-5.4-mini" /></label><label>API Key<input id="provider-api-key" type="password" autocomplete="off" placeholder="留空则保留已保存的密钥" /></label><div class="provider-editor-actions"><button id="delete-provider" class="danger" type="button">删除</button><button id="test-provider" type="button">测试连接</button><button id="save-provider" class="primary" type="button">保存</button></div><p id="provider-editor-status" class="operation-status"></p></section></div><div class="settings-card runtime-management"><header><div><h3>Runtime 管理</h3><p>安装状态、认证来源与已验证能力</p></div><button id="settings-refresh-runtimes" type="button">重新探测</button></header><div id="settings-runtime-list"></div></div></section>
+            <section data-settings-view="usage" hidden><div class="usage-summary"><article><span>Turn</span><strong id="usage-turns">0</strong></article><article><span>Session</span><strong id="usage-sessions">0</strong></article></div><div class="settings-card usage-chart"><h3>本地用量</h3><div id="usage-bars"></div><p>费用为 Provider 侧数据，Tsukiori 当前不臆测账单金额。</p></div></section>
+            <section data-settings-view="projects" hidden><div class="settings-card"><h3>项目</h3><div id="settings-project-list"></div><button id="settings-add-project" type="button">＋ 添加本地项目</button></div></section>
+            <section data-settings-view="devices" hidden><div class="settings-card"><h3>本机设备</h3><p>Windows Native · 当前用户 · Credential Manager 可用</p><div id="device-runtime-list"></div></div></section>
+            <section data-settings-view="github" hidden><div class="settings-card"><h3>GitHub</h3><p>项目 Git 操作使用本机 Git 身份；远程 GitHub 登录由 gh 或 Git Credential Manager 管理。</p><button id="copy-github-help" type="button">查看本地 Git 状态</button><pre id="github-status">尚未检测</pre></div></section>
+            <section data-settings-view="shortcuts" hidden><div class="settings-card shortcut-list"><h3>键盘快捷键</h3><p><span>发送消息</span><kbd>Enter</kbd></p><p><span>换行</span><kbd>Shift + Enter</kbd></p><p><span>打开设置</span><kbd>Ctrl + ,</kbd></p><p><span>折叠终端</span><kbd>Ctrl + J</kbd></p></div></section>
+            <section data-settings-view="billing" hidden><div class="settings-card"><h3>账单</h3><p>Tsukiori 本地版不收取平台费用。模型费用由你配置的 Provider 直接结算。</p></div></section>
+            <section data-settings-view="about" hidden><div class="settings-card about-card"><span class="about-logo">✣</span><h3>Tsukiori</h3><p>本地多 Agent 开发工作台</p><p id="about-version">Desktop — · Protocol —</p><button id="export-settings" type="button">导出脱敏设置</button><p id="export-settings-status" class="operation-status"></p></div></section>
+          </div>
+          <footer class="settings-footer"><span id="settings-save-status"></span><button id="save-settings" class="primary" type="button">保存设置</button></footer>
+        </main>
+      </div>
+    </dialog>
+
+    <section id="legacy-workspace" hidden>
+      <span id="version"></span><button id="legacy-session"></button><div id="session-timeline"></div><div id="tool-list"></div><div id="permission-list"></div><div id="runtime-list"></div>
+      <section id="alpha-workflow" hidden><span data-field="phase"></span><span data-field="project"></span><span data-field="worktree"></span><span data-field="runtime"></span><span data-field="alphaDestination"></span><ol><li data-step="project"></li><li data-step="worktree"></li><li data-step="runtime"></li><li data-step="review"></li><li data-step="archive"></li></ol><ul data-field="changedFiles"></ul><pre data-field="diffPreview"></pre><input data-field="commitSubject" value="feat: apply reviewed changes" /><button data-action="stage"></button><button data-action="commit"></button><button data-action="archive"></button><button data-action="safeCleanup"></button><span data-field="actionStatus"></span></section>
+      <section id="v1-git-workflow" hidden><span data-field="recoverySnapshot"></span><span data-field="integrationLocation"></span><span data-field="targetRef"></span><span data-field="integrationStrategy"></span><button data-v1-action="unstage"></button><button data-v1-action="revert"></button><button data-v1-action="integrate"></button><button data-v1-action="continue"></button><button data-v1-action="external-editor"></button><span data-field="v1ActionStatus"></span></section>
+      <section id="diagnostic-bundle" hidden>默认排除源码、完整 Prompt、Raw Payload、凭据和认证存储<label><input type="checkbox" data-field="includeSensitivePreviews" />包含再次脱敏的敏感预览</label><span data-field="diagnosticEstimatedBytes"></span><button data-action="exportDiagnostic"></button><span data-field="diagnosticStatus"></span></section>
+    </section>
+
+    <template id="runtime-card-template"><article class="runtime-card"><h3 data-field="runtimeType"></h3><dl><div><dt>版本</dt><dd data-field="version"></dd></div><div><dt>状态</dt><dd data-field="state"></dd></div><div><dt>认证来源</dt><dd data-field="authSource"></dd></div><div><dt>兼容性</dt><dd data-field="compatibility"></dd></div></dl><div class="provider-panel" data-field="providerPanel" hidden><p>PROVIDER &amp; DATA DESTINATION</p><select data-field="providerSelect"></select><select data-field="modelSelect"></select><strong data-field="destinationHost"></strong><span data-field="modelRequestState">模型请求尚未启动</span></div><ul data-field="nativeCapabilities"></ul><p>CODEX NATIVE CAPABILITIES · 不自动提升为公共 Adapter 能力</p></article></template>
+    <template id="tool-card-template"><article class="tool-card"><h3 data-field="title"></h3><pre data-field="summary"></pre></article></template>
+    <template id="permission-card-template"><article class="permission-card"><h3 data-field="title"></h3><p data-field="description"></p><dl><div><dt>类别</dt><dd data-field="category"></dd></div><div><dt>风险</dt><dd data-field="risk"></dd></div><div><dt>范围</dt><dd data-field="scope"></dd></div><div><dt>Enforcement Level</dt><dd data-field="enforcement"></dd></div></dl><div class="permission-actions"><button type="button">拒绝</button><button type="button">允许一次</button></div></article></template>
     <script type="module" src="./renderer.js"></script>
   </body>
 </html>

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "platform": "windows-native-x64",
+  "runtimes": [
+    { "type": "codex", "version": "0.146.0", "source": "private-spike-runtime", "supportLevel": "supported", "protocol": "app-server" },
+    { "type": "claude", "version": "2.1.201", "source": "path-executable", "supportLevel": "degraded", "protocol": "stream-json" },
+    { "type": "opencode", "version": "1.18.4", "source": "adapter-not-connected", "supportLevel": "unknown" },
+    { "type": "acp", "version": "unknown", "source": "not-connected", "supportLevel": "unknown" }
+  ],
+  "providers": [
+    { "id": "provider:chatgpt", "name": "ChatGPT 登录", "kind": "chatgpt", "apiFormat": "chatgpt", "baseUrl": "https://chatgpt.com/backend-api", "models": ["auto"], "configured": true },
+    { "id": "provider:openai", "name": "OpenAI API", "kind": "openai", "apiFormat": "openai", "baseUrl": "https://api.openai.com", "models": ["gpt-5.4", "gpt-5.4-mini"], "configured": false },
+    { "id": "provider:anthropic", "name": "Anthropic API", "kind": "anthropic", "apiFormat": "anthropic", "baseUrl": "https://api.anthropic.com", "models": ["claude-sonnet-4-6", "claude-opus-4-6"], "configured": false },
+    { "id": "provider:deepseek", "name": "DeepSeek", "kind": "deepseek", "apiFormat": "anthropic", "baseUrl": "https://api.deepseek.com/anthropic", "models": ["deepseek-v4-pro"], "configured": false }
+  ],
+  "apiKeysRead": false,
+  "providerRequestsSent": false,
+  "containsCredentials": false,
+  "containsPrompts": false,
+  "containsResponses": false
+}

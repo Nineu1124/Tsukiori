@@ -3594,17 +3594,34 @@ src/helpers/
   - [x] 按 UI/UX V1.0 规范实现四区布局、浅色 Design Tokens、Tool 分类、输入选择器、面板折叠和减少动态效果
   - [x] Daemon 正常退出、GUI 释放和异常终止均不会遗留孤儿 Named Pipe Host，常驻策略仍可安全重连
 
+### T5.7 设置、Provider、多 Runtime 与视觉一致性纠正
+
+- [x] 完成设置中心、API Provider、多 Runtime 选择和 UI/UX V1.0 视觉一致性纠正
+- 前置依赖：T5.6
+- 交付物：Settings/Provider Registry、Windows Credential Manager 集成、Codex/Claude Code Runtime Bridge、设计稿一致的 Desktop UI、E2E/视觉验收报告
+- Checkpoints：
+  - [x] 设置中心包含通用、外观、账号、Agent、用量、项目、设备、GitHub、键盘快捷键、账单和关于一级分类，入口、导航、保存与错误反馈均可操作
+  - [x] Provider Registry 支持 ChatGPT 登录、OpenAI、Anthropic、DeepSeek、自定义 OpenAI-compatible 与自定义 Anthropic-compatible，支持 Base URL、Model、连接测试、启用、编辑和删除
+  - [x] API Key 只写入 Windows Credential Manager；本地 JSON、SQLite、日志、诊断包、配置导出和 Renderer Snapshot 只保存 `secretRef` 或 `hasSecret`，不出现明文
+  - [x] Runtime Registry 至少发现 Codex app-server 与 Claude Code；Generic ACP 和未接通 Runtime 明确显示为 `unknown` 或 `unsupported`，不伪装为已支持
+  - [x] 新建 Session 和输入区可选择 Runtime、Provider、Model、Execution Environment 与 Permission Mode，并把选择固定到该 Session
+  - [x] Codex 可使用现有 ChatGPT 登录或 OpenAI/OpenAI-compatible Provider；Claude Code 可使用 Anthropic、DeepSeek 或 Anthropic-compatible Provider；不兼容组合在启动前阻止并解释原因
+  - [x] Provider 连接测试和 Runtime Probe 只记录布尔结果、延迟与错误类别，不记录 Key、测试 Prompt、响应正文或原始事件
+  - [x] `userMessage`、Agent 文本、READ、MODIFY 与 EXECUTE 事件分类正确，不再把用户消息渲染为 Tool Card
+  - [x] 主工作台、右侧四入口工作面板、底部终端区和设置弹窗按《Tsukiori 完整 UI/UX 与插图视觉设计规范 V1.0》完成 1600×1000 截图验收
+  - [x] 设置、Provider、Runtime、会话选择、视觉 DOM、秘密扫描和孤儿进程回归测试全部通过，公开 CI 不需要用户凭据
+
 ### G5 阶段 5 Gate
 
-- [x] Windows Local V1 已满足发布条件
-- 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5、T5.6
+- [ ] Windows Local V1 已满足发布条件
+- 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5、T5.6、T5.7
 - 交付物：最终 V1 Gate 报告和发布签字记录
 - Checkpoints：
-  - [x] T0.* 至 T5.* 的全部顶层任务已勾选
-  - [x] G0 至 G4 已通过，且 G5 无未解决阻塞项
-  - [x] 第 37.1 至 37.9 章所有 Local V1 发布检查已勾选并有证据
-  - [x] 严重级别安全、数据丢失和错误进程终止问题均为零
-  - [x] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
+  - [ ] T0.* 至 T5.* 的全部顶层任务已勾选
+  - [ ] G0 至 G4 已通过，且 G5 无未解决阻塞项
+  - [ ] 第 37.1 至 37.10 章所有 Local V1 发布检查已勾选并有证据
+  - [ ] 严重级别安全、数据丢失和错误进程终止问题均为零
+  - [ ] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
 
 ## V1 之后任务池
 
@@ -3969,11 +3986,11 @@ Runtime Native Protocol
 
 ## 37.0 Local V1 Ready 总门槛
 
-- [x] [T0.*–T5.*] T0.1 至 T5.6 的全部顶层任务已完成
-- [x] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
-- [x] [37.1–37.9] 本章所有分类验收项均已勾选
-- [x] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
-- [x] [B1–B3] Claude、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
+- [ ] [T0.*–T5.*] T0.1 至 T5.7 的全部顶层任务已完成
+- [ ] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
+- [ ] [37.1–37.10] 本章所有分类验收项均已勾选
+- [ ] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
+- [ ] [B1–B3] 完整 Claude Adapter、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
 
 只有以上五项全部通过，版本状态才能标记为 Local V1 Ready。Verified Publisher 是未来可选发布通道，不阻塞 Local V1。
 
@@ -4078,6 +4095,19 @@ Runtime Native Protocol
 - [x] [T5.6] 本机真实 Codex Probe 验证 Thread、Turn、流式响应和 Worktree 隔离，公开 CI 只运行无凭据替身测试
 - [x] [T5.6] 主工作区符合 UI/UX V1.0 的项目/会话、中央对话、右工作面板和底部运行日志布局
 - [x] [T5.6] 正常退出与强制终止回归均确认 Named Pipe Host 被回收，常驻 Daemon 仍可重连
+
+## 37.10 设置、Provider、多 Runtime 与视觉一致性
+
+- [x] [T5.7] 设置入口和十一个一级分类可访问，通用、外观与 Agent 设置可保存并在重启后恢复
+- [x] [T5.7] 用户可新增、编辑、测试、启用和删除 OpenAI、Anthropic、DeepSeek 与两类兼容 Provider
+- [x] [T5.2, T5.7] API Key 仅存在 Windows Credential Manager，状态文件、数据库、日志、导出与 Renderer 均无明文
+- [x] [T4.1, T5.7] Codex app-server 可按 Session 使用 ChatGPT 或兼容的 API Provider 与 Model
+- [x] [T5.7] Claude Code 可被发现，并可按 Session 使用 Anthropic/DeepSeek/Anthropic-compatible Provider 与 Model
+- [x] [T0.4, T5.7] Generic ACP、OpenCode 和不可用 Runtime 的支持级别真实显示，不兼容组合不会静默回退
+- [x] [T5.7] 输入区 Runtime、Provider、Model、Environment 与 Permission 选择器均可操作并固定到 Session
+- [x] [T5.7] 用户消息、Agent 消息和 READ/MODIFY/EXECUTE Tool Card 分类通过事件回归测试
+- [x] [T5.7] 1600×1000 主工作台和设置中心截图与 UI/UX V1.0 的布局、颜色、密度、几何装饰和交互入口一致
+- [x] [T5.1, T5.7] 设置/Provider/Runtime 回归不会泄漏凭据或遗留 Runtime、Daemon、Named Pipe Host 子进程
 
 ---
 # 38. 主要风险与应对

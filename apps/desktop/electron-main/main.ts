@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen, type OpenDialogOptions } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen, shell, type OpenDialogOptions } from 'electron';
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,8 @@ const preloadEntry = resolve(currentDirectory, '..', 'preload', 'index.cjs');
 const rendererEntry = resolve(currentDirectory, '..', 'renderer', 'index.html');
 const smokeMode = process.env.TSUKIORI_DESKTOP_SMOKE === '1';
 const captureDesktopPath = process.env.TSUKIORI_DESKTOP_CAPTURE_PATH;
+const captureDesktopView = process.env.TSUKIORI_DESKTOP_CAPTURE_VIEW;
+const captureSanitized = process.env.TSUKIORI_DESKTOP_CAPTURE_SANITIZED === '1';
 const daemonExitPolicy = process.env.TSUKIORI_DAEMON_EXIT_POLICY === 'keep' ? 'keep' : 'stop';
 const daemonLeaseFile = resolve(app.getPath('userData'), 'daemon-lease-v1.json');
 
@@ -97,13 +99,13 @@ let interactiveWorkspace: InteractiveWorkspace | null = null;
 
 function createWindow(): BrowserWindow {
   const workArea = screen.getPrimaryDisplay().workAreaSize;
-  const width = Math.min(1440, Math.max(960, workArea.width - 32));
-  const height = Math.min(900, Math.max(680, workArea.height - 32));
+  const width = Math.min(1600, Math.max(1180, workArea.width - 32));
+  const height = Math.min(1000, Math.max(760, workArea.height - 32));
   const window = new BrowserWindow({
     width,
     height,
-    minWidth: 960,
-    minHeight: 680,
+    minWidth: 1180,
+    minHeight: 760,
     show: !smokeMode && !captureDesktopPath,
     backgroundColor: '#f5fbff',
     autoHideMenuBar: true,
@@ -288,7 +290,68 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       ...workspace.pollEvents(Number(command.afterSequence ?? 0)),
     };
     if (command.type === 'create_session') {
-      return { ok: true, session: await workspace.createSession(String(command.projectId ?? '')) };
+      return { ok: true, session: await workspace.createSession(String(command.projectId ?? ''), {
+        ...(typeof command.runtimeType === 'string' ? { runtimeType: command.runtimeType as 'codex' | 'claude' } : {}),
+        ...(typeof command.providerId === 'string' ? { providerId: command.providerId } : {}),
+        ...(typeof command.model === 'string' ? { model: command.model } : {}),
+        ...(typeof command.permissionMode === 'string' ? { permissionMode: command.permissionMode as 'manual' | 'plan' | 'acceptEdits' | 'dontAsk' } : {}),
+      }) };
+    }
+    if (command.type === 'update_session_options') return {
+      ok: true,
+      session: await workspace.updateSessionOptions(String(command.sessionId ?? ''), {
+        ...(typeof command.providerId === 'string' ? { providerId: command.providerId } : {}),
+        ...(typeof command.model === 'string' ? { model: command.model } : {}),
+        ...(typeof command.permissionMode === 'string' ? { permissionMode: command.permissionMode } : {}),
+      }),
+    };
+    if (command.type === 'update_settings') return {
+      ok: true,
+      settings: workspace.updateSettings(object(command.settings)),
+    };
+    if (command.type === 'save_provider') return {
+      ok: true,
+      provider: workspace.saveProvider({
+        ...(typeof command.id === 'string' ? { id: command.id } : {}),
+        name: String(command.name ?? ''),
+        kind: String(command.kind ?? '') as 'chatgpt' | 'openai' | 'anthropic' | 'deepseek' | 'openai-compatible' | 'anthropic-compatible',
+        ...(typeof command.baseUrl === 'string' ? { baseUrl: command.baseUrl } : {}),
+        ...(Array.isArray(command.models) ? { models: command.models.map(String) } : {}),
+        ...(typeof command.apiKey === 'string' ? { apiKey: command.apiKey } : {}),
+        ...(typeof command.enabled === 'boolean' ? { enabled: command.enabled } : {}),
+      }),
+    };
+    if (command.type === 'delete_provider') {
+      workspace.deleteProvider(String(command.providerId ?? ''));
+      return { ok: true };
+    }
+    if (command.type === 'test_provider') return {
+      ok: true,
+      test: await workspace.testProvider(String(command.providerId ?? '')),
+    };
+    if (command.type === 'export_settings') {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const selection = owner
+        ? await dialog.showSaveDialog(owner, { title: '导出脱敏设置', defaultPath: 'tsukiori-settings.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
+        : await dialog.showSaveDialog({ title: '导出脱敏设置', defaultPath: 'tsukiori-settings.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+      if (selection.canceled || !selection.filePath) return { ok: true, canceled: true };
+      writeFileSync(selection.filePath, workspace.exportSanitizedSettings(), { encoding: 'utf8', mode: 0o600 });
+      return { ok: true, exported: true };
+    }
+    if (command.type === 'open_worktree') {
+      const snapshot = workspace.snapshot();
+      const sessions = Array.isArray(snapshot.sessions) ? snapshot.sessions as Array<Record<string, unknown>> : [];
+      const session = sessions.find((item) => item.id === String(command.sessionId ?? ''));
+      if (!session || typeof session.worktreePath !== 'string') throw new Error('Session Worktree 不存在');
+      const failure = await shell.openPath(session.worktreePath);
+      if (failure) throw new Error('无法打开 Worktree');
+      return { ok: true };
+    }
+    if (command.type === 'open_url') {
+      const url = new URL(String(command.url ?? ''));
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('只允许无内嵌认证的 HTTP/HTTPS 地址');
+      await shell.openExternal(url.toString(), { activate: true });
+      return { ok: true };
     }
     if (command.type === 'send_prompt') {
       return { ok: true, ...(await workspace.sendPrompt(
@@ -364,6 +427,33 @@ app.whenReady()
       window.webContents.once('did-finish-load', () => {
         setTimeout(() => {
           void (async () => {
+            if (captureDesktopView?.startsWith('settings')) {
+              await window.webContents.executeJavaScript("document.querySelector('#open-settings')?.click()", true);
+              await new Promise((resolveDelay) => setTimeout(resolveDelay, 350));
+              if (captureDesktopView === 'settings-agent') {
+                await window.webContents.executeJavaScript("document.querySelector('[data-settings-page=agent]')?.click()", true);
+                await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+              }
+            }
+            if (captureSanitized) {
+              await window.webContents.executeJavaScript(`(() => {
+                const path = document.querySelector('#session-context-path');
+                if (path) path.textContent = 'D:\\\\Projects\\\\tsukiori-academy\\\\.tsukiori\\\\session-a1b2c3d4';
+                const title = document.querySelector('#interactive-title');
+                if (title) title.textContent = '实现登录接口与权限校验';
+                const eyebrow = document.querySelector('#interactive-eyebrow');
+                if (eyebrow) eyebrow.textContent = 'tsukiori-academy / agent/auth-jwt';
+              })()`, true);
+            }
+            const captureDiagnostic = await window.webContents.executeJavaScript(`({
+              bodyClass: document.body.className,
+              viewport: [innerWidth, innerHeight, devicePixelRatio],
+              shell: (() => { const e=document.querySelector('.app-shell'); const r=e?.getBoundingClientRect(); return [r?.x,r?.y,r?.width,r?.height,getComputedStyle(e).display,getComputedStyle(e).gridTemplateColumns]; })(),
+              rail: (() => { const e=document.querySelector('.session-rail'); const r=e?.getBoundingClientRect(); return [r?.x,r?.y,r?.width,r?.height,getComputedStyle(e).display,getComputedStyle(e).visibility]; })(),
+              workspace: (() => { const e=document.querySelector('.workspace'); const r=e?.getBoundingClientRect(); return [r?.x,r?.y,r?.width,r?.height,getComputedStyle(e).display,getComputedStyle(e).visibility]; })(),
+              status: document.querySelector('#status')?.textContent,
+            })`, true);
+            process.stdout.write('TSUKIORI_CAPTURE_DIAGNOSTIC ' + JSON.stringify(captureDiagnostic) + '\n');
             const image = await window.webContents.capturePage();
             writeFileSync(captureDesktopPath, image.toPNG());
             await Promise.allSettled([
@@ -385,3 +475,9 @@ app.whenReady()
     await supervisor.stop(true).catch(() => undefined);
     app.exit(1);
   });
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}

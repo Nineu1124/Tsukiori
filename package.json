@@ -25,6 +25,7 @@
     "spike:codex": "node spikes/codex/harness.mjs",
     "probe:codex-adapter": "pnpm run build && node scripts/probe-codex-adapter.mjs",
     "probe:interactive-codex": "pnpm run build && node scripts/probe-interactive-codex.mjs",
+    "probe:t5.7-runtimes": "pnpm run build && node scripts/probe-t5.7-runtimes.mjs",
     "test:windows": "node --test spikes/windows/*.test.mjs",
     "spike:windows": "node spikes/windows/harness.mjs",
     "test:opencode": "node --test spikes/opencode/*.test.mjs",

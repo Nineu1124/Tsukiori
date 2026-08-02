@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "task": "T5.7",
+  "decision": "pass",
+  "platform": "windows-native-x64",
+  "settingsCategories": 11,
+  "providerKinds": ["chatgpt", "openai", "anthropic", "deepseek", "openai-compatible", "anthropic-compatible"],
+  "runtimes": {
+    "codex": { "version": "0.146.0", "supportLevel": "supported", "liveProbe": "pass" },
+    "claude": { "version": "2.1.201", "supportLevel": "degraded", "credentialFreeContract": "pass" },
+    "opencode": { "supportLevel": "unknown" },
+    "acp": { "supportLevel": "unknown" }
+  },
+  "tests": {
+    "interactive": 7,
+    "ui": 6,
+    "host": 9,
+    "security": 6
+  },
+  "visualEvidence": [
+    "docs/visual/t5.7-main-workspace.png",
+    "docs/visual/t5.7-settings-general.png",
+    "docs/visual/t5.7-settings-agent.png"
+  ],
+  "namedPipeHosts": { "activeAfterRegression": 0, "orphanedAfterRegression": 0 },
+  "containsCredentials": false,
+  "containsPrompts": false,
+  "containsResponses": false,
+  "containsUserSource": false
+}
