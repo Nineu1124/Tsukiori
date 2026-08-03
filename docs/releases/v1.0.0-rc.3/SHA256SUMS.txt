@@ -1,0 +1,2 @@
+fd84860d64fae5b8e46fbe7c984e23c239530dd6b16ba4c2e630685549ea84af  Tsukiori-1.0.0-rc.3-x64-setup.exe
+97a0223793de0d69fa8cc2402af10fc1421ea4c6d3c1a8ad96b12c4e13226e54  Tsukiori-1.0.0-rc.3-x64-setup.exe.blockmap

@@ -270,3 +270,21 @@ test('resizable work panel, terminal shell, and diagnostics persist without prom
   assert.match(persisted, /"terminalShell": "pwsh"/);
   assert.doesNotMatch(JSON.stringify(diagnostic), new RegExp(session.worktreePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
+
+test('scheduled task launches an isolated Runtime Session and records activity', async (t) => {
+  const f = fixture(t);
+  const project = f.workspace.addProject(f.repository);
+  const task = f.workspace.saveScheduledTask({
+    name: 'Fixture scheduled review', projectId: project.id, prompt: 'Review the fixture changes', intervalMinutes: 60,
+    enabled: true,
+  });
+  const launched = await f.workspace.runScheduledTask(task.id);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const permission = f.workspace.snapshot().permissions[0];
+  if (permission) f.workspace.decidePermission(permission.id, 'deny_once');
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(typeof launched.sessionId, 'string');
+  assert.equal(f.workspace.snapshot().sessions.some((session) => session.id === launched.sessionId), true);
+  assert.equal(f.emitted.some((event) => event.type === 'scheduled.task.started'), true);
+  assert.equal(f.workspace.listScheduledTasks(project.id)[0].enabled, true);
+});

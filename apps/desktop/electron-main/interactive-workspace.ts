@@ -31,6 +31,11 @@ import {
   type ProviderKind,
   deepSeekClaudeModel,
 } from './provider-registry.js';
+import {
+  WorkspaceCapabilities,
+  type McpServerInput,
+  type ScheduledTask,
+} from './workspace-capabilities.js';
 
 type RuntimeType = 'codex' | 'claude';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -162,6 +167,7 @@ export class InteractiveWorkspace {
   readonly #createClient: InteractiveWorkspaceOptions['createClient'];
   readonly #createClaudeClient: InteractiveWorkspaceOptions['createClaudeClient'];
   readonly #providers: ProviderRegistry;
+  readonly #capabilities: WorkspaceCapabilities;
   #state: PersistedState = {
     schemaVersion: 3, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [], teams: [],
   };
@@ -175,6 +181,7 @@ export class InteractiveWorkspace {
   #eventLog: WorkspaceEvent[] = [];
   #eventSequence = 0;
   #approvals = new Map<string, ApprovalResolver>();
+  #schedulerTimer: NodeJS.Timeout | null = null;
 
   constructor(options: InteractiveWorkspaceOptions) {
     this.#statePath = join(options.userDataPath, 'workspace-state-v3.json');
@@ -194,10 +201,12 @@ export class InteractiveWorkspace {
       ...(options.credentials ? { credentials: options.credentials } : {}),
       persist: (providers) => { this.#state.providers = providers; this.#save(); },
     });
+    this.#capabilities = new WorkspaceCapabilities(options.userDataPath);
     this.#state.providers = this.#providers.raw();
     this.#loadTranscripts();
     this.refreshRuntimes();
     this.#save();
+    this.#schedulerTimer = setInterval(() => { void this.#runScheduledTasks(); }, 15_000);
   }
 
   snapshot(): Record<string, unknown> {
@@ -208,6 +217,8 @@ export class InteractiveWorkspace {
       teams: this.#state.teams,
       runtimes: this.#runtimes,
       providers: this.#providers.list(),
+      mcpServers: this.#capabilities.listMcp(),
+      scheduledTasks: this.#capabilities.listScheduledTasks(),
       settings: this.#state.settings,
       permissions: [...this.#approvals.entries()].map(([id, pending]) => ({
         id, sessionId: pending.sessionId, connectionEpoch: 'interactive-codex',
@@ -330,6 +341,114 @@ export class InteractiveWorkspace {
     return this.#providers.listModels(id);
   }
 
+  listMcp(projectId?: string) { return this.#capabilities.listMcp(projectId); }
+
+  saveMcp(input: McpServerInput) {
+    const record = this.#capabilities.saveMcp(input);
+    if (record.projectId) this.#capabilities.syncProjectMcp(this.#project(record.projectId).gitRoot, record.projectId);
+    return record;
+  }
+
+  deleteMcp(id: string): void {
+    const record = this.#capabilities.listMcp().find((item) => item.id === id);
+    this.#capabilities.deleteMcp(id);
+    if (record?.projectId) this.#capabilities.syncProjectMcp(this.#project(record.projectId).gitRoot, record.projectId);
+  }
+
+  listSkills(projectId: string) {
+    const project = this.#project(projectId);
+    return this.#capabilities.listSkills(project.gitRoot, project.id);
+  }
+
+  skillDetail(projectId: string, id: string) {
+    const project = this.#project(projectId);
+    return this.#capabilities.skillDetail(id, project.gitRoot, project.id);
+  }
+
+  installSkill(projectId: string, sourcePath: string, name?: string) {
+    const project = this.#project(projectId);
+    return this.#capabilities.installSkill(project.gitRoot, sourcePath, name);
+  }
+
+  uninstallSkill(projectId: string, name: string): void {
+    const project = this.#project(projectId);
+    this.#capabilities.uninstallSkill(project.gitRoot, name);
+  }
+
+  listMemory(projectId: string) {
+    return this.#capabilities.listMemory(this.#project(projectId).gitRoot);
+  }
+
+  readMemory(projectId: string, path: string) {
+    return this.#capabilities.readMemory(this.#project(projectId).gitRoot, path);
+  }
+
+  saveMemory(projectId: string, path: string, content: string) {
+    return this.#capabilities.saveMemory(this.#project(projectId).gitRoot, path, content);
+  }
+
+  activity(sessionId?: string): Record<string, unknown> {
+    const events = (sessionId ? this.#events.get(sessionId) ?? [] : this.#eventLog).slice(-500);
+    const backgroundTasks = this.#state.sessions
+      .filter((session) => !session.archivedAt && (!sessionId || session.id === sessionId))
+      .filter((session) => ['running', 'waiting_permission', 'starting'].includes(session.status))
+      .map((session) => ({ id: 'task:' + session.id, sessionId: session.id, title: session.name, status: session.status, startedAt: session.updatedAt }));
+    return {
+      sessionId: sessionId ?? null,
+      events: events.map((event) => ({ id: event.id, type: event.type, sessionId: event.sessionId, createdAt: event.createdAt, payload: event.payload })),
+      backgroundTasks,
+      subagents: this.#state.teams.flatMap((team) => team.memberSessionIds.map((memberSessionId) => ({ teamId: team.id, sessionId: memberSessionId, role: this.#state.sessions.find((session) => session.id === memberSessionId)?.name ?? 'Agent', status: team.status }))),
+    };
+  }
+
+  async stopBackgroundTask(taskId: string): Promise<void> {
+    const sessionId = taskId.startsWith('task:') ? taskId.slice(5) : taskId;
+    if (this.#activeTurns.has(sessionId)) await this.interrupt(sessionId);
+    else {
+      const session = this.#session(sessionId);
+      session.status = 'stopped'; session.updatedAt = Date.now(); this.#save();
+    }
+    this.#emit({ sessionId, type: 'background.task.stopped', payload: { taskId } });
+  }
+
+  listScheduledTasks(projectId?: string): ScheduledTask[] { return this.#capabilities.listScheduledTasks(projectId); }
+
+  saveScheduledTask(input: Partial<ScheduledTask> & Pick<ScheduledTask, 'name' | 'projectId' | 'prompt' | 'intervalMinutes'>): ScheduledTask {
+    this.#project(input.projectId);
+    return this.#capabilities.saveScheduledTask(input);
+  }
+
+  setScheduledTaskEnabled(id: string, enabled: boolean): ScheduledTask { return this.#capabilities.setScheduledTaskEnabled(id, enabled); }
+
+  deleteScheduledTask(id: string): void { this.#capabilities.deleteScheduledTask(id); }
+
+  async runScheduledTask(id: string): Promise<ScheduledTask> {
+    const task = this.#capabilities.listScheduledTasks().find((item) => item.id === id);
+    if (!task) throw new Error('定时任务不存在');
+    const now = Date.now();
+    const nextRunAt = now + task.intervalMinutes * 60_000;
+    this.#capabilities.updateScheduledTask(id, { lastRunAt: now, nextRunAt, lastError: undefined });
+    try {
+      let session = task.sessionId ? this.#state.sessions.find((item) => item.id === task.sessionId && !item.archivedAt) : undefined;
+      if (!session) {
+        session = await this.createSession(task.projectId, {
+          ...(task.runtimeType ? { runtimeType: task.runtimeType } : {}),
+          ...(task.providerId ? { providerId: task.providerId } : {}),
+          ...(task.model ? { model: task.model } : {}),
+          ...(task.permissionMode ? { permissionMode: task.permissionMode } : {}),
+        });
+        this.#capabilities.updateScheduledTask(id, { sessionId: session.id });
+      }
+      await this.sendPrompt(session.id, task.prompt);
+      this.#emit({ sessionId: session.id, type: 'scheduled.task.started', payload: { taskId: id, name: task.name } });
+      return this.#capabilities.listScheduledTasks().find((item) => item.id === id) as ScheduledTask;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#capabilities.updateScheduledTask(id, { lastError: truncate(message, 2_000) });
+      throw error;
+    }
+  }
+
   terminalShell(): WorkspaceSettings['terminalShell'] {
     return this.#state.settings.terminalShell;
   }
@@ -355,6 +474,7 @@ export class InteractiveWorkspace {
       eventCounts,
       transcriptPersistence: this.#state.settings.persistConversation,
       credentialStore: 'windows_credential_manager',
+      mcpServers: this.#capabilities.listMcp().length,
       containsCredentials: false,
       containsPrompts: false,
       containsUserSource: false,
@@ -722,6 +842,7 @@ export class InteractiveWorkspace {
   }
 
   async shutdown(): Promise<void> {
+    if (this.#schedulerTimer) { clearInterval(this.#schedulerTimer); this.#schedulerTimer = null; }
     for (const pending of this.#approvals.values()) pending.reject(new Error('Tsukiori 正在退出'));
     this.#approvals.clear();
     await Promise.allSettled([
@@ -729,6 +850,15 @@ export class InteractiveWorkspace {
       this.#claudeClient?.stop() ?? Promise.resolve(),
     ]);
     this.#clients.clear();
+  }
+
+  async #runScheduledTasks(): Promise<void> {
+    const now = Date.now();
+    for (const task of this.#capabilities.listScheduledTasks()) {
+      if (!task.enabled || task.nextRunAt > now) continue;
+      try { await this.runScheduledTask(task.id); }
+      catch { /* Error is persisted on the task and shown in Scheduled Tasks. */ }
+    }
   }
 
   async #ensureCodexClient(sessionId: string): Promise<CodexAppServerClient> {

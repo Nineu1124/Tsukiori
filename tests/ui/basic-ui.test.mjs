@@ -43,14 +43,14 @@ test('settings center exposes all specification categories and functional contro
   const [html, script] = await rendererFiles();
   assert.match(html, /id="open-settings"/);
   assert.match(html, /id="settings-dialog"/);
-  for (const page of ['general','appearance','account','agent','terminal','mcp','agents','skills','memory','usage','trace','diagnostics','projects','devices','github','shortcuts','billing','about']) {
+  for (const page of ['general','appearance','account','agent','terminal','mcp','agents','skills','memory','scheduled','usage','trace','diagnostics','projects','devices','github','shortcuts','billing','about']) {
     assert.match(html, new RegExp(`data-settings-page="${page}"`));
     assert.match(html, new RegExp(`data-settings-view="${page}"`));
   }
-  for (const id of ['save-settings','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','refresh-mcp','refresh-skills','run-doctor','export-diagnostic-settings','export-settings']) {
+  for (const id of ['save-settings','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','new-mcp','save-mcp','delete-provider','refresh-mcp','import-skill','refresh-skills','load-memory','save-memory','refresh-agent-activity','new-scheduled-task','save-scheduled-task','run-doctor','export-diagnostic-settings','export-settings']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','deleteProvider','refreshRuntimes','diagnosticSummary','exportDiagnostic','exportSettings']) {
+  for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','listMcp','saveMcp','deleteMcp','listSkills','skillDetail','pickSkillSource','installSkill','uninstallSkill','listMemory','readMemory','saveMemory','activity','stopBackgroundTask','listScheduledTasks','saveScheduledTask','setScheduledTaskEnabled','deleteScheduledTask','runScheduledTask','diagnosticSummary','exportDiagnostic','exportSettings']) {
     assert.match(script, new RegExp(`workspace\.${method}`));
   }
 });
@@ -77,6 +77,9 @@ test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/E
   assert.match(script, /return 'read'/);
   assert.match(styles, /data-tool-kind="modify"/);
   assert.match(styles, /data-tool-kind="execute"/);
+  assert.match(workspace, /WorkspaceCapabilities/);
+  assert.match(workspace, /saveMemory/);
+  assert.match(workspace, /installSkill/);
 });
 
 test('Renderer uses a fixed preload surface and does not gain Node or HTML injection primitives', async () => {

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "releaseCandidate": "1.0.0-rc.3",
+  "platform": "windows-x64",
+  "desktop": {
+    "version": "1.0.0-rc.3",
+    "hostProtocolVersion": 1,
+    "ipcProtocolVersion": 1,
+    "maximumDatabaseSchema": 6
+  },
+  "daemon": {
+    "version": "1.0.0-rc.3",
+    "hostProtocolVersion": 1,
+    "ipcProtocolVersion": 1
+  },
+  "workbench": {
+    "sessionTranscript": "local-opt-in",
+    "worktreeFilesAndAttachments": "supported",
+    "windowsConPty": "supported",
+    "terminalShellSelection": "supported",
+    "sandboxedLocalPreview": "supported",
+    "codexSkillsMcp": "supported",
+    "mcpConfiguration": "project-mcp-json-with-sanitized-env-keys",
+    "skillImport": "local-project-claude-skills",
+    "memoryEditor": "project-memory-allowlist",
+    "scheduledTasks": "isolated-runtime-session",
+    "providerModelDiscovery": "supported",
+    "resizableWorkPanel": "260-720px-persisted",
+    "agentTeam": "2-4-independent-worktrees",
+    "diagnostics": "sanitized-local-export",
+    "responsiveBaseline": "1600x1000",
+    "compactMinimum": "1040x720",
+    "reducedMotion": "supported"
+  },
+  "runtimes": [
+    {
+      "runtime": "opencode",
+      "minimumSupportedVersion": "1.18.4",
+      "maximumTestedVersion": "1.18.4",
+      "schemaVersion": "1.18.4",
+      "schemaSha256": "f5cb443f0d160fc4b17190f64c2401f199160eb2137ce4e00ca319b99aa34005",
+      "knownIssues": [
+        "In-flight turn recovery was not exercised and must remain unknown.",
+        "The provider configuration exposes key-like option field names; fixtures never retain their values.",
+        "The global SSE stream must be explicitly closed before server shutdown."
+      ]
+    },
+    {
+      "runtime": "codex",
+      "minimumSupportedVersion": "0.146.0",
+      "maximumTestedVersion": "0.146.0",
+      "schemaVersion": "0.146.0",
+      "schemaSha256": "776ab888b2e673311a4c53ed086d66b061dcfdc8ca595b4cf43220c2b3d04368",
+      "knownIssues": [
+        "Codex 0.142.5 was rejected by the current model service and was replaced only inside the ignored spike runtime directory.",
+        "WebSocket sampling timed out on this host and automatically degraded to HTTPS.",
+        "No structured network approval context was observed; this capability remains unknown."
+      ]
+    },
+    {
+      "runtime": "claude-code",
+      "minimumSupportedVersion": "2.1.201",
+      "maximumTestedVersion": "2.1.201",
+      "transport": "stream-json-verbose",
+      "supportLevel": "degraded",
+      "knownIssues": [
+        "Permission semantics are limited to Plan, Accept Edits, and Don't Ask.",
+        "MCP and Skills are managed for Claude project directories; Claude-specific OAuth management remains outside the adapter contract.",
+        "Provider and model compatibility depend on the configured Anthropic, DeepSeek, or Anthropic-compatible service."
+      ]
+    },
+    {
+      "runtime": "generic-acp",
+      "supportLevel": "unknown",
+      "knownIssues": ["Generic ACP is not connected to Local V1 session creation and remains backlog task B2."]
+    }
+  ],
+  "publication": {
+    "channel": "local",
+    "localV1RequiresAuthenticode": false,
+    "verifiedPublisherRequiresAuthenticode": true,
+    "unsignedSmartScreenWarningRequired": true,
+    "detachedManifestSignature": "Ed25519",
+    "testArtifactCommitted": false,
+    "privateSigningMaterialCommitted": false,
+    "localInstallerSha256": "fd84860d64fae5b8e46fbe7c984e23c239530dd6b16ba4c2e630685549ea84af"
+  }
+}

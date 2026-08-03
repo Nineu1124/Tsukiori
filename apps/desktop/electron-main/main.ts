@@ -351,6 +351,55 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       ok: true,
       ...(await workspace.listProviderModels(String(command.providerId ?? ''))),
     };
+    if (command.type === 'list_mcp') return { ok: true, servers: workspace.listMcp(typeof command.projectId === 'string' ? command.projectId : undefined) };
+    if (command.type === 'save_mcp') return {
+      ok: true,
+      server: workspace.saveMcp({
+        ...(typeof command.id === 'string' ? { id: command.id } : {}),
+        name: String(command.name ?? ''),
+        scope: String(command.scope ?? 'user') as 'user' | 'project' | 'local',
+        ...(typeof command.projectId === 'string' ? { projectId: command.projectId } : {}),
+        transport: String(command.transport ?? 'stdio') as 'stdio' | 'http' | 'sse',
+        ...(typeof command.command === 'string' ? { command: command.command } : {}),
+        args: Array.isArray(command.args) ? command.args.map(String) : [],
+        ...(typeof command.url === 'string' ? { url: command.url } : {}),
+        envKeys: Array.isArray(command.envKeys) ? command.envKeys.map(String) : [],
+        enabled: command.enabled !== false,
+      }),
+    };
+    if (command.type === 'delete_mcp') { workspace.deleteMcp(String(command.id ?? '')); return { ok: true }; }
+    if (command.type === 'list_skills') return { ok: true, skills: workspace.listSkills(String(command.projectId ?? '')) };
+    if (command.type === 'skill_detail') return { ok: true, skill: workspace.skillDetail(String(command.projectId ?? ''), String(command.id ?? '')) };
+    if (command.type === 'pick_skill_source') {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const selection = owner
+        ? await dialog.showOpenDialog(owner, { title: '选择本地 Skill 文件夹', properties: ['openDirectory'] })
+        : await dialog.showOpenDialog({ title: '选择本地 Skill 文件夹', properties: ['openDirectory'] });
+      return selection.canceled || !selection.filePaths[0] ? { ok: true, canceled: true } : { ok: true, sourcePath: selection.filePaths[0] };
+    }
+    if (command.type === 'install_skill') return { ok: true, skill: workspace.installSkill(String(command.projectId ?? ''), String(command.sourcePath ?? ''), typeof command.name === 'string' ? command.name : undefined) };
+    if (command.type === 'uninstall_skill') { workspace.uninstallSkill(String(command.projectId ?? ''), String(command.name ?? '')); return { ok: true }; }
+    if (command.type === 'list_memory') return { ok: true, files: workspace.listMemory(String(command.projectId ?? '')) };
+    if (command.type === 'read_memory') return { ok: true, file: workspace.readMemory(String(command.projectId ?? ''), String(command.path ?? '')) };
+    if (command.type === 'save_memory') return { ok: true, file: workspace.saveMemory(String(command.projectId ?? ''), String(command.path ?? ''), String(command.content ?? '')) };
+    if (command.type === 'activity') return { ok: true, activity: workspace.activity(typeof command.sessionId === 'string' ? command.sessionId : undefined) };
+    if (command.type === 'stop_background_task') { await workspace.stopBackgroundTask(String(command.taskId ?? '')); return { ok: true }; }
+    if (command.type === 'list_scheduled_tasks') return { ok: true, tasks: workspace.listScheduledTasks(typeof command.projectId === 'string' ? command.projectId : undefined) };
+    if (command.type === 'save_scheduled_task') return {
+      ok: true,
+      task: workspace.saveScheduledTask({
+        ...(typeof command.id === 'string' ? { id: command.id } : {}),
+        name: String(command.name ?? ''), projectId: String(command.projectId ?? ''), prompt: String(command.prompt ?? ''), intervalMinutes: Number(command.intervalMinutes ?? 60),
+        enabled: command.enabled === true,
+        ...(command.runtimeType === 'claude' || command.runtimeType === 'codex' ? { runtimeType: command.runtimeType } : {}),
+        ...(typeof command.providerId === 'string' ? { providerId: command.providerId } : {}),
+        ...(typeof command.model === 'string' ? { model: command.model } : {}),
+        ...(typeof command.permissionMode === 'string' ? { permissionMode: command.permissionMode as 'manual' | 'plan' | 'acceptEdits' | 'dontAsk' } : {}),
+      }),
+    };
+    if (command.type === 'set_scheduled_task_enabled') return { ok: true, task: workspace.setScheduledTaskEnabled(String(command.id ?? ''), command.enabled === true) };
+    if (command.type === 'delete_scheduled_task') { workspace.deleteScheduledTask(String(command.id ?? '')); return { ok: true }; }
+    if (command.type === 'run_scheduled_task') return { ok: true, task: await workspace.runScheduledTask(String(command.id ?? '')) };
     if (command.type === 'diagnostic_summary') return { ok: true, diagnostic: workspace.diagnosticSummary() };
     if (command.type === 'export_diagnostic') {
       const owner = BrowserWindow.fromWebContents(event.sender);
