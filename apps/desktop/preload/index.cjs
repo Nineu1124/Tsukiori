@@ -10,6 +10,7 @@ const api = Object.freeze({
   workspace: Object.freeze({
     snapshot: () => ipcRenderer.invoke('workspace:snapshot'),
     pickProject: () => ipcRenderer.invoke('workspace:command', { type: 'pick_project' }),
+    removeProject: (projectId) => ipcRenderer.invoke('workspace:command', { type: 'remove_project', projectId }),
     refreshRuntimes: () => ipcRenderer.invoke('workspace:command', { type: 'refresh_runtimes' }),
     createSession: (projectId, selection) => ipcRenderer.invoke(
       'workspace:command', { type: 'create_session', projectId, ...(selection ?? {}) },
@@ -17,6 +18,9 @@ const api = Object.freeze({
     updateSessionOptions: (sessionId, selection) => ipcRenderer.invoke(
       'workspace:command', { type: 'update_session_options', sessionId, ...(selection ?? {}) },
     ),
+    renameSession: (sessionId, name) => ipcRenderer.invoke('workspace:command', { type: 'rename_session', sessionId, name }),
+    pinSession: (sessionId, pinned) => ipcRenderer.invoke('workspace:command', { type: 'pin_session', sessionId, pinned: pinned === true }),
+    archiveSession: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'archive_session', sessionId }),
     updateSettings: (settings) => ipcRenderer.invoke(
       'workspace:command', { type: 'update_settings', settings },
     ),
@@ -33,6 +37,18 @@ const api = Object.freeze({
     openWorktree: (sessionId) => ipcRenderer.invoke(
       'workspace:command', { type: 'open_worktree', sessionId },
     ),
+    listFiles: (sessionId, query) => ipcRenderer.invoke('workspace:command', { type: 'list_files', sessionId, query }),
+    readFile: (sessionId, path) => ipcRenderer.invoke('workspace:command', { type: 'read_file', sessionId, path }),
+    pickAttachments: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'pick_attachments', sessionId }),
+    codexNative: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'codex_native', sessionId }),
+    githubStatus: (projectId) => ipcRenderer.invoke('workspace:command', { type: 'github_status', projectId }),
+    checkUpdates: () => ipcRenderer.invoke('workspace:command', { type: 'check_updates' }),
+    createTeam: (projectId, goal, agents) => ipcRenderer.invoke('workspace:command', { type: 'create_team', projectId, goal, agents }),
+    startTerminal: (sessionId, columns, rows) => ipcRenderer.invoke('workspace:command', { type: 'terminal_start', sessionId, columns, rows }),
+    terminalInput: (sessionId, data) => ipcRenderer.invoke('workspace:command', { type: 'terminal_input', sessionId, data }),
+    resizeTerminal: (sessionId, columns, rows) => ipcRenderer.invoke('workspace:command', { type: 'terminal_resize', sessionId, columns, rows }),
+    stopTerminal: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'terminal_stop', sessionId }),
+    copyText: (text) => ipcRenderer.invoke('workspace:command', { type: 'copy_text', text }),
     openUrl: (url) => ipcRenderer.invoke('workspace:command', { type: 'open_url', url }),
     sendPrompt: (sessionId, text) => ipcRenderer.invoke(
       'workspace:command', { type: 'send_prompt', sessionId, text },

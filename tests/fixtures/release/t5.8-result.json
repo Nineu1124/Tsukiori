@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "task": "T5.8",
+  "decision": "pass",
+  "referenceProducts": [
+    { "name": "Codex Desk", "version": "0.1.4", "use": "read-only product patterns" },
+    { "name": "Lody", "version": "0.75.1", "use": "read-only product patterns" },
+    { "name": "cc-haha", "version": "0.5.1", "use": "read-only product patterns" }
+  ],
+  "features": {
+    "sessionLifecycle": "supported",
+    "localTranscript": "supported",
+    "worktreeFileBrowser": "supported",
+    "boundedTextPreview": "supported",
+    "attachments": "supported",
+    "safeMarkdown": "supported",
+    "windowsConPty": "supported",
+    "sandboxedPreview": "supported",
+    "codexSkillsMcp": "supported",
+    "agentTeam": "supported",
+    "githubReleaseCheck": "supported",
+    "windowsIcon": "supported",
+    "responsiveUiProportions": "supported",
+    "allButtonMotion": "supported",
+    "reducedMotion": "supported",
+    "windowsNsisInstaller": "supported",
+    "orphanProcessCleanup": "supported"
+  },
+  "runtimeBoundaries": {
+    "codex": "supported",
+    "claudeCode": "degraded",
+    "opencode": "unknown",
+    "genericAcp": "unknown"
+  },
+  "limits": {
+    "files": 2000,
+    "textPreviewBytes": 524288,
+    "attachmentsPerSelection": 10,
+    "attachmentBytes": 10485760,
+    "transcriptBytesPerSession": 5242880,
+    "agentTeamMembers": 4,
+    "terminalVisibleCharacters": 500000
+  },
+  "security": {
+    "referenceSourceCommitted": false,
+    "referenceBrandAssetsCommitted": false,
+    "credentialsCommitted": false,
+    "userPromptsCommitted": false,
+    "rendererNodeIntegration": false,
+    "worktreeClaimedAsSandbox": false
+  },
+  "verification": {
+    "typecheck": { "passed": 32, "failed": 0 },
+    "interactive": { "passed": 10, "failed": 0 },
+    "ui": { "passed": 9, "failed": 0 },
+    "security": { "passed": 6, "failed": 0 },
+    "host": { "passed": 9, "failed": 0 },
+    "checkpointTasks": 30,
+    "secretScanFiles": 274,
+    "releaseLifecycle": "passed",
+    "installerSha256": "121f9fe0a037b596be73a7702ad58a8ecd2976fb680ce3b544bd11827b3c5790",
+    "installerBytes": 217513770,
+    "orphanPipeHostsAfterExit": 0
+  }
+}

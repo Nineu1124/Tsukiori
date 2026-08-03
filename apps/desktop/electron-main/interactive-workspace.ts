@@ -1,7 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import {
+  appendFileSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { WindowsCredentialBroker } from '@tsukiori/credential-broker';
 import {
   CodexAppServerClient,
@@ -48,6 +58,20 @@ type SessionState = {
   status: 'starting' | 'ready' | 'running' | 'waiting_permission' | 'error' | 'stopped';
   lastError?: string;
   createdAt: number;
+  updatedAt: number;
+  pinned?: boolean;
+  archivedAt?: number;
+};
+
+type TeamRunState = {
+  id: string;
+  projectId: string;
+  name: string;
+  goal: string;
+  memberSessionIds: string[];
+  status: 'dispatching' | 'running' | 'completed' | 'partial_failure';
+  createdAt: number;
+  updatedAt: number;
 };
 
 type WorkspaceSettings = {
@@ -62,14 +86,17 @@ type WorkspaceSettings = {
   defaultProviderId: string;
   defaultModel: string;
   defaultPermissionMode: PermissionMode;
+  persistConversation: boolean;
+  confirmHighRisk: boolean;
 };
 
 type PersistedState = {
-  schemaVersion: 2;
+  schemaVersion: 3;
   projects: ProjectState[];
   sessions: SessionState[];
   settings: WorkspaceSettings;
   providers: ProviderConfig[];
+  teams: TeamRunState[];
 };
 
 type RuntimeState = {
@@ -117,11 +144,13 @@ const defaultSettings: WorkspaceSettings = {
   autoUpdate: true, startMinimized: false, defaultProjectDirectory: '',
   defaultRuntime: 'codex', defaultProviderId: 'provider:chatgpt', defaultModel: 'auto',
   defaultPermissionMode: 'manual',
+  persistConversation: true, confirmHighRisk: true,
 };
 
 export class InteractiveWorkspace {
   readonly #statePath: string;
   readonly #worktreeRoot: string;
+  readonly #transcriptRoot: string;
   readonly #emitExternal: (event: WorkspaceEvent) => void;
   readonly #discoverCodex: () => CodexLaunch;
   readonly #discoverClaude: () => ClaudeLaunch;
@@ -129,7 +158,7 @@ export class InteractiveWorkspace {
   readonly #createClaudeClient: InteractiveWorkspaceOptions['createClaudeClient'];
   readonly #providers: ProviderRegistry;
   #state: PersistedState = {
-    schemaVersion: 2, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [],
+    schemaVersion: 3, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [], teams: [],
   };
   #runtimes: RuntimeState[] = [];
   #codexLaunch: CodexLaunch | null = null;
@@ -143,8 +172,9 @@ export class InteractiveWorkspace {
   #approvals = new Map<string, ApprovalResolver>();
 
   constructor(options: InteractiveWorkspaceOptions) {
-    this.#statePath = join(options.userDataPath, 'workspace-state-v2.json');
+    this.#statePath = join(options.userDataPath, 'workspace-state-v3.json');
     this.#worktreeRoot = join(options.userDataPath, 'worktrees');
+    this.#transcriptRoot = join(options.userDataPath, 'transcripts');
     this.#emitExternal = options.emit;
     this.#discoverCodex = options.discoverCodex ?? discoverCodexLaunch;
     this.#discoverClaude = options.discoverClaude ?? discoverClaudeLaunch;
@@ -152,6 +182,7 @@ export class InteractiveWorkspace {
     this.#createClaudeClient = options.createClaudeClient;
     mkdirSync(options.userDataPath, { recursive: true });
     mkdirSync(this.#worktreeRoot, { recursive: true });
+    mkdirSync(this.#transcriptRoot, { recursive: true });
     this.#load(options.userDataPath);
     this.#providers = new ProviderRegistry({
       providers: this.#state.providers,
@@ -159,6 +190,7 @@ export class InteractiveWorkspace {
       persist: (providers) => { this.#state.providers = providers; this.#save(); },
     });
     this.#state.providers = this.#providers.raw();
+    this.#loadTranscripts();
     this.refreshRuntimes();
     this.#save();
   }
@@ -168,6 +200,7 @@ export class InteractiveWorkspace {
       mode: 'interactive',
       projects: this.#state.projects,
       sessions: this.#state.sessions,
+      teams: this.#state.teams,
       runtimes: this.#runtimes,
       providers: this.#providers.list(),
       settings: this.#state.settings,
@@ -189,6 +222,11 @@ export class InteractiveWorkspace {
   pollEvents(afterSequence: number): { cursor: number; events: WorkspaceEvent[] } {
     const safe = Number.isInteger(afterSequence) && afterSequence >= 0 ? afterSequence : 0;
     return { cursor: this.#eventSequence, events: this.#eventLog.filter((event) => event.sequence > safe) };
+  }
+
+  publishLocalEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
+    this.#session(sessionId);
+    this.#emit({ sessionId, type, payload });
   }
 
   refreshRuntimes(): RuntimeState[] {
@@ -251,6 +289,8 @@ export class InteractiveWorkspace {
       defaultProviderId: safeSettingText(input.defaultProviderId, current.defaultProviderId, 128),
       defaultModel: safeSettingText(input.defaultModel, current.defaultModel, 128),
       defaultPermissionMode: permissionMode(input.defaultPermissionMode ?? current.defaultPermissionMode),
+      persistConversation: typeof input.persistConversation === 'boolean' ? input.persistConversation : current.persistConversation,
+      confirmHighRisk: typeof input.confirmHighRisk === 'boolean' ? input.confirmHighRisk : current.confirmHighRisk,
     };
     if (!this.#providers.list().some((provider) => provider.id === next.defaultProviderId)) {
       next.defaultProviderId = 'provider:chatgpt';
@@ -297,6 +337,193 @@ export class InteractiveWorkspace {
     return project;
   }
 
+  removeProject(projectId: string): void {
+    const hasSessions = this.#state.sessions.some((session) => session.projectId === projectId);
+    if (hasSessions) throw new Error('项目仍有 Session 历史；为避免遗失 Worktree 绑定，当前不能移除');
+    const index = this.#state.projects.findIndex((project) => project.id === projectId);
+    if (index < 0) throw new Error('Project 不存在');
+    this.#state.projects.splice(index, 1);
+    this.#save();
+    this.#emit({ type: 'project.removed', payload: { projectId } });
+  }
+
+  githubStatus(projectId: string): Record<string, unknown> {
+    const project = this.#project(projectId);
+    let userName = '未配置';
+    try { userName = this.#git(project.gitRoot, ['config', '--get', 'user.name']).trim() || '未配置'; } catch { userName = '未配置'; }
+    let remote = '';
+    try { remote = this.#git(project.gitRoot, ['remote', 'get-url', 'origin']).trim(); } catch { remote = ''; }
+    let remoteHost = 'none'; let repository = 'none';
+    if (remote) {
+      const normalized = remote.replace(/^git@([^:]+):/, 'ssh://$1/');
+      try {
+        const url = new URL(normalized);
+        remoteHost = url.hostname;
+        repository = basename(url.pathname).replace(/\.git$/i, '');
+      } catch { remoteHost = 'local-or-custom'; repository = basename(remote).replace(/\.git$/i, ''); }
+    }
+    const gh = spawnSync('gh.exe', ['auth', 'status'], {
+      encoding: 'utf8', windowsHide: true, shell: false, timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 128 * 1024,
+    });
+    return { userName, branch: project.branch, remoteHost, repository, ghAuthenticated: gh.status === 0 };
+  }
+
+  renameSession(sessionId: string, name: string): SessionState {
+    const session = this.#session(sessionId);
+    const clean = safeSettingText(name, session.name, 80);
+    if (!clean) throw new Error('Session 名称不能为空');
+    session.name = clean;
+    session.updatedAt = Date.now();
+    this.#save();
+    this.#emit({ sessionId, type: 'session.renamed', payload: { name: clean } });
+    return session;
+  }
+
+  pinSession(sessionId: string, pinned: boolean): SessionState {
+    const session = this.#session(sessionId);
+    session.pinned = pinned;
+    session.updatedAt = Date.now();
+    this.#save();
+    this.#emit({ sessionId, type: 'session.pinned', payload: { pinned } });
+    return session;
+  }
+
+  archiveSession(sessionId: string): SessionState {
+    const session = this.#session(sessionId);
+    if (session.status === 'running' || session.status === 'waiting_permission') throw new Error('运行中的 Session 不能归档');
+    session.archivedAt = Date.now();
+    session.updatedAt = session.archivedAt;
+    session.status = 'stopped';
+    this.#save();
+    this.#emit({ sessionId, type: 'session.archived', payload: { worktreeRetained: true } });
+    return session;
+  }
+
+  sessionWorktree(sessionId: string): string {
+    return this.#session(sessionId).worktreePath;
+  }
+
+  listFiles(sessionId: string, query = ''): Array<{ path: string; size: number; modifiedAt: number }> {
+    const session = this.#session(sessionId);
+    const needle = query.trim().toLowerCase();
+    const files: Array<{ path: string; size: number; modifiedAt: number }> = [];
+    const visit = (directory: string): void => {
+      if (files.length >= 2_000) return;
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.name === '.git' || entry.name === 'node_modules' || entry.name === '.turbo') continue;
+        const absolute = join(directory, entry.name);
+        if (entry.isDirectory()) visit(absolute);
+        else if (entry.isFile()) {
+          const path = relative(session.worktreePath, absolute).replaceAll('\\', '/');
+          if (needle && !path.toLowerCase().includes(needle)) continue;
+          const stat = statSync(absolute);
+          files.push({ path, size: stat.size, modifiedAt: stat.mtimeMs });
+        }
+        if (files.length >= 2_000) break;
+      }
+    };
+    visit(session.worktreePath);
+    return files.sort((a, b) => a.path.localeCompare(b.path)).slice(0, 2_000);
+  }
+
+  readTextFile(sessionId: string, path: string): { path: string; content: string; bytes: number; truncated: boolean } {
+    const session = this.#session(sessionId);
+    const absolute = resolveInside(session.worktreePath, path);
+    const stat = statSync(absolute);
+    if (!stat.isFile()) throw new Error('所选路径不是文件');
+    const maximum = 512 * 1024;
+    const data = readFileSync(absolute);
+    if (looksBinary(data.subarray(0, Math.min(data.length, 8_192)))) throw new Error('二进制文件不能在文本预览中打开');
+    return {
+      path: safeRelativePath(path),
+      content: data.subarray(0, maximum).toString('utf8'),
+      bytes: data.length,
+      truncated: data.length > maximum,
+    };
+  }
+
+  attachFiles(sessionId: string, sources: readonly string[]): Array<{ path: string; bytes: number; kind: string }> {
+    const session = this.#session(sessionId);
+    if (sources.length < 1 || sources.length > 10) throw new Error('一次最多添加 10 个附件');
+    const destination = join(session.worktreePath, '.tsukiori', 'attachments');
+    mkdirSync(destination, { recursive: true });
+    const attached = sources.map((source, index) => {
+      const canonical = realpathSync.native(resolve(source));
+      const stat = statSync(canonical);
+      if (!stat.isFile() || stat.size > 10 * 1024 * 1024) throw new Error('附件必须是小于 10 MB 的文件');
+      const extension = extname(canonical).slice(0, 16);
+      const stem = basename(canonical, extname(canonical)).replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 60) || 'attachment';
+      const name = `${Date.now()}-${index + 1}-${stem}${extension}`;
+      const target = join(destination, name);
+      copyFileSync(canonical, target);
+      return { path: relative(session.worktreePath, target).replaceAll('\\', '/'), bytes: stat.size, kind: attachmentKind(extension) };
+    });
+    this.#emit({ sessionId, type: 'attachment.added', payload: { files: attached } });
+    return attached;
+  }
+
+  async codexNativeCapabilities(sessionId: string): Promise<Record<string, unknown>> {
+    const session = this.#session(sessionId);
+    if (session.runtimeType !== 'codex') throw new Error('原生 Skills/MCP 仅适用于 Codex Session');
+    const client = await this.#ensureCodexClient(sessionId);
+    const [skillsRaw, mcpRaw] = await Promise.all([
+      client.request('skills/list', { cwds: [session.worktreePath], forceReload: false }),
+      client.request('mcpServerStatus/list', { detail: 'toolsAndAuthOnly' }),
+    ]);
+    const skillsGroups = Array.isArray(object(skillsRaw).data) ? object(skillsRaw).data as unknown[] : [];
+    const skills = skillsGroups.flatMap((group) => Array.isArray(object(group).skills) ? object(group).skills as unknown[] : [])
+      .slice(0, 200).map((skill) => ({
+        name: safeSettingText(object(skill).name, 'Unnamed skill', 120),
+        description: safeSettingText(object(skill).description, '', 500),
+        enabled: object(skill).enabled !== false,
+        scope: safeSettingText(object(skill).scope, 'unknown', 40),
+      }));
+    const servers = (Array.isArray(object(mcpRaw).data) ? object(mcpRaw).data as unknown[] : []).slice(0, 100).map((server) => ({
+      name: safeSettingText(object(server).name, 'Unnamed MCP', 120),
+      authStatus: safeSettingText(object(server).authStatus, 'unknown', 80),
+      toolCount: Object.keys(object(object(server).tools)).length,
+      resourceCount: Array.isArray(object(server).resources) ? (object(server).resources as unknown[]).length : 0,
+    }));
+    return { supportLevel: 'supported', skills, servers, refreshedAt: Date.now() };
+  }
+
+  async createTeam(projectId: string, goal: string, agents: ReadonlyArray<Record<string, unknown>>): Promise<TeamRunState> {
+    const cleanGoal = safeSettingText(goal, '', 8_000);
+    if (!cleanGoal) throw new Error('团队目标不能为空');
+    if (agents.length < 2 || agents.length > 4) throw new Error('Agent Team 需要 2–4 个成员');
+    const team: TeamRunState = {
+      id: 'team:' + randomUUID(), projectId, name: cleanGoal.slice(0, 48), goal: cleanGoal,
+      memberSessionIds: [], status: 'dispatching', createdAt: Date.now(), updatedAt: Date.now(),
+    };
+    this.#state.teams.push(team);
+    this.#save();
+    try {
+      for (const [index, agent] of agents.entries()) {
+        const runtimeType = agent.runtimeType === 'claude' ? 'claude' : 'codex';
+        const role = safeSettingText(agent.role, `Agent ${index + 1}`, 80);
+        const session = await this.createSession(projectId, {
+          runtimeType,
+          ...(typeof agent.providerId === 'string' ? { providerId: agent.providerId } : {}),
+          ...(typeof agent.model === 'string' ? { model: agent.model } : {}),
+          permissionMode: runtimeType === 'claude' ? 'plan' : 'manual',
+        });
+        this.renameSession(session.id, role);
+        team.memberSessionIds.push(session.id);
+      }
+      team.status = 'running'; team.updatedAt = Date.now(); this.#save();
+      this.#emit({ type: 'team.started', payload: { teamId: team.id, projectId, memberCount: team.memberSessionIds.length } });
+      await Promise.all(team.memberSessionIds.map((sessionId, index) => this.sendPrompt(
+        sessionId,
+        `你是本地 Agent Team 的成员“${safeSettingText(agents[index]?.role, `Agent ${index + 1}`, 80)}”。\n团队目标：${cleanGoal}\n请独立完成你负责的部分，明确输出结论、风险和可交付结果；不要假设其他成员已经完成工作。`,
+      )));
+      return team;
+    } catch (error) {
+      team.status = 'partial_failure'; team.updatedAt = Date.now(); this.#save();
+      throw error;
+    }
+  }
+
   async createSession(projectId: string, selection?: Partial<Pick<SessionState, 'runtimeType' | 'providerId' | 'model' | 'permissionMode'>>): Promise<SessionState> {
     const project = this.#project(projectId);
     const runtimeType = selection?.runtimeType ?? this.#state.settings.defaultRuntime;
@@ -319,7 +546,7 @@ export class InteractiveWorkspace {
       name: (runtimeType === 'codex' ? 'Codex ' : 'Claude ') + runtimeCount,
       runtimeType, providerId, model, environment: 'windows-native', permissionMode: selectedPermission,
       worktreePath, branch, ...(runtimeType === 'claude' ? { threadId: randomUUID() } : {}),
-      turnCount: 0, status: 'ready', createdAt: Date.now(),
+      turnCount: 0, status: 'ready', createdAt: Date.now(), updatedAt: Date.now(),
     };
     this.#state.sessions.push(session);
     this.#save();
@@ -339,6 +566,7 @@ export class InteractiveWorkspace {
     session.providerId = provider.id;
     session.model = safeModel(input.model ?? provider.models[0] ?? session.model);
     session.permissionMode = permissionMode(input.permissionMode ?? session.permissionMode);
+    session.updatedAt = Date.now();
     this.#save();
     return session;
   }
@@ -348,6 +576,7 @@ export class InteractiveWorkspace {
     if (!prompt || prompt.length > 64_000) throw new Error('Prompt 必须为 1–64000 个字符');
     const session = this.#session(sessionId);
     session.status = 'running';
+    session.updatedAt = Date.now();
     delete session.lastError;
     this.#emit({ sessionId, type: 'user.message', payload: { text: prompt } });
     if (session.runtimeType === 'codex') {
@@ -518,8 +747,17 @@ export class InteractiveWorkspace {
       if (turnId) this.#activeTurns.set(sessionId, turnId);
     } else if (type === 'turn.completed') {
       session.status = payload.status === 'failed' ? 'error' : 'ready';
+      session.updatedAt = Date.now();
       this.#activeTurns.delete(sessionId);
       this.#emit({ sessionId, type: 'git.changed', payload: { action: 'refresh' } });
+      for (const team of this.#state.teams.filter((item) => item.memberSessionIds.includes(sessionId))) {
+        const members = team.memberSessionIds.map((id) => this.#state.sessions.find((item) => item.id === id));
+        if (members.every((member) => member && !['running', 'waiting_permission', 'starting'].includes(member.status))) {
+          team.status = members.some((member) => member?.status === 'error') ? 'partial_failure' : 'completed';
+          team.updatedAt = Date.now();
+          this.#emit({ type: 'team.completed', payload: { teamId: team.id, status: team.status } });
+        }
+      }
     }
     this.#emit({ sessionId, type, payload });
     this.#save();
@@ -550,6 +788,7 @@ export class InteractiveWorkspace {
       if (events.length > 500) events.splice(0, events.length - 500);
       this.#events.set(event.sessionId, events);
     }
+    this.#persistTranscript(event);
     this.#emitExternal(event);
   }
 
@@ -584,29 +823,67 @@ export class InteractiveWorkspace {
   }
 
   #load(userDataPath: string): void {
-    const legacyPath = join(userDataPath, 'workspace-state-v1.json');
-    const source = existsSync(this.#statePath) ? this.#statePath : legacyPath;
+    const version2Path = join(userDataPath, 'workspace-state-v2.json');
+    const version1Path = join(userDataPath, 'workspace-state-v1.json');
+    const source = existsSync(this.#statePath) ? this.#statePath : existsSync(version2Path) ? version2Path : version1Path;
     if (!existsSync(source)) return;
     try {
       const value = JSON.parse(readFileSync(source, 'utf8')) as Record<string, unknown>;
       const projects = Array.isArray(value.projects) ? value.projects as ProjectState[] : [];
       const sessions = Array.isArray(value.sessions) ? value.sessions.map((raw) => migrateSession(object(raw))) : [];
-      const settings = value.schemaVersion === 2 ? { ...defaultSettings, ...object(value.settings) } as WorkspaceSettings : { ...defaultSettings };
-      const providers = value.schemaVersion === 2 && Array.isArray(value.providers) ? value.providers as ProviderConfig[] : [];
-      this.#state = { schemaVersion: 2, projects, sessions, settings, providers };
+      const settings = Number(value.schemaVersion) >= 2 ? { ...defaultSettings, ...object(value.settings) } as WorkspaceSettings : { ...defaultSettings };
+      const providers = Number(value.schemaVersion) >= 2 && Array.isArray(value.providers) ? value.providers as ProviderConfig[] : [];
+      const teams = Number(value.schemaVersion) >= 3 && Array.isArray(value.teams) ? value.teams as TeamRunState[] : [];
+      this.#state = { schemaVersion: 3, projects, sessions, settings, providers, teams };
     } catch {
-      this.#state = { schemaVersion: 2, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [] };
+      this.#state = { schemaVersion: 3, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [], teams: [] };
     }
   }
 
   #save(): void {
     const safe: PersistedState = {
-      schemaVersion: 2, projects: this.#state.projects,
+      schemaVersion: 3, projects: this.#state.projects,
       sessions: this.#state.sessions.map(({ lastError, ...session }) => ({ ...session, ...(lastError ? { lastError: truncate(lastError, 2_000) } : {}) })),
       settings: this.#state.settings,
       providers: this.#state.providers,
+      teams: this.#state.teams,
     };
     writeFileSync(this.#statePath, JSON.stringify(safe, null, 2), { encoding: 'utf8', mode: 0o600 });
+  }
+
+  #loadTranscripts(): void {
+    for (const session of this.#state.sessions) {
+      const path = join(this.#transcriptRoot, safeTranscriptName(session.id));
+      if (!existsSync(path) || statSync(path).size > 8 * 1024 * 1024) continue;
+      const lines = readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean).slice(-1_000);
+      const events: WorkspaceEvent[] = [];
+      for (const line of lines) {
+        try {
+          const raw = JSON.parse(line) as Record<string, unknown>;
+          if (raw.sessionId !== session.id || typeof raw.type !== 'string' || !transcriptEvent(raw.type)) continue;
+          const event: WorkspaceEvent = {
+            id: typeof raw.id === 'string' ? raw.id : randomUUID(),
+            sequence: ++this.#eventSequence,
+            sessionId: session.id,
+            type: raw.type,
+            createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : session.createdAt,
+            payload: object(raw.payload),
+          };
+          events.push(event); this.#eventLog.push(event);
+        } catch { /* Invalid local transcript rows are ignored. */ }
+      }
+      if (events.length) this.#events.set(session.id, events);
+    }
+  }
+
+  #persistTranscript(event: WorkspaceEvent): void {
+    if (!this.#state.settings.persistConversation || !event.sessionId || !transcriptEvent(event.type)) return;
+    const path = join(this.#transcriptRoot, safeTranscriptName(event.sessionId));
+    if (existsSync(path) && statSync(path).size >= 5 * 1024 * 1024) return;
+    appendFileSync(path, JSON.stringify({
+      id: event.id, sessionId: event.sessionId, type: event.type,
+      createdAt: event.createdAt, payload: event.payload,
+    }) + '\n', { encoding: 'utf8', mode: 0o600 });
   }
 
   #usage(): Record<string, unknown> {
@@ -629,6 +906,9 @@ function migrateSession(value: Record<string, unknown>): SessionState {
     status: value.status === 'running' || value.status === 'waiting_permission' ? 'ready' : String(value.status ?? 'ready') as SessionState['status'],
     ...(typeof value.lastError === 'string' ? { lastError: value.lastError } : {}),
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
+    updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
+    ...(value.pinned === true ? { pinned: true } : {}),
+    ...(typeof value.archivedAt === 'number' ? { archivedAt: value.archivedAt } : {}),
   };
 }
 
@@ -711,6 +991,35 @@ function safeRelativePath(value: string): string {
   const normalized = value.replaceAll('\\', '/');
   if (!normalized || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized) || normalized.split('/').includes('..') || normalized.includes('\0')) throw new Error('文件路径必须位于 Session Worktree 内');
   return normalized;
+}
+
+function resolveInside(root: string, value: string): string {
+  const safe = safeRelativePath(value);
+  const absolute = resolve(root, safe);
+  const canonicalRoot = realpathSync.native(root);
+  const canonical = realpathSync.native(absolute);
+  const prefix = canonicalRoot.endsWith(sep) ? canonicalRoot : canonicalRoot + sep;
+  if (canonical !== canonicalRoot && !canonical.toLowerCase().startsWith(prefix.toLowerCase())) throw new Error('文件路径越出 Session Worktree');
+  return canonical;
+}
+
+function looksBinary(value: Buffer): boolean {
+  if (value.includes(0)) return true;
+  let controls = 0;
+  for (const byte of value) if (byte < 9 || (byte > 13 && byte < 32)) controls += 1;
+  return value.length > 0 && controls / value.length > 0.08;
+}
+
+function attachmentKind(extension: string): string {
+  return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(extension.toLowerCase()) ? 'image' : 'file';
+}
+
+function transcriptEvent(type: string): boolean {
+  return ['user.message', 'assistant.delta', 'tool.event', 'turn.completed', 'runtime.error', 'attachment.added'].includes(type);
+}
+
+function safeTranscriptName(sessionId: string): string {
+  return createHash('sha256').update(sessionId).digest('hex') + '.jsonl';
 }
 
 function truncate(value: string, max: number): string { return value.length <= max ? value : value.slice(0, max) + '\n…[truncated]'; }

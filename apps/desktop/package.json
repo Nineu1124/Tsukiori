@@ -17,7 +17,8 @@
   "dependencies": {
     "@tsukiori/adapter-fake": "workspace:*",
     "@tsukiori/credential-broker": "workspace:*",
-    "@tsukiori/protocol": "workspace:*"
+    "@tsukiori/protocol": "workspace:*",
+    "node-pty": "1.1.0"
   },
   "devDependencies": {
     "electron": "43.2.0",

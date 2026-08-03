@@ -13,4 +13,7 @@ await Promise.all([
   cp(resolve(packageRoot, 'renderer'), resolve(outputRoot, 'renderer'), {
     recursive: true,
   }),
+  cp(resolve(packageRoot, 'build'), resolve(outputRoot, 'build'), {
+    recursive: true,
+  }),
 ]);

@@ -67,6 +67,8 @@ test('Local V1 allows unsigned NSIS without weakening the Verified Publisher cha
   const config = readFileSync(join(root, 'apps/desktop/electron-builder.config.cjs'), 'utf8');
   assert.match(config, /TSUKIORI_REQUIRE_CODE_SIGNING === '1'/);
   assert.match(config, /forceCodeSigning: requireSigning/);
+  assert.match(config, /npmRebuild:\s*false/);
+  assert.match(config, /node_modules\/node-pty\/\*\*/);
   const adr = readFileSync(join(root, 'docs/adr/0003-windows-local-release-signing-policy.md'), 'utf8');
   assert.match(adr, /允许 Authenticode 状态为 `NotSigned`/);
   assert.match(adr, /Verified Publisher/);

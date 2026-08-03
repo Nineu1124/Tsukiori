@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, screen, shell, type OpenDialogOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell, type OpenDialogOptions } from 'electron';
 import { writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +6,7 @@ import { DAEMON_VERSION, HOST_PROTOCOL_VERSION } from '@tsukiori/protocol';
 import { FakeRuntimeAdapter } from '@tsukiori/adapter-fake';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import { InteractiveWorkspace } from './interactive-workspace.js';
+import { TerminalManager } from './terminal-manager.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const daemonEntry = app.isPackaged
@@ -96,19 +97,23 @@ const workspaceSnapshot = smokeMode ? {
 let quitting = false;
 let smokeCommandCount = 0;
 let interactiveWorkspace: InteractiveWorkspace | null = null;
+const terminalManager = new TerminalManager((event) => {
+  interactiveWorkspace?.publishLocalEvent(event.sessionId, event.type, event.payload);
+});
 
 function createWindow(): BrowserWindow {
   const workArea = screen.getPrimaryDisplay().workAreaSize;
-  const width = Math.min(1600, Math.max(1180, workArea.width - 32));
-  const height = Math.min(1000, Math.max(760, workArea.height - 32));
+  const width = Math.min(1600, Math.max(1040, workArea.width - 32));
+  const height = Math.min(1000, Math.max(720, workArea.height - 32));
   const window = new BrowserWindow({
     width,
     height,
-    minWidth: 1180,
-    minHeight: 760,
-    show: !smokeMode && !captureDesktopPath,
+    minWidth: 1040,
+    minHeight: 720,
+    show: !smokeMode,
     backgroundColor: '#f5fbff',
     autoHideMenuBar: true,
+    icon: resolve(currentDirectory, '..', 'build', 'icon.png'),
     webPreferences: {
       preload: preloadEntry,
       nodeIntegration: false,
@@ -284,6 +289,10 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       if (selection.canceled || !selection.filePaths[0]) return { ok: true, canceled: true };
       return { ok: true, project: workspace.addProject(selection.filePaths[0]) };
     }
+    if (command.type === 'remove_project') {
+      workspace.removeProject(String(command.projectId ?? ''));
+      return { ok: true };
+    }
     if (command.type === 'refresh_runtimes') return { ok: true, runtime: workspace.refreshRuntimes() };
     if (command.type === 'poll_events') return {
       ok: true,
@@ -304,6 +313,15 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
         ...(typeof command.model === 'string' ? { model: command.model } : {}),
         ...(typeof command.permissionMode === 'string' ? { permissionMode: command.permissionMode } : {}),
       }),
+    };
+    if (command.type === 'rename_session') return {
+      ok: true, session: workspace.renameSession(String(command.sessionId ?? ''), String(command.name ?? '')),
+    };
+    if (command.type === 'pin_session') return {
+      ok: true, session: workspace.pinSession(String(command.sessionId ?? ''), command.pinned === true),
+    };
+    if (command.type === 'archive_session') return {
+      ok: true, session: workspace.archiveSession(String(command.sessionId ?? '')),
     };
     if (command.type === 'update_settings') return {
       ok: true,
@@ -345,6 +363,78 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       if (!session || typeof session.worktreePath !== 'string') throw new Error('Session Worktree 不存在');
       const failure = await shell.openPath(session.worktreePath);
       if (failure) throw new Error('无法打开 Worktree');
+      return { ok: true };
+    }
+    if (command.type === 'list_files') return {
+      ok: true,
+      files: workspace.listFiles(String(command.sessionId ?? ''), typeof command.query === 'string' ? command.query : ''),
+    };
+    if (command.type === 'read_file') return {
+      ok: true,
+      file: workspace.readTextFile(String(command.sessionId ?? ''), String(command.path ?? '')),
+    };
+    if (command.type === 'pick_attachments') {
+      const sessionId = String(command.sessionId ?? '');
+      workspace.sessionWorktree(sessionId);
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const options: OpenDialogOptions = {
+        title: '添加到 Session Worktree', properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: '常用文件', extensions: ['md', 'txt', 'json', 'yaml', 'yml', 'toml', 'csv', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf'] },
+          { name: '全部文件', extensions: ['*'] },
+        ],
+      };
+      const selection = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+      if (selection.canceled) return { ok: true, canceled: true, attachments: [] };
+      return { ok: true, attachments: workspace.attachFiles(sessionId, selection.filePaths) };
+    }
+    if (command.type === 'codex_native') return {
+      ok: true,
+      native: await workspace.codexNativeCapabilities(String(command.sessionId ?? '')),
+    };
+    if (command.type === 'github_status') return {
+      ok: true, status: workspace.githubStatus(String(command.projectId ?? '')),
+    };
+    if (command.type === 'check_updates') {
+      const response = await fetch('https://api.github.com/repos/Nineu1124/Tsukiori/releases/latest', {
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Tsukiori/' + app.getVersion() },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(response.status === 404 ? '尚未发布公开 Release' : `更新检查失败（HTTP ${response.status}）`);
+      const release = object(await response.json());
+      const latest = String(release.tag_name ?? '').replace(/^v/i, '');
+      const url = String(release.html_url ?? '');
+      if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(latest) || !url.startsWith('https://github.com/')) throw new Error('Release 元数据无效');
+      return { ok: true, update: { current: app.getVersion(), latest, available: compareVersions(latest, app.getVersion()) > 0, url } };
+    }
+    if (command.type === 'create_team') return {
+      ok: true,
+      team: await workspace.createTeam(
+        String(command.projectId ?? ''), String(command.goal ?? ''),
+        Array.isArray(command.agents) ? command.agents.map(object) : [],
+      ),
+    };
+    if (command.type === 'terminal_start') {
+      const sessionId = String(command.sessionId ?? '');
+      terminalManager.start(sessionId, workspace.sessionWorktree(sessionId), Number(command.columns ?? 120), Number(command.rows ?? 28));
+      return { ok: true };
+    }
+    if (command.type === 'terminal_input') {
+      terminalManager.write(String(command.sessionId ?? ''), String(command.data ?? ''));
+      return { ok: true };
+    }
+    if (command.type === 'terminal_resize') {
+      terminalManager.resize(String(command.sessionId ?? ''), Number(command.columns ?? 120), Number(command.rows ?? 28));
+      return { ok: true };
+    }
+    if (command.type === 'terminal_stop') {
+      await terminalManager.stop(String(command.sessionId ?? ''));
+      return { ok: true };
+    }
+    if (command.type === 'copy_text') {
+      const text = String(command.text ?? '');
+      if (text.length > 512_000 || text.includes('\0')) throw new Error('复制内容无效');
+      clipboard.writeText(text);
       return { ok: true };
     }
     if (command.type === 'open_url') {
@@ -410,6 +500,7 @@ app.on('before-quit', (event) => {
   void Promise.allSettled([
     supervisor.release(),
     interactiveWorkspace?.shutdown() ?? Promise.resolve(),
+    terminalManager.shutdown(),
   ]).finally(() => app.quit());
 });
 
@@ -427,13 +518,27 @@ app.whenReady()
       window.webContents.once('did-finish-load', () => {
         setTimeout(() => {
           void (async () => {
+            await window.webContents.executeJavaScript("document.body.classList.add('reduce-motion')", true);
+            if (captureDesktopView === 'compact') {
+              window.setSize(1040, 720);
+              window.center();
+              await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+            }
             if (captureDesktopView?.startsWith('settings')) {
-              await window.webContents.executeJavaScript("document.querySelector('#open-settings')?.click()", true);
+              await window.webContents.executeJavaScript("document.querySelector('#settings-dialog')?.showModal()", true);
               await new Promise((resolveDelay) => setTimeout(resolveDelay, 350));
               if (captureDesktopView === 'settings-agent') {
                 await window.webContents.executeJavaScript("document.querySelector('[data-settings-page=agent]')?.click()", true);
                 await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
               }
+            }
+            if (captureDesktopView === 'team') {
+              await window.webContents.executeJavaScript("document.querySelector('#new-team')?.click(); if(!document.querySelector('#team-dialog')?.open) document.querySelector('#team-dialog')?.showModal()", true);
+              await new Promise((resolveDelay) => setTimeout(resolveDelay, 350));
+            }
+            if (captureDesktopView === 'files') {
+              await window.webContents.executeJavaScript("document.querySelector('[data-panel-tab=files]')?.click()", true);
+              await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
             }
             if (captureSanitized) {
               await window.webContents.executeJavaScript(`(() => {
@@ -446,12 +551,16 @@ app.whenReady()
               })()`, true);
             }
             const captureDiagnostic = await window.webContents.executeJavaScript(`({
+              captureView: ${JSON.stringify(captureDesktopView ?? null)},
               bodyClass: document.body.className,
               viewport: [innerWidth, innerHeight, devicePixelRatio],
               shell: (() => { const e=document.querySelector('.app-shell'); const r=e?.getBoundingClientRect(); return [r?.x,r?.y,r?.width,r?.height,getComputedStyle(e).display,getComputedStyle(e).gridTemplateColumns]; })(),
               rail: (() => { const e=document.querySelector('.session-rail'); const r=e?.getBoundingClientRect(); return [r?.x,r?.y,r?.width,r?.height,getComputedStyle(e).display,getComputedStyle(e).visibility]; })(),
               workspace: (() => { const e=document.querySelector('.workspace'); const r=e?.getBoundingClientRect(); return [r?.x,r?.y,r?.width,r?.height,getComputedStyle(e).display,getComputedStyle(e).visibility]; })(),
               status: document.querySelector('#status')?.textContent,
+              settingsOpen: document.querySelector('#settings-dialog')?.open,
+              teamOpen: document.querySelector('#team-dialog')?.open,
+              settingsBox: (() => { const e=document.querySelector('#settings-dialog'); const r=e?.getBoundingClientRect(); return [r?.x,r?.y,r?.width,r?.height,getComputedStyle(e).display,getComputedStyle(e).opacity,getComputedStyle(e).transform]; })(),
             })`, true);
             process.stdout.write('TSUKIORI_CAPTURE_DIAGNOSTIC ' + JSON.stringify(captureDiagnostic) + '\n');
             const image = await window.webContents.capturePage();
@@ -480,4 +589,14 @@ function object(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+function compareVersions(left: string, right: string): number {
+  const a = left.replace(/^v/i, '').split(/[.+-]/).slice(0, 3).map((part) => Number(part) || 0);
+  const b = right.replace(/^v/i, '').split(/[.+-]/).slice(0, 3).map((part) => Number(part) || 0);
+  for (let index = 0; index < 3; index += 1) {
+    const delta = (a[index] ?? 0) - (b[index] ?? 0);
+    if (delta !== 0) return delta;
+  }
+  return 0;
 }

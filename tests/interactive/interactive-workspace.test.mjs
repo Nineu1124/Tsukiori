@@ -50,6 +50,11 @@ function fixture(t, options = {}) {
       return 'turn-real';
     }
     async interrupt() {}
+    async request(method) {
+      if (method === 'skills/list') return { data: [{ skills: [{ name: 'fixture-skill', description: 'safe fixture', enabled: true, scope: 'repo' }] }] };
+      if (method === 'mcpServerStatus/list') return { data: [{ name: 'fixture-mcp', authStatus: 'notRequired', tools: { read: {} }, resources: [] }] };
+      return {};
+    }
     async stop() { clientOptions.onExit(null); }
   }
   const workspace = new InteractiveWorkspace({
@@ -94,8 +99,10 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
   assert.equal(polled.events.some((event) => event.type === 'assistant.delta'), true);
   assert.equal(polled.events.some((event) => event.type === 'turn.completed'), true);
   assert.deepEqual(f.approval(), { decision: 'accept' });
-  const state = readFileSync(join(f.userData, 'workspace-state-v2.json'), 'utf8');
+  const state = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
   assert.doesNotMatch(state, /prompt must remain/);
+  const transcript = readFileSync(join(f.userData, 'transcripts', (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl'), 'utf8');
+  assert.match(transcript, /prompt must remain memory-only/);
   assert.equal(f.emitted.some((event) => event.type === 'tool.event' && event.payload.tool === 'userMessage'), false);
 });
 
@@ -148,7 +155,7 @@ test('interactive workspace stores provider secrets outside state and runs a Cla
   await workspace.sendPrompt(session.id, 'memory-only claude prompt');
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(emitted.some((event) => event.type === 'assistant.delta'), true);
-  const persisted = readFileSync(join(userData, 'workspace-state-v2.json'), 'utf8');
+  const persisted = readFileSync(join(userData, 'workspace-state-v3.json'), 'utf8');
   assert.doesNotMatch(persisted, /fixture-secret-value|memory-only claude prompt/);
   assert.match(persisted, /secretref:/);
   const snapshotText = JSON.stringify(workspace.snapshot());
@@ -193,6 +200,53 @@ test('Codex custom OpenAI-compatible Provider is bound to app-server without per
   assert.equal(f.clientOptions().environment.OPENAI_API_KEY, 'custom-provider-fixture-secret');
   assert.deepEqual(f.clientOptions().configArgs.slice(0, 2), ['-c', 'model_provider="tsukiori"']);
   assert.match(f.clientOptions().configArgs.join(' '), /responses\.example\.invalid/);
-  const state = readFileSync(join(f.userData, 'workspace-state-v2.json'), 'utf8');
+  const state = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
   assert.doesNotMatch(state, /custom-provider-fixture-secret|memory-only custom provider prompt/);
+});
+
+test('session lifecycle, persisted transcript, files, attachments, and native capabilities are complete', async (t) => {
+  const f = fixture(t);
+  const project = f.workspace.addProject(f.repository);
+  const session = await f.workspace.createSession(project.id);
+  f.workspace.renameSession(session.id, 'Pinned implementation');
+  f.workspace.pinSession(session.id, true);
+  writeFileSync(join(session.worktreePath, 'feature.md'), '# feature\nlocal preview\n');
+  const source = join(f.userData, 'selected.txt');
+  writeFileSync(source, 'attachment body\n');
+  const attachments = f.workspace.attachFiles(session.id, [source]);
+  assert.equal(attachments.length, 1);
+  assert.equal(existsSync(join(session.worktreePath, attachments[0].path)), true);
+  assert.equal(f.workspace.listFiles(session.id, 'feature').some((file) => file.path === 'feature.md'), true);
+  assert.match(f.workspace.readTextFile(session.id, 'feature.md').content, /local preview/);
+  assert.throws(() => f.workspace.readTextFile(session.id, '../README.md'), /Worktree|路径/);
+  const native = await f.workspace.codexNativeCapabilities(session.id);
+  assert.deepEqual(native.skills.map((item) => item.name), ['fixture-skill']);
+  assert.deepEqual(native.servers.map((item) => item.name), ['fixture-mcp']);
+  const archived = f.workspace.archiveSession(session.id);
+  assert.equal(archived.pinned, true);
+  assert.equal(typeof archived.archivedAt, 'number');
+  assert.equal(existsSync(session.worktreePath), true);
+  assert.doesNotMatch(readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8'), /attachment body/);
+});
+
+test('Agent Team dispatches two independent sessions and Worktrees', async (t) => {
+  const prompts = [];
+  class TeamClient {
+    constructor(options) { this.options = options; }
+    async start() { return { authenticated: true, authSource: 'chatgpt' }; }
+    async startThread(cwd) { return 'thread:' + cwd; }
+    async startTurn(_threadId, prompt) { prompts.push(prompt); return 'turn:' + prompts.length; }
+    async interrupt() {}
+    async stop() { this.options.onExit(null); }
+  }
+  const f = fixture(t, { createClient: (options) => new TeamClient(options) });
+  const project = f.workspace.addProject(f.repository);
+  const team = await f.workspace.createTeam(project.id, 'Implement and review a bounded feature', [
+    { role: 'Implementer', runtimeType: 'codex', providerId: 'provider:chatgpt', model: 'auto' },
+    { role: 'Reviewer', runtimeType: 'codex', providerId: 'provider:chatgpt', model: 'auto' },
+  ]);
+  assert.equal(team.memberSessionIds.length, 2);
+  assert.equal(new Set(team.memberSessionIds.map((id) => f.workspace.sessionWorktree(id))).size, 2);
+  assert.equal(prompts.length, 2);
+  assert.equal(f.workspace.snapshot().teams[0].status, 'running');
 });

@@ -25,10 +25,17 @@ test('main workspace matches the V1.0 four-region information architecture', asy
   for (const token of ['#f5fbff','#258fe8','#4bb9ef','#20364b','#526b80','#45c995','#f3c94f','#ef6b7c','#8e7bef']) {
     assert.ok(styles.toLowerCase().includes(token));
   }
-  assert.match(styles, /grid-template:\s*40px minmax\(0,1fr\) \/ 300px minmax\(480px,1fr\) 300px/);
-  assert.match(styles, /grid-template-rows:\s*48px 28px minmax\(140px,1fr\) auto 220px/);
+  assert.match(styles, /--titlebar-height:\s*40px/);
+  assert.match(styles, /--rail-width:\s*300px/);
+  assert.match(styles, /--work-panel-width:\s*300px/);
+  assert.match(styles, /--terminal-height:\s*220px/);
+  assert.match(styles, /grid-template:[^;]*var\(--titlebar-height\)[^;]*var\(--rail-width\) minmax\(620px,1fr\) var\(--work-panel-width\)/);
+  assert.match(styles, /grid-template-rows:\s*48px 28px minmax\(140px,1fr\) auto var\(--terminal-height\)/);
   assert.match(styles, /\.chat-message\.user[\s\S]*justify-self:\s*end/);
   assert.match(styles, /\.chat-message\.assistant[\s\S]*background:\s*transparent/);
+  assert.match(styles, /\.message-body\s*\{[^}]*font-size:\s*13px/);
+  assert.match(styles, /\.composer textarea\s*\{[^}]*font-size:\s*13px/);
+  assert.match(styles, /\.terminal-panel pre[^}]*font-size:\s*12px/);
   assert.match(styles, /prefers-reduced-motion/);
 });
 
@@ -85,4 +92,54 @@ test('legacy smoke fixtures remain isolated from the interactive product surface
   for (const id of ['legacy-workspace','alpha-workflow','v1-git-workflow','diagnostic-bundle','runtime-card-template','tool-card-template','permission-card-template']) assert.match(html,new RegExp(`id="${id}"`));
   assert.match(script, /snapshot\?\.mode==='interactive'/);
   assert.match(html, /默认排除源码、完整 Prompt、Raw Payload、凭据和认证存储/);
+});
+
+test('complete workbench exposes persisted sessions, files, attachments, ConPTY, preview, native tools, and Agent Team', async () => {
+  const [html, script, styles, preload] = await rendererFiles();
+  for (const id of [
+    'history-query','session-rename','session-pin','session-archive','attach-files','composer-attachments',
+    'terminal-input','file-query','file-preview','browser-preview','team-dialog','new-team',
+    'refresh-native-capabilities','native-capability-list','setting-persist-conversation',
+  ]) assert.match(html, new RegExp(`id="${id}"`));
+  for (const method of [
+    'renameSession','pinSession','archiveSession','listFiles','readFile','pickAttachments','codexNative',
+    'createTeam','startTerminal','terminalInput','stopTerminal','copyText',
+  ]) assert.match(preload, new RegExp(method));
+  for (const functionName of [
+    'renderMarkdownBody','refreshFiles','loadFilePreview','loadCodexNative','createTeam','ensureTerminal',
+  ]) assert.match(script, new RegExp(`function ${functionName}`));
+  assert.match(styles, /\.terminal-command/);
+  assert.match(styles, /#browser-preview/);
+  assert.match(styles, /\.team-agent-grid/);
+  assert.match(html, /id="browser-preview" sandbox="allow-scripts allow-forms allow-same-origin"/);
+  assert.match(html, /frame-src http:\/\/localhost:\* http:\/\/127\.0\.0\.1:\* https:/);
+});
+
+test('every button receives motion feedback with specialized actions and reduced-motion fallbacks', async () => {
+  const [html, script, styles] = await rendererFiles();
+  assert.match(styles, /button\s*\{[\s\S]*transition:[\s\S]*transform var\(--motion-fast\)/);
+  assert.match(styles, /button:not\(:disabled\):hover\s*\{[\s\S]*translateY\(-1px\)/);
+  assert.match(styles, /button:not\(:disabled\):active\s*\{[\s\S]*scale\(\.97\)/);
+  assert.match(styles, /button:disabled:hover[\s\S]*transform:\s*none/);
+  assert.match(styles, /tsukiori-button-sweep/);
+  assert.match(styles, /#interrupt-turn:not\(:disabled\)[\s\S]*tsukiori-interrupt-ready/);
+  assert.match(styles, /#terminal-run:not\(:disabled\):hover/);
+  assert.match(styles, /#new-team,#panel-new-team,#confirm-create-team/);
+  assert.match(styles, /\.settings-dialog\[open\][\s\S]*tsukiori-dialog-in/);
+  assert.match(styles, /\.reduce-motion button[\s\S]*animation:\s*none !important/);
+  assert.match(styles, /@media \(prefers-reduced-motion:\s*reduce\)/);
+  for (const id of ['workspace-settings','project-filter','session-favorite','terminal-tab-shell','terminal-new']) {
+    assert.match(html, new RegExp(`id="${id}"`));
+    assert.match(script, new RegExp(`byId\\('${id}'\\)\\.addEventListener`));
+  }
+  assert.match(html, /id="terminal-run" type="submit"/);
+  assert.match(script, /byId\('terminal-form'\)\.addEventListener\('submit'/);
+});
+
+test('desktop proportions preserve the conversation at compact widths by overlaying the work panel', async () => {
+  const [,, styles] = await rendererFiles();
+  assert.match(styles, /@media \(max-width:\s*1179px\)/);
+  assert.match(styles, /grid-template-columns:\s*240px minmax\(620px,1fr\)/);
+  assert.match(styles, /\.attention-panel\s*\{[\s\S]*position:\s*fixed[\s\S]*width:\s*min\(360px,calc\(100vw - 90px\)\)/);
+  assert.match(styles, /\.app-shell\.right-collapsed \.attention-panel[\s\S]*translateX\(105%\)/);
 });

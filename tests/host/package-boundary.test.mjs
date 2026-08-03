@@ -90,6 +90,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/adapter-fake': 'workspace:*',
     '@tsukiori/credential-broker': 'workspace:*',
     '@tsukiori/protocol': 'workspace:*',
+    'node-pty': '1.1.0',
   });
 
   const manifests = [protocol, domain, credentialBroker, database, runtimeCore, observability, fakeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop];

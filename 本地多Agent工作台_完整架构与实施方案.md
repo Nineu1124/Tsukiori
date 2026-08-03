@@ -3611,17 +3611,32 @@ src/helpers/
   - [x] 主工作台、右侧四入口工作面板、底部终端区和设置弹窗按《Tsukiori 完整 UI/UX 与插图视觉设计规范 V1.0》完成 1600×1000 截图验收
   - [x] 设置、Provider、Runtime、会话选择、视觉 DOM、秘密扫描和孤儿进程回归测试全部通过，公开 CI 不需要用户凭据
 
+### T5.8 三产品优点融合与完整工作台落地
+
+- [x] 在不复制参考项目源码、品牌和私有数据的前提下完成可交互本地多 Agent 工作台
+- 前置依赖：T5.7
+- 交付物：参考产品差距报告、会话与 Transcript、文件/附件、ConPTY、预览、Skills/MCP、Agent Team、应用图标、Fixture 和测试报告
+- Checkpoints：
+  - [x] Codex Desk、Lody 和 cc-haha 的版本、许可边界、功能模式与工程做法完成只读审计，参考文件只存在忽略的 `.tmp` 目录
+  - [x] Session 支持搜索、置顶、重命名和安全归档；项目、Session、Team 与本地 Transcript 可在重启后恢复
+  - [x] Worktree 文件树、路径内文本预览、文件筛选、附件复制和安全 Markdown/代码块展示可观察且有大小边界
+  - [x] 每个 Session 可启动真实 Windows ConPTY，输入、输出、切换和退出均可测试，终端环境不继承 key-like 凭据
+  - [x] 本地/HTTPS 预览使用受 CSP 与 sandbox 约束的 iframe，系统浏览器打开仍由 Main Process 校验 URL
+  - [x] Codex Skills/MCP 按需读取且不持久化原始路径或认证内容；2–4 个 Agent Team 使用独立 Worktree 并行派发
+  - [x] 更新检查、Git/GitHub 状态、Provider、Runtime、持久化策略与高风险确认设置均有真实控制面；UI 比例、13–15px 正文、全按钮微动效和减少动态效果通过可见截图验收，Windows 包使用 Tsukiori 图标
+  - [x] 类型、交互、UI、安全、Host、秘密扫描、预编译 ConPTY 打包、NSIS 安装生命周期和孤儿进程回归全部通过
+
 ### G5 阶段 5 Gate
 
-- [x] Windows Local V1 已满足发布条件
-- 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5、T5.6、T5.7
+- [ ] Windows Local V1 已满足发布条件
+- 前置依赖：T5.1、T5.2、T5.3、T5.4、T5.5、T5.6、T5.7、T5.8
 - 交付物：最终 V1 Gate 报告和发布签字记录
 - Checkpoints：
-  - [x] T0.* 至 T5.* 的全部顶层任务已勾选
-  - [x] G0 至 G4 已通过，且 G5 无未解决阻塞项
-  - [x] 第 37.1 至 37.10 章所有 Local V1 发布检查已勾选并有证据
-  - [x] 严重级别安全、数据丢失和错误进程终止问题均为零
-  - [x] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
+  - [ ] T0.* 至 T5.* 的全部顶层任务已勾选
+  - [ ] G0 至 G4 已通过，且 G5 无未解决阻塞项
+  - [ ] 第 37.1 至 37.11 章所有 Local V1 发布检查已勾选并有证据
+  - [ ] 严重级别安全、数据丢失和错误进程终止问题均为零
+  - [ ] B1 至 B3 未计入 V1 完成率，也未被包装成已发布能力
 
 ## V1 之后任务池
 
@@ -3986,11 +4001,11 @@ Runtime Native Protocol
 
 ## 37.0 Local V1 Ready 总门槛
 
-- [x] [T0.*–T5.*] T0.1 至 T5.7 的全部顶层任务已完成
-- [x] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
-- [x] [37.1–37.10] 本章所有分类验收项均已勾选
-- [x] [T5.5] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
-- [x] [B1–B3] 完整 Claude Adapter、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
+- [ ] [T0.*–T5.*] T0.1 至 T5.8 的全部顶层任务已完成
+- [ ] [G0–G5] G0 至 G5 的全部阶段 Gate 已通过
+- [ ] [37.1–37.11] 本章所有分类验收项均已勾选
+- [ ] [T5.5, T5.8] Release Candidate、兼容性矩阵、回归报告和已知问题已归档
+- [ ] [B1–B3] 完整 Claude Adapter、Generic ACP 和新执行环境未计入 V1 完成率，也未被包装成已发布能力
 
 只有以上五项全部通过，版本状态才能标记为 Local V1 Ready。Verified Publisher 是未来可选发布通道，不阻塞 Local V1。
 
@@ -4108,6 +4123,21 @@ Runtime Native Protocol
 - [x] [T5.7] 用户消息、Agent 消息和 READ/MODIFY/EXECUTE Tool Card 分类通过事件回归测试
 - [x] [T5.7] 1600×1000 主工作台和设置中心截图与 UI/UX V1.0 的布局、颜色、密度、几何装饰和交互入口一致
 - [x] [T5.1, T5.7] 设置/Provider/Runtime 回归不会泄漏凭据或遗留 Runtime、Daemon、Named Pipe Host 子进程
+
+## 37.11 完整工作台与三产品优点融合
+
+- [x] [T5.8] Session 可搜索、置顶、重命名和安全归档，归档不会删除未提交 Worktree
+- [x] [T5.8] 用户明确启用时，对话正文以本地 Transcript 恢复；状态文件、公开 Fixture 和仓库仍不包含 Prompt
+- [x] [T5.8] Worktree 文件树、筛选、有界文本预览和路径越界拒绝均可验证
+- [x] [T5.8] 文件与图片附件由 Main Process 选择并复制到当前独立 Worktree，单文件和总数量有边界
+- [x] [T5.8] Agent 消息以无 HTML 注入的 Markdown、列表、引用和代码块呈现
+- [x] [T0.3, T5.8] 每个 Session 的 Windows ConPTY 支持交互输入、流式输出、Resize 与退出回收
+- [x] [T5.8] 本地预览由 CSP 和 iframe sandbox 约束，外部打开继续校验 HTTP/HTTPS 与内嵌认证
+- [x] [T4.3, T5.8] Codex Skills 与 MCP 可按需展示，原始本地路径、Token 与认证正文不进入持久化数据
+- [x] [T2.3, T4.5, T5.8] 2–4 个 Agent Team 使用独立 Session 和 Worktree 并行派发，失败状态不会静默成功
+- [x] [T5.4, T5.8] 应用具有 Tsukiori Windows 图标、公开 Release 更新检查和本地 Git/GitHub 状态检测
+- [x] [T5.7, T5.8] 新能力继续遵循 UI/UX V1.0 的蓝白日系科幻布局、密度、几何装饰和四区域信息架构
+- [x] [T5.1, T5.2, T5.8] Terminal、Team、文件、附件和 Transcript 回归不泄漏 Credential Manager 密钥且不遗留孤儿进程
 
 ---
 # 38. 主要风险与应对

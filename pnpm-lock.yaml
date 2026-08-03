@@ -41,6 +41,9 @@ importers:
       '@tsukiori/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      node-pty:
+        specifier: 1.1.0
+        version: 1.1.0
     devDependencies:
       electron:
         specifier: 43.2.0
