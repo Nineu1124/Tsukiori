@@ -14,14 +14,21 @@ param(
   [ValidateRange(1, 2147483647)]
   [int]$DaemonPid,
 
-  [Parameter(Mandatory = $true)]
+  [Parameter(Mandatory = $false)]
   [ValidateRange(1, 9223372036854775807)]
-  [long]$DaemonStartTimeUtcTicks,
+  [long]$DaemonStartTimeUtcTicks = 0,
 
   [int]$MaxConnections = 32
 )
 
 $ErrorActionPreference = 'Stop'
+if ($DaemonStartTimeUtcTicks -le 0) {
+  try {
+    $DaemonStartTimeUtcTicks = [System.Diagnostics.Process]::GetProcessById($DaemonPid).StartTime.ToUniversalTime().Ticks
+  } catch {
+    throw 'DaemonStartTimeUtcTicks is required when the daemon start time cannot be probed'
+  }
+}
 $token = $env:TSUKIORI_IPC_BOOTSTRAP_TOKEN
 if ([string]::IsNullOrWhiteSpace($token) -or $token.Length -lt 32) {
   throw 'TSUKIORI_IPC_BOOTSTRAP_TOKEN must contain at least 32 characters'

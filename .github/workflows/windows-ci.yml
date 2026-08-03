@@ -56,6 +56,7 @@ jobs:
           npm run test:codex
           npm run test:codex-adapter
           npm run test:windows
+          npm run test:computer-use
           npm run test:opencode
           npm run test:opencode-adapter
           npm run test:alpha

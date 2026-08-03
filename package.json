@@ -28,6 +28,7 @@
     "probe:ui-interactions": "pnpm run build && node scripts/probe-ui-interactions.mjs",
     "probe:t5.7-runtimes": "pnpm run build && node scripts/probe-t5.7-runtimes.mjs",
     "test:windows": "node --test spikes/windows/*.test.mjs",
+    "test:computer-use": "pnpm run build && node --test tests/computer-use/*.test.mjs",
     "spike:windows": "node spikes/windows/harness.mjs",
     "test:opencode": "node --test spikes/opencode/*.test.mjs",
     "test:opencode-adapter": "pnpm run build && node --test tests/opencode-adapter/*.test.mjs",

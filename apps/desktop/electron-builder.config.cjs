@@ -10,6 +10,7 @@ module.exports = {
     'node_modules/node-pty/**',
     'node_modules/@tsukiori/credential-broker/dist/windows/**',
     'dist/daemon/windows/**',
+    'dist/windows/**',
   ],
   directories: { output: 'release', buildResources: 'build' },
   files: ['dist/**/*', 'package.json', '!dist/**/*.map'],

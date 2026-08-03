@@ -21,7 +21,7 @@ test('main workspace matches the V1.0 four-region information architecture', asy
   for (const id of ['project-list','session-list','conversation','prompt-input','terminal-panel','attention-center']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  for (const label of ['侧边对话','文件','全部变更','浏览器']) assert.match(html, new RegExp(label));
+  for (const label of ['侧边对话','文件','全部变更','浏览器','Computer Use']) assert.match(html, new RegExp(label));
   for (const token of ['#f5fbff','#258fe8','#4bb9ef','#20364b','#526b80','#45c995','#f3c94f','#ef6b7c','#8e7bef']) {
     assert.ok(styles.toLowerCase().includes(token));
   }
@@ -116,6 +116,16 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
   assert.match(styles, /\.team-agent-grid/);
   assert.match(html, /id="browser-preview" sandbox="allow-scripts allow-forms allow-same-origin"/);
   assert.match(html, /frame-src http:\/\/localhost:\* http:\/\/127\.0\.0\.1:\* https:/);
+});
+
+test('Computer Use exposes a locked, one-time-approved Windows action surface', async () => {
+  const [html, script, styles, preload] = await rendererFiles();
+  for (const id of ['computer-refresh','computer-lock','computer-unlock','computer-screenshot','computer-move','computer-click','computer-type','computer-key-combo','computer-screenshot-image']) assert.match(html, new RegExp(`id="${id}"`));
+  for (const method of ['computerUseStatus','computerUseForeground','computerUseAcquire','computerUseRelease','computerUseRequest','computerUseApprove']) assert.match(preload, new RegExp(method));
+  for (const functionName of ['refreshComputerUse','lockComputerUse','releaseComputerUse','runComputerAction']) assert.match(script, new RegExp(`function ${functionName}`));
+  assert.match(script, /window\.confirm\(`确认执行 Computer Use/);
+  assert.match(html, /不是 OS 安全沙箱/);
+  assert.match(styles, /\.computer-use-panel/);
 });
 
 test('every button receives motion feedback with specialized actions and reduced-motion fallbacks', async () => {

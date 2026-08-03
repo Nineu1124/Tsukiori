@@ -16,4 +16,7 @@ await Promise.all([
   cp(resolve(packageRoot, 'build'), resolve(outputRoot, 'build'), {
     recursive: true,
   }),
+  cp(resolve(packageRoot, 'electron-main', 'windows'), resolve(outputRoot, 'windows'), {
+    recursive: true,
+  }),
 ]);

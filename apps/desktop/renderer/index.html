@@ -105,6 +105,7 @@
           <button type="button" data-panel-tab="files"><i>▱</i><span><strong>文件</strong><small>浏览与管理项目文件结构</small></span><b>›</b></button>
           <button type="button" data-panel-tab="changes"><i>♧</i><span><strong>全部变更</strong><small>查看当前所有代码变更</small></span><b>›</b></button>
           <button type="button" data-panel-tab="browser"><i>◎</i><span><strong>浏览器</strong><small>在浏览器中预览与调试</small></span><b>›</b></button>
+          <button type="button" data-panel-tab="computer"><i>⌖</i><span><strong>Computer Use</strong><small>锁定前台应用后逐次确认桌面动作</small></span><b>›</b></button>
         </section>
         <section data-panel-view="chat" hidden><div class="panel-title"><span>Agent 协作与待处理</span><b id="attention-count">0</b></div><p class="panel-description">权限、失败、完成与并行 Agent Team 集中在这里。</p><button id="panel-new-team" class="panel-primary" type="button">＋ 创建 Agent Team</button><div id="team-list" class="team-list"></div><div id="attention-list" class="attention-list"><p class="empty-state">暂无待处理事项</p></div></section>
         <section data-panel-view="files" hidden><div class="panel-title"><span>文件</span><button id="open-worktree" type="button">在资源管理器打开</button></div><p id="worktree-path" class="mono boundary-note">选择会话后查看文件</p><div class="file-toolbar"><input id="file-query" type="search" placeholder="筛选 Worktree 文件" /><button id="refresh-files" type="button">刷新</button></div><div id="panel-file-list" class="panel-file-list"><p class="empty-state">暂无文件信息</p></div><div class="file-preview-header"><span id="file-preview-name">文件预览</span><button id="copy-file-content" type="button">复制</button></div><pre id="file-preview" class="file-preview">选择文本文件查看内容</pre></section>
@@ -112,6 +113,20 @@
           <section class="git-panel"><div class="panel-title"><span>全部变更</span><button id="refresh-git" type="button">刷新</button></div><div id="git-files" class="git-files"><p class="empty-state">暂无改动</p></div><pre id="git-diff" class="diff-preview">选择文件查看 Diff</pre><div class="git-actions"><button id="stage-files" type="button">暂存</button><button id="unstage-files" type="button">取消暂存</button><input id="commit-subject" maxlength="200" placeholder="提交说明" /><button id="commit-files" class="primary" type="button">提交</button><span id="git-status" class="operation-status"></span></div></section>
         </section>
         <section data-panel-view="browser" hidden><div class="panel-title"><span>本地预览</span><button id="open-browser-external" type="button">系统浏览器</button></div><p class="panel-description">本地开发服务器在沙箱 iframe 中预览；外部站点可能拒绝嵌入。</p><div class="browser-launch"><input id="browser-url" value="http://localhost:3000" aria-label="预览地址" /><button id="open-browser-url" class="primary" type="button">载入</button><span id="browser-status" class="operation-status"></span></div><iframe id="browser-preview" sandbox="allow-scripts allow-forms allow-same-origin" title="本地应用预览"></iframe></section>
+        <section data-panel-view="computer" hidden class="computer-use-panel" aria-label="Computer Use">
+          <div class="panel-title"><span>Computer Use</span><b id="computer-support-level">unknown</b></div>
+          <p class="panel-description">桌面动作只在本机执行。先锁定当前前台应用，每个截图、点击和输入都必须单次确认；这不是 OS 安全沙箱。</p>
+          <div id="computer-target" class="computer-target">尚未检查前台应用</div>
+          <div class="computer-toolbar"><button id="computer-refresh" type="button">检查前台</button><button id="computer-lock" class="primary" type="button">锁定当前应用（2 秒切换）</button><button id="computer-unlock" class="danger" type="button" hidden>释放锁定</button></div>
+          <p id="computer-status" class="operation-status" aria-live="polite"></p>
+          <div id="computer-controls" class="computer-controls" hidden>
+            <div class="computer-toolbar"><button id="computer-screenshot" type="button">截图</button><button id="computer-move" type="button">移动鼠标</button><button id="computer-click" type="button">点击</button></div>
+            <div class="computer-input-grid"><label>X<input id="computer-x" type="number" value="0" /></label><label>Y<input id="computer-y" type="number" value="0" /></label><label>按键<select id="computer-button"><option value="left">左键</option><option value="right">右键</option><option value="middle">中键</option></select></label><label>次数<select id="computer-clicks"><option value="1">1</option><option value="2">2</option></select></label></div>
+            <label class="computer-text-label">键盘输入<textarea id="computer-text" rows="3" maxlength="4096" placeholder="输入后点击发送；不会使用剪贴板"></textarea></label>
+            <div class="computer-toolbar"><button id="computer-type" type="button">发送键盘输入</button><input id="computer-keys" maxlength="48" placeholder="快捷键，例如 CTRL+L" /><button id="computer-key-combo" type="button">发送快捷键</button></div>
+            <div id="computer-screenshot-frame" class="computer-screenshot-frame" hidden><img id="computer-screenshot-image" alt="当前前台应用截图" /></div>
+          </div>
+        </section>
         <div class="panel-illustration" aria-hidden="true"><span>TSUKIORI OS VER1.0</span></div>
       </aside>
     </div>

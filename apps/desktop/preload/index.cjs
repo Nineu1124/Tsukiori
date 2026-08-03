@@ -125,6 +125,12 @@ const api = Object.freeze({
     pollEvents: (afterSequence) => ipcRenderer.invoke(
       'workspace:command', { type: 'poll_events', afterSequence },
     ),
+    computerUseStatus: () => ipcRenderer.invoke('workspace:command', { type: 'computer_use_status' }),
+    computerUseForeground: () => ipcRenderer.invoke('workspace:command', { type: 'computer_use_foreground' }),
+    computerUseAcquire: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'computer_use_acquire', sessionId }),
+    computerUseRelease: () => ipcRenderer.invoke('workspace:command', { type: 'computer_use_release' }),
+    computerUseRequest: (action) => ipcRenderer.invoke('workspace:command', { type: 'computer_use_request', action }),
+    computerUseApprove: (approvalId) => ipcRenderer.invoke('workspace:command', { type: 'computer_use_approve', approvalId }),
   }),
 });
 

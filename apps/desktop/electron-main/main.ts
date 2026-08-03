@@ -1,5 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell, type OpenDialogOptions } from 'electron';
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DAEMON_VERSION, HOST_PROTOCOL_VERSION } from '@tsukiori/protocol';
@@ -7,6 +7,7 @@ import { FakeRuntimeAdapter } from '@tsukiori/adapter-fake';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import { InteractiveWorkspace } from './interactive-workspace.js';
 import { TerminalManager } from './terminal-manager.js';
+import { ComputerUseManager, type ComputerUseAction } from './computer-use-manager.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const daemonEntry = app.isPackaged
@@ -20,6 +21,13 @@ const captureDesktopView = process.env.TSUKIORI_DESKTOP_CAPTURE_VIEW;
 const captureSanitized = process.env.TSUKIORI_DESKTOP_CAPTURE_SANITIZED === '1';
 const daemonExitPolicy = process.env.TSUKIORI_DAEMON_EXIT_POLICY === 'keep' ? 'keep' : 'stop';
 const daemonLeaseFile = resolve(app.getPath('userData'), 'daemon-lease-v1.json');
+const helperFileName = 'computer-use-helper.ps1';
+const packagedComputerUseHelper = resolve(process.resourcesPath, 'app.asar.unpacked', 'dist', 'windows', helperFileName);
+const sourceComputerUseHelper = resolve(currentDirectory, 'windows', helperFileName);
+const compiledComputerUseHelper = resolve(currentDirectory, '..', 'windows', helperFileName);
+const computerUseHelperPath = app.isPackaged
+  ? packagedComputerUseHelper
+  : existsSync(sourceComputerUseHelper) ? sourceComputerUseHelper : compiledComputerUseHelper;
 
 const supervisor = new DaemonSupervisor({
   daemonEntry,
@@ -99,6 +107,10 @@ let smokeCommandCount = 0;
 let interactiveWorkspace: InteractiveWorkspace | null = null;
 const terminalManager = new TerminalManager((event) => {
   interactiveWorkspace?.publishLocalEvent(event.sessionId, event.type, event.payload);
+});
+const computerUse = new ComputerUseManager({
+  helperPath: computerUseHelperPath,
+  userDataPath: app.getPath('userData'),
 });
 
 function createWindow(): BrowserWindow {
@@ -272,14 +284,50 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
     const allowed = new Set([
       'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
       'integrate', 'continue_integration', 'open_external_editor', 'export_diagnostic',
+      'computer_use_status', 'computer_use_foreground', 'computer_use_acquire',
+      'computer_use_release', 'computer_use_request', 'computer_use_approve',
     ]);
     if (!allowed.has(command.type)) return { ok: false, code: 'invalid_command' };
     smokeCommandCount += 1;
+    if (command.type === 'computer_use_status') return {
+      ok: true,
+      computerUse: {
+        supportLevel: 'supported', enforcementLevel: 'interceptable', locked: false,
+        message: 'Smoke Fixture：Computer Use 需要显式锁定和逐次确认',
+      },
+    };
+    if (command.type === 'computer_use_foreground') return {
+      ok: true,
+      foreground: { pid: 4242, name: 'fixture-app.exe', startTime: 1, titleHash: 'fixture-title' },
+    };
     return { ok: true, command: command.type, sequence: smokeCommandCount };
   }
   const workspace = interactiveWorkspace;
   if (!workspace) return { ok: false, code: 'workspace_unavailable', message: 'Workspace 尚未初始化' };
   try {
+    const ownerId = String(event.sender.id);
+    if (command.type === 'computer_use_status') return {
+      ok: true,
+      computerUse: await computerUse.status(ownerId),
+    };
+    if (command.type === 'computer_use_foreground') return {
+      ok: true,
+      foreground: await computerUse.foreground(),
+    };
+    if (command.type === 'computer_use_acquire') {
+      const sessionId = String(command.sessionId ?? '');
+      workspace.sessionWorktree(sessionId);
+      return { ok: true, computerUse: await computerUse.acquire(ownerId, sessionId) };
+    }
+    if (command.type === 'computer_use_release') return { ok: true, computerUse: computerUse.release(ownerId) };
+    if (command.type === 'computer_use_request') return {
+      ok: true,
+      approval: computerUse.requestAction(ownerId, object(command.action) as unknown as ComputerUseAction),
+    };
+    if (command.type === 'computer_use_approve') return {
+      ok: true,
+      result: await computerUse.approveAction(ownerId, String(command.approvalId ?? '')),
+    };
     if (command.type === 'pick_project') {
       const owner = BrowserWindow.fromWebContents(event.sender);
       const options: OpenDialogOptions = { title: '选择本地 Git 项目', properties: ['openDirectory'] };
@@ -564,6 +612,7 @@ app.on('before-quit', (event) => {
     supervisor.release(),
     interactiveWorkspace?.shutdown() ?? Promise.resolve(),
     terminalManager.shutdown(),
+    Promise.resolve(computerUse.shutdown()),
   ]).finally(() => app.quit());
 });
 
