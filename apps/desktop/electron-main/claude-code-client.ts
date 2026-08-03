@@ -63,7 +63,7 @@ export class ClaudeCodeClient {
   startTurn(options: ClaudeTurnOptions): string {
     const turnId = 'claude-turn:' + randomUUID();
     const args = [
-      '--print', '--output-format', 'stream-json', '--include-partial-messages',
+      '--print', '--verbose', '--output-format', 'stream-json', '--include-partial-messages',
       '--permission-mode', options.permissionMode, '--model', safeModel(options.model),
       ...(options.resume ? ['--resume', options.sessionId] : ['--session-id', options.sessionId]),
     ];
@@ -75,6 +75,13 @@ export class ClaudeCodeClient {
     this.#turns.set(turnId, child);
     let stderr = '';
     let receivedDelta = false;
+    let receivedResult = false;
+    let exitReported = false;
+    const reportExit = (error: string | null): void => {
+      if (exitReported) return;
+      exitReported = true;
+      options.onExit(error);
+    };
     child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString('utf8')).slice(-2_000); });
     createInterface({ input: child.stdout, crlfDelay: Infinity }).on('line', (line) => {
       const message = parse(line);
@@ -101,6 +108,7 @@ export class ClaudeCodeClient {
         }
       }
       if (message.type === 'result') {
+        receivedResult = true;
         options.onEvent('turn.completed', {
           status: message.is_error === true ? 'failed' : 'completed',
           costUsd: numberOrZero(message.total_cost_usd),
@@ -108,11 +116,13 @@ export class ClaudeCodeClient {
         });
       }
     });
-    child.once('error', (error) => options.onExit(error.message));
+    child.once('error', (error) => reportExit(safeError(error.message)));
     child.once('exit', (code) => {
       this.#turns.delete(turnId);
-      const error = code === 0 ? null : safeError(stderr || `Claude Code 已退出（${code ?? 'signal'}）`);
-      options.onExit(error);
+      const error = code !== 0
+        ? safeError(stderr || `Claude Code 已退出（${code ?? 'signal'}）`)
+        : receivedResult ? null : 'Claude Code 已退出，但没有返回 Turn 结果';
+      reportExit(error);
     });
     child.stdin.end(options.prompt);
     options.onEvent('turn.started', { turnId });
@@ -156,6 +166,8 @@ function cleanProviderEnvironment(additions?: Readonly<Record<string, string>>):
   const environment = { ...process.env };
   for (const key of [
     'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL',
     'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY',
   ]) delete environment[key];
   Object.assign(environment, additions ?? {}, { NO_COLOR: '1', GIT_TERMINAL_PROMPT: '0' });

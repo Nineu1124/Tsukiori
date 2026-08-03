@@ -39,7 +39,7 @@ const defaults: Record<ProviderKind, Pick<ProviderConfig, 'apiFormat' | 'baseUrl
   chatgpt: { apiFormat: 'chatgpt', baseUrl: 'https://chatgpt.com/backend-api', models: ['auto'] },
   openai: { apiFormat: 'openai', baseUrl: 'https://api.openai.com', models: ['gpt-5.4', 'gpt-5.4-mini'] },
   anthropic: { apiFormat: 'anthropic', baseUrl: 'https://api.anthropic.com', models: ['claude-sonnet-4-6', 'claude-opus-4-6'] },
-  deepseek: { apiFormat: 'anthropic', baseUrl: 'https://api.deepseek.com/anthropic', models: ['deepseek-v4-pro'] },
+  deepseek: { apiFormat: 'anthropic', baseUrl: 'https://api.deepseek.com/anthropic', models: ['deepseek-v4-pro', 'deepseek-v4-flash'] },
   'openai-compatible': { apiFormat: 'openai', baseUrl: '', models: [] },
   'anthropic-compatible': { apiFormat: 'anthropic', baseUrl: '', models: [] },
 };
@@ -164,12 +164,54 @@ export class ProviderRegistry {
     return result;
   }
 
-  withEnvironment<T>(id: string, consumer: (environment: Record<string, string>) => T): T {
+  async listModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {
+    const provider = this.get(id);
+    if (provider.kind === 'chatgpt' || provider.kind === 'anthropic' || provider.kind === 'anthropic-compatible') {
+      return { models: [...provider.models], source: 'configured' };
+    }
+    if (!provider.secretRef) throw new Error('请先保存 API Key');
+    return await this.withEnvironment(provider.id, async (environment) => {
+      const token = environment.OPENAI_API_KEY ?? environment.ANTHROPIC_AUTH_TOKEN;
+      if (!token) throw new Error('credential_unavailable');
+      const endpoint = provider.kind === 'deepseek'
+        ? 'https://api.deepseek.com/models'
+        : provider.baseUrl + '/v1/models';
+      const response = await fetch(endpoint, {
+        headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+        redirect: 'error', signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new Error(httpCategory(response.status));
+      }
+      const length = Number(response.headers.get('content-length') ?? 0);
+      if (length > 1024 * 1024) throw new Error('model_response_too_large');
+      const text = await response.text();
+      if (Buffer.byteLength(text, 'utf8') > 1024 * 1024) throw new Error('model_response_too_large');
+      const value = JSON.parse(text) as Record<string, unknown>;
+      const data = Array.isArray(value.data) ? value.data : [];
+      const models = normalizeModels(data.map((item) => String((item as Record<string, unknown>)?.id ?? '')));
+      if (models.length === 0) throw new Error('model_list_empty');
+      return { models, source: 'remote' };
+    });
+  }
+
+  withEnvironment<T>(id: string, consumer: (environment: Record<string, string>) => T, selectedModel?: string): T {
     const provider = this.get(id);
     const environment: Record<string, string> = {};
     if (provider.apiFormat === 'anthropic') {
       environment.ANTHROPIC_BASE_URL = provider.baseUrl;
-      environment.ANTHROPIC_MODEL = provider.models[0] ?? '';
+      environment.ANTHROPIC_MODEL = selectedModel ?? provider.models[0] ?? '';
+    }
+    if (provider.kind === 'deepseek') {
+      const pro = deepSeekClaudeModel(selectedModel ?? provider.models.find((model) => model.includes('pro')) ?? 'deepseek-v4-pro');
+      const flash = provider.models.find((model) => model.includes('flash')) ?? 'deepseek-v4-flash';
+      environment.ANTHROPIC_MODEL = pro;
+      environment.ANTHROPIC_DEFAULT_OPUS_MODEL = pro;
+      environment.ANTHROPIC_DEFAULT_SONNET_MODEL = pro;
+      environment.ANTHROPIC_DEFAULT_HAIKU_MODEL = flash;
+      environment.CLAUDE_CODE_SUBAGENT_MODEL = flash;
+      environment.CLAUDE_CODE_EFFORT_LEVEL = 'max';
     }
     if (!provider.secretRef) return consumer(environment);
     const binding = credentialBinding(provider.id, provider.kind);
@@ -187,6 +229,11 @@ export class ProviderRegistry {
   #flush(): void {
     this.#persist(this.raw());
   }
+}
+
+export function deepSeekClaudeModel(value: string): string {
+  const model = String(value ?? '').trim();
+  return model.includes('pro') && !model.endsWith('[1m]') ? model + '[1m]' : model;
 }
 
 function createBuiltIn(id: string, name: string, kind: ProviderKind, now: number): ProviderConfig {

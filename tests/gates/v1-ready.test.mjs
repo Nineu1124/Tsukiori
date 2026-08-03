@@ -73,7 +73,8 @@ test('Local V1 signing policy remains explicit and Verified Publisher stays fail
   assert.equal(ready.publication.authenticodeRequired, false);
   assert.equal(ready.publication.smartScreenWarningRequired, true);
   assert.equal(ready.publication.verifiedPublisherRemainsFailClosed, true);
-  const compatibility = fixture('tests/fixtures/release/v1.0.0-rc.1-compatibility.json');
+  const releaseVersion = fixture('apps/desktop/package.json').version;
+  const compatibility = fixture(`tests/fixtures/release/v${releaseVersion}-compatibility.json`);
   assert.equal(compatibility.publication.localV1RequiresAuthenticode, false);
   assert.equal(compatibility.publication.verifiedPublisherRequiresAuthenticode, true);
 });

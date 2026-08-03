@@ -6,7 +6,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const releaseRoot = join(root, 'docs', 'releases', 'v1.0.0-rc.1');
+const releaseVersion = JSON.parse(await readFile(join(root, 'apps', 'desktop', 'package.json'), 'utf8')).version;
+const releaseRoot = join(root, 'docs', 'releases', `v${releaseVersion}`);
 
 function canonical(value) {
   if (value === null || typeof value === 'number' || typeof value === 'boolean') return JSON.stringify(value);
@@ -45,7 +46,7 @@ test('published checksums map the installer and blockmap without private signing
   const script = await readFile(join(root, 'scripts', 'prepare-github-release.mjs'), 'utf8');
   const manifest = JSON.parse(manifestText);
   assert.match(checksums, new RegExp(`^${manifest.artifact.sha256}  ${manifest.artifact.fileName}`, 'm'));
-  assert.match(checksums, /^[a-f0-9]{64}  Tsukiori-1\.0\.0-rc\.1-x64-setup\.exe\.blockmap$/m);
+  assert.match(checksums, new RegExp(`^[a-f0-9]{64}  Tsukiori-${releaseVersion.replaceAll('.', '\\.')}-x64-setup\\.exe\\.blockmap$`, 'm'));
   assert.match(publicKey, /^-----BEGIN PUBLIC KEY-----/);
   assert.doesNotMatch(manifestText + checksums + publicKey, /PRIVATE KEY|secretref:/);
   assert.match(script, /credentialStore: 'windows_credential_manager'/);

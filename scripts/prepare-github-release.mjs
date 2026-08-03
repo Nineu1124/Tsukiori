@@ -12,7 +12,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const releaseVersion = '1.0.0-rc.1';
+const releaseVersion = json(join(repositoryRoot, 'apps', 'desktop', 'package.json')).version;
 const releaseTag = `v${releaseVersion}`;
 const artifactName = `Tsukiori-${releaseVersion}-x64-setup.exe`;
 const blockmapName = `${artifactName}.blockmap`;

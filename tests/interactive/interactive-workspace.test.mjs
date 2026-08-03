@@ -250,3 +250,23 @@ test('Agent Team dispatches two independent sessions and Worktrees', async (t) =
   assert.equal(prompts.length, 2);
   assert.equal(f.workspace.snapshot().teams[0].status, 'running');
 });
+
+test('resizable work panel, terminal shell, and diagnostics persist without prompts or credentials', async (t) => {
+  const f = fixture(t);
+  const project = f.workspace.addProject(f.repository);
+  const session = await f.workspace.createSession(project.id);
+  const settings = f.workspace.updateSettings({ workPanelWidth: 900, terminalShell: 'pwsh' });
+  assert.equal(settings.workPanelWidth, 720);
+  assert.equal(settings.terminalShell, 'pwsh');
+  assert.equal(f.workspace.terminalShell(), 'pwsh');
+  const diagnostic = f.workspace.diagnosticSummary();
+  assert.equal(diagnostic.projects, 1);
+  assert.equal(diagnostic.sessions, 1);
+  assert.equal(diagnostic.containsCredentials, false);
+  assert.equal(diagnostic.containsPrompts, false);
+  assert.equal(diagnostic.containsUserSource, false);
+  const persisted = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
+  assert.match(persisted, /"workPanelWidth": 720/);
+  assert.match(persisted, /"terminalShell": "pwsh"/);
+  assert.doesNotMatch(JSON.stringify(diagnostic), new RegExp(session.worktreePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});

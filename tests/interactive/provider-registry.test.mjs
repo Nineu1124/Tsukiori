@@ -74,3 +74,38 @@ test('Anthropic-compatible connection test sends a bounded one-token probe and d
   assert.equal(result.ok, true);
   assert.equal(bodyCancelled, true);
 });
+
+test('DeepSeek injects the complete Claude Code model map and discovers remote models safely', async (t) => {
+  const secrets = new Map();
+  const credentials = {
+    store(input) { const reference = input.reference ?? 'secretref:00000000-0000-4000-8000-000000000005'; secrets.set(reference, { secret: input.secret, binding: input.binding }); return reference; },
+    use(reference, binding, consumer) { const value = secrets.get(reference); assert.deepEqual(value.binding, binding); return consumer(value.secret); },
+    delete(reference) { return secrets.delete(reference); },
+  };
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, 'https://api.deepseek.com/models');
+    assert.equal(options.headers.Authorization, 'Bearer deepseek-fixture-secret');
+    return new Response(JSON.stringify({ data: [
+      { id: 'deepseek-v4-pro' }, { id: 'deepseek-v4-flash' },
+    ] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const registry = new ProviderRegistry({ credentials, persist: () => undefined });
+  registry.save({
+    id: 'provider:deepseek', name: 'DeepSeek', kind: 'deepseek',
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash'], apiKey: 'deepseek-fixture-secret',
+  });
+  registry.withEnvironment('provider:deepseek', (environment) => {
+    assert.equal(environment.ANTHROPIC_AUTH_TOKEN, 'deepseek-fixture-secret');
+    assert.equal(environment.ANTHROPIC_MODEL, 'deepseek-v4-pro[1m]');
+    assert.equal(environment.ANTHROPIC_DEFAULT_OPUS_MODEL, 'deepseek-v4-pro[1m]');
+    assert.equal(environment.ANTHROPIC_DEFAULT_SONNET_MODEL, 'deepseek-v4-pro[1m]');
+    assert.equal(environment.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'deepseek-v4-flash');
+    assert.equal(environment.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash');
+    assert.equal(environment.CLAUDE_CODE_EFFORT_LEVEL, 'max');
+  }, 'deepseek-v4-pro');
+  assert.deepEqual(await registry.listModels('provider:deepseek'), {
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash'], source: 'remote',
+  });
+});

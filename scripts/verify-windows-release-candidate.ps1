@@ -2,9 +2,10 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$releaseVersion = (Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'apps\desktop\package.json') | ConvertFrom-Json).version
 $temporaryRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $token = [Guid]::NewGuid().ToString('N')
-$buildRoot = Join-Path $temporaryRoot ('tsukiori-v1-rc1-' + $token)
+$buildRoot = Join-Path $temporaryRoot ('tsukiori-v1-' + ($releaseVersion -replace '[^a-zA-Z0-9.-]', '-') + '-' + $token)
 $installRoot = Join-Path $temporaryRoot ('tsukiori-v1-install-' + $token)
 $userDataRoot = Join-Path $temporaryRoot ('tsukiori-v1-userdata-' + $token)
 
@@ -56,7 +57,7 @@ try {
     ('--config.directories.output=' + $buildRoot)
   )
 
-  $installer = Join-Path $buildRoot 'Tsukiori-1.0.0-rc.1-x64-setup.exe'
+  $installer = Join-Path $buildRoot ('Tsukiori-' + $releaseVersion + '-x64-setup.exe')
   if (-not (Test-Path -LiteralPath $installer)) { throw 'Expected RC installer is missing' }
   $executable = Install-Candidate $installer
   $firstHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $executable).Hash
@@ -78,7 +79,7 @@ try {
 
   [ordered]@{
     schemaVersion = 1
-    releaseCandidate = '1.0.0-rc.1'
+    releaseCandidate = $releaseVersion
     platform = 'windows-x64'
     install = 'passed'
     packagedSmoke = 'passed'

@@ -21,9 +21,10 @@ export class TerminalManager {
     this.#emit = emit;
   }
 
-  start(sessionId: string, cwd: string, columns = 120, rows = 28): void {
+  start(sessionId: string, cwd: string, columns = 120, rows = 28, shell: 'powershell' | 'pwsh' | 'cmd' = 'powershell'): void {
     if (this.#sessions.has(sessionId)) return;
-    const pty = spawn('powershell.exe', ['-NoLogo', '-NoProfile'], {
+    const shellConfig = terminalShell(shell);
+    const pty = spawn(shellConfig.executable, shellConfig.args, {
       name: 'xterm-256color',
       cwd,
       cols: clamp(columns, 40, 300),
@@ -46,7 +47,7 @@ export class TerminalManager {
       resolveExit();
       this.#emit({ sessionId, type: 'terminal.exited', payload: { exitCode, signal } });
     });
-    this.#emit({ sessionId, type: 'terminal.started', payload: { shell: 'Windows PowerShell', cwd } });
+    this.#emit({ sessionId, type: 'terminal.started', payload: { shell: shellConfig.label, cwd } });
   }
 
   write(sessionId: string, data: string): void {
@@ -78,6 +79,12 @@ export class TerminalManager {
   async shutdown(): Promise<void> {
     await Promise.allSettled([...this.#sessions.keys()].map((sessionId) => this.stop(sessionId)));
   }
+}
+
+function terminalShell(value: 'powershell' | 'pwsh' | 'cmd'): { executable: string; args: string[]; label: string } {
+  if (value === 'pwsh') return { executable: 'pwsh.exe', args: ['-NoLogo', '-NoProfile'], label: 'PowerShell 7' };
+  if (value === 'cmd') return { executable: 'cmd.exe', args: ['/Q'], label: 'Command Prompt' };
+  return { executable: 'powershell.exe', args: ['-NoLogo', '-NoProfile'], label: 'Windows PowerShell' };
 }
 
 function cleanEnvironment(): Record<string, string> {

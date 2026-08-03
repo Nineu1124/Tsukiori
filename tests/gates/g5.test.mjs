@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const architecture = readFileSync(join(root, '本地多Agent工作台_完整架构与实施方案.md'), 'utf8');
 const evidence = fixture('tests/fixtures/gates/g5-evidence.json');
-const compatibility = fixture('tests/fixtures/release/v1.0.0-rc.1-compatibility.json');
+const releaseVersion = fixture('apps/desktop/package.json').version;
+const compatibility = fixture(`tests/fixtures/release/v${releaseVersion}-compatibility.json`);
 
 function fixture(path) {
   return JSON.parse(readFileSync(join(root, path), 'utf8'));

@@ -27,10 +27,10 @@ test('main workspace matches the V1.0 four-region information architecture', asy
   }
   assert.match(styles, /--titlebar-height:\s*40px/);
   assert.match(styles, /--rail-width:\s*300px/);
-  assert.match(styles, /--work-panel-width:\s*300px/);
+  assert.match(styles, /--work-panel-width:\s*360px/);
   assert.match(styles, /--terminal-height:\s*220px/);
   assert.match(styles, /grid-template:[^;]*var\(--titlebar-height\)[^;]*var\(--rail-width\) minmax\(620px,1fr\) var\(--work-panel-width\)/);
-  assert.match(styles, /grid-template-rows:\s*48px 28px minmax\(140px,1fr\) auto var\(--terminal-height\)/);
+  assert.match(styles, /grid-template-rows:\s*48px 28px minmax\(140px,1fr\) auto auto var\(--terminal-height\)/);
   assert.match(styles, /\.chat-message\.user[\s\S]*justify-self:\s*end/);
   assert.match(styles, /\.chat-message\.assistant[\s\S]*background:\s*transparent/);
   assert.match(styles, /\.message-body\s*\{[^}]*font-size:\s*13px/);
@@ -43,14 +43,14 @@ test('settings center exposes all specification categories and functional contro
   const [html, script] = await rendererFiles();
   assert.match(html, /id="open-settings"/);
   assert.match(html, /id="settings-dialog"/);
-  for (const page of ['general','appearance','account','agent','usage','projects','devices','github','shortcuts','billing','about']) {
+  for (const page of ['general','appearance','account','agent','terminal','mcp','agents','skills','memory','usage','trace','diagnostics','projects','devices','github','shortcuts','billing','about']) {
     assert.match(html, new RegExp(`data-settings-page="${page}"`));
     assert.match(html, new RegExp(`data-settings-view="${page}"`));
   }
-  for (const id of ['save-settings','new-provider','save-provider','test-provider','delete-provider','settings-refresh-runtimes','export-settings']) {
+  for (const id of ['save-settings','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','refresh-mcp','refresh-skills','run-doctor','export-diagnostic-settings','export-settings']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  for (const method of ['updateSettings','saveProvider','testProvider','deleteProvider','refreshRuntimes','exportSettings']) {
+  for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','deleteProvider','refreshRuntimes','diagnosticSummary','exportDiagnostic','exportSettings']) {
     assert.match(script, new RegExp(`workspace\.${method}`));
   }
 });
@@ -137,9 +137,13 @@ test('every button receives motion feedback with specialized actions and reduced
 });
 
 test('desktop proportions preserve the conversation at compact widths by overlaying the work panel', async () => {
-  const [,, styles] = await rendererFiles();
+  const [html, script, styles] = await rendererFiles();
+  assert.match(html, /id="work-panel-resizer"[^>]*role="separator"[^>]*aria-valuemin="260"[^>]*aria-valuemax="720"/);
+  assert.match(script, /function setupWorkPanelResize/);
+  assert.match(script, /workPanelWidth:current/);
+  assert.match(styles, /\.work-panel-resizer[^}]*cursor:\s*col-resize/);
   assert.match(styles, /@media \(max-width:\s*1179px\)/);
   assert.match(styles, /grid-template-columns:\s*240px minmax\(620px,1fr\)/);
-  assert.match(styles, /\.attention-panel\s*\{[\s\S]*position:\s*fixed[\s\S]*width:\s*min\(360px,calc\(100vw - 90px\)\)/);
+  assert.match(styles, /\.attention-panel\s*\{[\s\S]*position:\s*fixed[\s\S]*width:\s*min\(var\(--work-panel-width\),calc\(100vw - 90px\)\)/);
   assert.match(styles, /\.app-shell\.right-collapsed \.attention-panel[\s\S]*translateX\(105%\)/);
 });

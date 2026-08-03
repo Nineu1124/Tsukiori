@@ -29,6 +29,7 @@ import {
   type ProviderConfig,
   type ProviderInput,
   type ProviderKind,
+  deepSeekClaudeModel,
 } from './provider-registry.js';
 
 type RuntimeType = 'codex' | 'claude';
@@ -88,6 +89,8 @@ type WorkspaceSettings = {
   defaultPermissionMode: PermissionMode;
   persistConversation: boolean;
   confirmHighRisk: boolean;
+  workPanelWidth: number;
+  terminalShell: 'powershell' | 'pwsh' | 'cmd';
 };
 
 type PersistedState = {
@@ -145,6 +148,8 @@ const defaultSettings: WorkspaceSettings = {
   defaultRuntime: 'codex', defaultProviderId: 'provider:chatgpt', defaultModel: 'auto',
   defaultPermissionMode: 'manual',
   persistConversation: true, confirmHighRisk: true,
+  workPanelWidth: 360,
+  terminalShell: 'powershell',
 };
 
 export class InteractiveWorkspace {
@@ -291,6 +296,12 @@ export class InteractiveWorkspace {
       defaultPermissionMode: permissionMode(input.defaultPermissionMode ?? current.defaultPermissionMode),
       persistConversation: typeof input.persistConversation === 'boolean' ? input.persistConversation : current.persistConversation,
       confirmHighRisk: typeof input.confirmHighRisk === 'boolean' ? input.confirmHighRisk : current.confirmHighRisk,
+      workPanelWidth: Number.isFinite(input.workPanelWidth)
+        ? Math.max(260, Math.min(720, Math.round(input.workPanelWidth as number)))
+        : current.workPanelWidth,
+      terminalShell: input.terminalShell === 'pwsh' || input.terminalShell === 'cmd'
+        ? input.terminalShell
+        : input.terminalShell === 'powershell' ? 'powershell' : current.terminalShell,
     };
     if (!this.#providers.list().some((provider) => provider.id === next.defaultProviderId)) {
       next.defaultProviderId = 'provider:chatgpt';
@@ -313,6 +324,41 @@ export class InteractiveWorkspace {
 
   testProvider(id: string): Promise<{ ok: boolean; latencyMs: number; category: string }> {
     return this.#providers.test(id);
+  }
+
+  listProviderModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {
+    return this.#providers.listModels(id);
+  }
+
+  terminalShell(): WorkspaceSettings['terminalShell'] {
+    return this.#state.settings.terminalShell;
+  }
+
+  diagnosticSummary(): Record<string, unknown> {
+    const eventCounts: Record<string, number> = {};
+    for (const event of this.#eventLog) eventCounts[event.type] = (eventCounts[event.type] ?? 0) + 1;
+    return {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      platform: 'windows-native-x64',
+      projects: this.#state.projects.length,
+      sessions: this.#state.sessions.length,
+      activeSessions: this.#state.sessions.filter((session) => ['running', 'waiting_permission'].includes(session.status)).length,
+      failedSessions: this.#state.sessions.filter((session) => session.status === 'error').length,
+      providers: this.#providers.list().map((provider) => ({
+        id: provider.id, kind: provider.kind, configured: provider.kind === 'chatgpt' || provider.hasSecret,
+        connected: provider.lastTest?.ok === true, category: provider.lastTest?.category ?? 'not_tested',
+      })),
+      runtimes: this.#runtimes.map(({ id, type, name, available, version, source, supportLevel, error }) => ({
+        id, type, name, available, version, source, supportLevel, ...(error ? { error: truncate(error, 500) } : {}),
+      })),
+      eventCounts,
+      transcriptPersistence: this.#state.settings.persistConversation,
+      credentialStore: 'windows_credential_manager',
+      containsCredentials: false,
+      containsPrompts: false,
+      containsUserSource: false,
+    };
   }
 
   exportSanitizedSettings(): string {
@@ -575,6 +621,9 @@ export class InteractiveWorkspace {
     const prompt = text.trim();
     if (!prompt || prompt.length > 64_000) throw new Error('Prompt 必须为 1–64000 个字符');
     const session = this.#session(sessionId);
+    if (session.status === 'running' || session.status === 'waiting_permission') {
+      throw new Error('当前 Turn 尚未结束；请等待、处理中断或完成权限确认');
+    }
     session.status = 'running';
     session.updatedAt = Date.now();
     delete session.lastError;
@@ -593,7 +642,7 @@ export class InteractiveWorkspace {
     const provider = this.#providers.get(session.providerId);
     const turnId = this.#providers.withEnvironment(provider.id, (environment) => claude.startTurn({
       cwd: session.worktreePath, sessionId: session.threadId as string, resume: session.turnCount > 0,
-      prompt, model: session.model,
+      prompt, model: provider.kind === 'deepseek' ? deepSeekClaudeModel(session.model) : session.model,
       permissionMode: claudePermission(session.permissionMode), environment,
       onEvent: (type, payload) => this.#runtimeEvent(sessionId, type, payload),
       onExit: (error) => {
@@ -602,7 +651,7 @@ export class InteractiveWorkspace {
         this.#emit({ sessionId, type: 'runtime.error', payload: { message: error } });
         this.#save();
       },
-    }));
+    }), session.model);
     this.#activeTurns.set(sessionId, turnId);
     session.turnCount += 1;
     this.#save();

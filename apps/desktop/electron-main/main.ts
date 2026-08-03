@@ -347,6 +347,20 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       ok: true,
       test: await workspace.testProvider(String(command.providerId ?? '')),
     };
+    if (command.type === 'list_provider_models') return {
+      ok: true,
+      ...(await workspace.listProviderModels(String(command.providerId ?? ''))),
+    };
+    if (command.type === 'diagnostic_summary') return { ok: true, diagnostic: workspace.diagnosticSummary() };
+    if (command.type === 'export_diagnostic') {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const selection = owner
+        ? await dialog.showSaveDialog(owner, { title: '导出脱敏诊断包', defaultPath: 'tsukiori-diagnostic.json', filters: [{ name: 'JSON', extensions: ['json'] }] })
+        : await dialog.showSaveDialog({ title: '导出脱敏诊断包', defaultPath: 'tsukiori-diagnostic.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+      if (selection.canceled || !selection.filePath) return { ok: true, canceled: true };
+      writeFileSync(selection.filePath, JSON.stringify(workspace.diagnosticSummary(), null, 2), { encoding: 'utf8', mode: 0o600 });
+      return { ok: true, exported: true };
+    }
     if (command.type === 'export_settings') {
       const owner = BrowserWindow.fromWebContents(event.sender);
       const selection = owner
@@ -416,7 +430,7 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
     };
     if (command.type === 'terminal_start') {
       const sessionId = String(command.sessionId ?? '');
-      terminalManager.start(sessionId, workspace.sessionWorktree(sessionId), Number(command.columns ?? 120), Number(command.rows ?? 28));
+      terminalManager.start(sessionId, workspace.sessionWorktree(sessionId), Number(command.columns ?? 120), Number(command.rows ?? 28), workspace.terminalShell());
       return { ok: true };
     }
     if (command.type === 'terminal_input') {
@@ -527,8 +541,12 @@ app.whenReady()
             if (captureDesktopView?.startsWith('settings')) {
               await window.webContents.executeJavaScript("document.querySelector('#settings-dialog')?.showModal()", true);
               await new Promise((resolveDelay) => setTimeout(resolveDelay, 350));
-              if (captureDesktopView === 'settings-agent') {
-                await window.webContents.executeJavaScript("document.querySelector('[data-settings-page=agent]')?.click()", true);
+              const settingsPage = captureDesktopView.slice('settings-'.length);
+              if (settingsPage && settingsPage !== captureDesktopView) {
+                await window.webContents.executeJavaScript(
+                  `document.querySelector('[data-settings-page=${JSON.stringify(settingsPage)}]')?.click()`,
+                  true,
+                );
                 await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
               }
             }

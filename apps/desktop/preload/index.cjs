@@ -33,6 +33,10 @@ const api = Object.freeze({
     testProvider: (providerId) => ipcRenderer.invoke(
       'workspace:command', { type: 'test_provider', providerId },
     ),
+    listProviderModels: (providerId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'list_provider_models', providerId },
+    ),
+    diagnosticSummary: () => ipcRenderer.invoke('workspace:command', { type: 'diagnostic_summary' }),
     exportSettings: () => ipcRenderer.invoke('workspace:command', { type: 'export_settings' }),
     openWorktree: (sessionId) => ipcRenderer.invoke(
       'workspace:command', { type: 'open_worktree', sessionId },

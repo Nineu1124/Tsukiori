@@ -15,7 +15,8 @@ const protocol = await import(
   pathToFileURL(join(root, 'packages', 'protocol', 'dist', 'index.js')).href,
 );
 const { LocalDatabase } = databaseModule;
-const compatibility = fixture('tests/fixtures/release/v1.0.0-rc.1-compatibility.json');
+const releaseVersion = fixture('apps/desktop/package.json').version;
+const compatibility = fixture(`tests/fixtures/release/v${releaseVersion}-compatibility.json`);
 const acceptanceEvidence = fixture('tests/fixtures/release/v1-acceptance-evidence.json');
 
 function fixture(path) {
@@ -29,7 +30,7 @@ test('V1 RC locks Desktop, Daemon, Runtime versions, Schema hashes, and knownIss
   const opencodeCapabilities = fixture('tests/fixtures/opencode/1.18.4/capability-matrix.json');
   const codexManifest = fixture('tests/fixtures/codex/0.146.0/schema-manifest.json');
   const codexCapabilities = fixture('tests/fixtures/codex/0.146.0/capability-matrix.json');
-  assert.equal(compatibility.releaseCandidate, '1.0.0-rc.1');
+  assert.equal(compatibility.releaseCandidate, releaseVersion);
   assert.equal(desktopPackage.version, compatibility.desktop.version);
   assert.equal(daemonPackage.version, compatibility.daemon.version);
   assert.equal(protocol.DAEMON_VERSION, compatibility.daemon.version);
