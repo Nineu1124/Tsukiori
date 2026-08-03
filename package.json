@@ -52,7 +52,8 @@
     "test:security": "pnpm run build && node --test tests/security/*.test.mjs",
     "test:observability": "pnpm run build && node --test tests/observability/*.test.mjs",
     "test:release": "pnpm run build && node --test tests/release/*.test.mjs",
-    "test:release-candidate": "pnpm run build && node --test tests/release-candidate/*.test.mjs"
+    "test:release-candidate": "pnpm run build && node --test tests/release-candidate/*.test.mjs",
+    "release:prepare": "pnpm run build && node scripts/prepare-github-release.mjs"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "1.18.4",

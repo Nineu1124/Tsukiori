@@ -16,6 +16,7 @@ const helper = unpackedHelper !== archivedHelper && existsSync(unpackedHelper)
 const allowedEnvironmentVariables = new Set([
   'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY',
   'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'TSUKIORI_IPC_BOOTSTRAP_TOKEN',
+  'TSUKIORI_RELEASE_SIGNING_KEY',
 ]);
 
 export type SecretReference = `secretref:${string}`;

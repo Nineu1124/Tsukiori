@@ -31,7 +31,7 @@
     "finalUninstall": "passed",
     "userDataRetained": true,
     "artifactSha256": "5056ba8eb351a65e0eff9d8a365273c218ec49a88916a9b5270d436430908a49",
-    "finalInstallerSha256": "121f9fe0a037b596be73a7702ad58a8ecd2976fb680ce3b544bd11827b3c5790",
+    "finalInstallerSha256": "e691c46a90706b5bef34fec28034673c232d21b00329d8ec8a3f8764ce9a2e86",
     "artifactCommitted": false
   },
   "releasePolicy": {

@@ -35,7 +35,7 @@ Local V1 可采用未签名 NSIS，但这不代表 Windows 已验证发布者。
 - 设计稿视觉证据：`docs/visual/t5.7-main-workspace.png`、`docs/visual/t5.7-settings-general.png`、`docs/visual/t5.7-settings-agent.png`
 - 已知问题：`docs/releases/V1.0.0-rc.1-known-issues.md`
 - G5 签字：`docs/gates/G5-stage-5.md`
-- 本机安装生命周期：构建、Packaged Smoke、安装、升级、卸载、重装和最终卸载全部通过；临时安装包 SHA-256 为 `5056ba8eb351a65e0eff9d8a365273c218ec49a88916a9b5270d436430908a49`，未提交仓库。最终本地安装包 SHA-256 为 `121f9fe0a037b596be73a7702ad58a8ecd2976fb680ce3b544bd11827b3c5790`，并再次通过安装、Smoke 和卸载。
+- 本机安装生命周期：构建、Packaged Smoke、安装、升级、卸载、重装和最终卸载全部通过；临时安装包 SHA-256 为 `5056ba8eb351a65e0eff9d8a365273c218ec49a88916a9b5270d436430908a49`，未提交仓库。采用用户角色图标重新构建的最终本地安装包大小为 `219793969` bytes，SHA-256 为 `e691c46a90706b5bef34fec28034673c232d21b00329d8ec8a3f8764ce9a2e86`，并再次通过安装、Smoke 和卸载。
 - 预 Gate Windows CI：<https://github.com/Nineu1124/Tsukiori/actions/runs/30778175326>（T5.8 回归通过，Ready 因 G5 尚未勾选而按预期失败）
 - 最终 Windows CI：G5 完成 push 对应运行，必须通过无凭据回归和 NSIS 生命周期。
 

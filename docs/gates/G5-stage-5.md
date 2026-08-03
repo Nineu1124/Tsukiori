@@ -31,7 +31,7 @@ T5.8 提交 `6187dd0ee9d5b45c4027329bef233c4aaa86fd35` 的预 Gate Windows CI `3
 - G0–G4：已通过并分别归档 Gate 报告；
 - T5.8 预 Gate CI `30778175326`：T5.8 回归通过，Ready 检查因 G5 尚未签字而按预期失败；
 - 本机 `scripts/verify-windows-release-candidate.ps1`：构建、Packaged Smoke、安装、升级、卸载、重装和最终卸载全部通过，用户数据按策略保留；临时 Artifact SHA-256 为 `5056ba8eb351a65e0eff9d8a365273c218ec49a88916a9b5270d436430908a49`，未提交仓库；
-- 最终本地安装包 `Tsukiori-1.0.0-rc.1-x64-setup.exe` 的 SHA-256 为 `121f9fe0a037b596be73a7702ad58a8ecd2976fb680ce3b544bd11827b3c5790`，并独立通过安装、Packaged Smoke 和卸载；
+- 采用用户角色图标重新构建的最终本地安装包 `Tsukiori-1.0.0-rc.1-x64-setup.exe` 大小为 `219793969` bytes，SHA-256 为 `e691c46a90706b5bef34fec28034673c232d21b00329d8ec8a3f8764ce9a2e86`，并独立通过安装、Packaged Smoke 和卸载；
 - G5 完成 push：必须在干净 Windows runner 上通过完整无凭据回归和 NSIS 生命周期；
 - Local V1 未解决阻塞项：0；
 - Verified Publisher 缺少证书是可选通道状态，不是 Local V1 阻塞。

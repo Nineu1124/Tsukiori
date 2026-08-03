@@ -15,7 +15,7 @@ export type UnsignedReleaseManifest = {
     fileName: string;
     byteLength: number;
     sha256: string;
-    authenticodeRequired: true;
+    authenticodeRequired: boolean;
   };
   source: { channel: ReleaseChannel; downloadUrl: string };
   createdAt: string;
@@ -172,7 +172,7 @@ function validateShape(manifest: UnsignedReleaseManifest | ReleaseManifest): voi
   }
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(manifest.artifact.fileName)
     || !/^[a-f0-9]{64}$/.test(manifest.artifact.sha256)
-    || manifest.artifact.authenticodeRequired !== true
+    || typeof manifest.artifact.authenticodeRequired !== 'boolean'
     || !['stable', 'candidate'].includes(manifest.source.channel)
     || Number.isNaN(Date.parse(manifest.createdAt))) {
     throw new ReleaseVerificationError('invalid_manifest', 'Release manifest fields are invalid');
