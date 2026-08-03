@@ -13,6 +13,17 @@
     "hostProtocolVersion": 1,
     "ipcProtocolVersion": 1
   },
+  "workbench": {
+    "sessionTranscript": "local-opt-in",
+    "worktreeFilesAndAttachments": "supported",
+    "windowsConPty": "supported",
+    "sandboxedLocalPreview": "supported",
+    "codexSkillsMcp": "supported",
+    "agentTeam": "2-4-independent-worktrees",
+    "responsiveBaseline": "1600x1000",
+    "compactMinimum": "1040x720",
+    "reducedMotion": "supported"
+  },
   "runtimes": [
     {
       "runtime": "opencode",
@@ -63,6 +74,7 @@
     "unsignedSmartScreenWarningRequired": true,
     "detachedManifestSignature": "Ed25519",
     "testArtifactCommitted": false,
-    "privateSigningMaterialCommitted": false
+    "privateSigningMaterialCommitted": false,
+    "localInstallerSha256": "121f9fe0a037b596be73a7702ad58a8ecd2976fb680ce3b544bd11827b3c5790"
   }
 }

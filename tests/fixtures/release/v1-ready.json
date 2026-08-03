@@ -3,7 +3,7 @@
   "decision": "local_v1_ready",
   "releaseCandidate": "1.0.0-rc.1",
   "platform": "windows-x64",
-  "completion": { "tasks": 29, "gates": 6, "acceptanceItems": 85, "readyChecks": 5, "allChecked": true },
+  "completion": { "tasks": 30, "gates": 6, "acceptanceItems": 97, "readyChecks": 5, "allChecked": true },
   "g5ContinuousIntegration": {
     "workflow": "windows-ci",
     "trigger": "g5-completion-push",
@@ -18,10 +18,12 @@
     "tests/fixtures/release/t5.6-interactive-result.json",
     "tests/fixtures/release/t5.7-result.json",
     "tests/fixtures/release/t5.7-runtime-provider-result.json",
+    "tests/fixtures/release/t5.8-result.json",
     "docs/releases/V1.0.0-rc.1-known-issues.md",
     "docs/releases/Local-V1-Ready.md",
     "docs/spikes/T5.6-interactive-product.md",
     "docs/spikes/T5.7-settings-provider-runtime-ui.md",
+    "docs/spikes/T5.8-three-product-complete-workbench.md",
     "docs/gates/G5-stage-5.md"
   ],
   "publication": { "channel": "local", "authenticodeRequired": false, "smartScreenWarningRequired": true, "verifiedPublisherRemainsFailClosed": true },

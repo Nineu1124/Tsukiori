@@ -12,9 +12,12 @@
     "installerLifecycle": "required"
   },
   "preGateEvidence": {
-    "runId": 30758935659,
-    "headSha": "2a8ff95d736a329eb4fc957528eeab2a61c1b0d4",
-    "t5_7TestsPassed": true,
+    "runId": 30778175326,
+    "url": "https://github.com/Nineu1124/Tsukiori/actions/runs/30778175326",
+    "headSha": "6187dd0ee9d5b45c4027329bef233c4aaa86fd35",
+    "t5_8TestsPassed": true,
+    "conclusion": "failure",
+    "allNonReadinessTestsPassed": true,
     "readinessFailureExpected": true,
     "reason": "G5 and 37.0 intentionally remained unchecked before gate revalidation"
   },
@@ -27,7 +30,8 @@
     "reinstall": "passed",
     "finalUninstall": "passed",
     "userDataRetained": true,
-    "artifactSha256": "84cb427ff3a6c25843d3633b917a249967bb6415120bf3edc20ceb6d3606c51a",
+    "artifactSha256": "5056ba8eb351a65e0eff9d8a365273c218ec49a88916a9b5270d436430908a49",
+    "finalInstallerSha256": "121f9fe0a037b596be73a7702ad58a8ecd2976fb680ce3b544bd11827b3c5790",
     "artifactCommitted": false
   },
   "releasePolicy": {
@@ -37,7 +41,7 @@
     "integrity": ["sha256", "ed25519-release-manifest", "https-origin", "channel", "database-schema"]
   },
   "unresolvedSevereIssues": { "security": 0, "dataLoss": 0, "wrongProcessTermination": 0 },
-  "acceptance": { "sections": "37.1-37.10", "items": 85, "allChecked": true, "allMappedToEvidence": true },
+  "acceptance": { "sections": "37.1-37.11", "items": 97, "allChecked": true, "allMappedToEvidence": true },
   "backlogExcluded": ["B1", "B2", "B3"],
   "containsCredentials": false,
   "containsPrivateSigningMaterial": false,

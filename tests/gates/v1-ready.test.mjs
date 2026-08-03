@@ -30,8 +30,8 @@ function checkboxLines(startMarker, endMarker) {
     .filter((line) => /^- \[[ xX]\] /.test(line));
 }
 
-test('all 29 V1 tasks and all six stage gates are complete', () => {
-  const counts = [4, 5, 4, 4, 5, 7];
+test('all 30 V1 tasks and all six stage gates are complete', () => {
+  const counts = [4, 5, 4, 4, 5, 8];
   let taskCount = 0;
   for (let stage = 0; stage < counts.length; stage += 1) {
     for (let item = 1; item <= counts[stage]; item += 1) {
