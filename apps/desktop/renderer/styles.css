@@ -344,6 +344,631 @@ button:disabled:active {
 .usage-summary span,.usage-bar,.shortcut-list p { font-size: 11px; }
 body.density-compact .rail-item { min-height: 31px; font-size: 12px; }
 body.density-compact .message-body,body.density-compact .composer textarea { font-size: 12px; }
+
+/* ============================================================================
+   SCHALE OS visual language (Blue Archive)
+   ----------------------------------------------------------------------------
+   Geometry and texture layer only. Every V1.0 token, layout metric, grid
+   template and font scale above is preserved verbatim.
+
+   Geometry is carried by clip-path, never by transform: the reduced-motion
+   guard forces `transform: none !important` on buttons and dialogs, so a
+   skewX() parallelogram would silently flatten. clip-path is unaffected, so
+   the shape language survives with animation disabled.
+
+   filter: drop-shadow() is used only on leaf components. It is deliberately
+   NOT applied to .attention-panel, which becomes position:fixed below 1179px
+   and would be broken by a filter-induced containing block.
+   ============================================================================ */
+:root {
+  --ba-cut: 12px;
+  --ba-cut-sm: 7px;
+  --ba-slant: 9px;
+  --ba-frame: rgba(37,143,232,.52);
+  --ba-frame-soft: rgba(37,143,232,.20);
+  --ba-hatch: repeating-linear-gradient(45deg,rgba(37,143,232,.085) 0 2px,transparent 2px 6px);
+  --ba-hatch-strong: repeating-linear-gradient(45deg,rgba(37,143,232,.16) 0 2px,transparent 2px 5px);
+  --ba-clip-card: polygon(0 0,calc(100% - var(--ba-cut)) 0,100% var(--ba-cut),100% 100%,var(--ba-cut) 100%,0 calc(100% - var(--ba-cut)));
+  --ba-clip-tile: polygon(0 0,calc(100% - var(--ba-cut-sm)) 0,100% var(--ba-cut-sm),100% 100%,0 100%);
+  --ba-clip-para: polygon(var(--ba-slant) 0,100% 0,calc(100% - var(--ba-slant)) 100%,0 100%);
+  --ba-clip-para-sm: polygon(5px 0,100% 0,calc(100% - 5px) 100%,0 100%);
+  --ba-clip-right: polygon(0 0,calc(100% - var(--ba-cut-sm)) 0,100% var(--ba-cut-sm),100% 100%,0 100%);
+}
+
+/* --- 1. Chamfers replace rounded corners on flat surfaces ----------------- */
+.settings-card,
+.project-hero,
+.dashboard-grid > section,
+.metric-grid article,
+.work-panel-home > button,
+.runtime-summary,
+.composer,
+.turn-activity,
+.terminal-panel,
+.provider-editor,
+.capability-editor,
+.account-card,
+.about-card,
+.usage-chart {
+  border-radius: 0;
+  clip-path: var(--ba-clip-card);
+}
+.rail-item,
+.panel-file,
+.git-file,
+.trace-item,
+.provider-list-item,
+.settings-runtime-item,
+.native-capability,
+.mcp-server-row,
+.memory-file-row,
+.skill-server-row,
+.team-row,
+.diagnostic-tile,
+.attachment-chip,
+.rail-runtime > button {
+  border-radius: 0;
+  clip-path: var(--ba-clip-tile);
+}
+.settings-card,
+.project-hero,
+.metric-grid article,
+.dashboard-grid > section,
+.work-panel-home > button {
+  box-shadow: none;
+  filter: drop-shadow(0 6px 16px rgba(36,100,138,.09));
+}
+
+/* --- 2. Parallelogram action elements ------------------------------------- */
+.new-chat,
+.primary,
+.panel-primary,
+.terminal-tab,
+#terminal-run,
+.settings-footer .primary,
+.dashboard-actions .primary {
+  border-radius: 0;
+  clip-path: var(--ba-clip-para);
+}
+.send-button,
+.project-branch {
+  border-radius: 0;
+  clip-path: var(--ba-clip-para-sm);
+}
+.project-branch {
+  padding: 5px 13px;
+  letter-spacing: .04em;
+}
+
+/* --- 3. Diagonal hatching ------------------------------------------------- */
+.rail-section-header,
+.panel-title,
+.settings-header,
+.terminal-panel header,
+.attention-panel > header {
+  position: relative;
+  background-image: var(--ba-hatch);
+  background-repeat: no-repeat;
+  background-size: 76px 100%;
+  background-position: right center;
+}
+.empty-state {
+  background-image: var(--ba-hatch);
+  border: 1px solid var(--ba-frame-soft);
+  clip-path: var(--ba-clip-tile);
+}
+.usage-bar {
+  background-image: var(--ba-hatch);
+  background-repeat: no-repeat;
+  background-size: 100% 3px;
+  background-position: left bottom;
+}
+/* Leading tick before every rail/panel section label. */
+.rail-section-header::before,
+.panel-title::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  width: 3px;
+  height: 11px;
+  transform: translateY(-50%) skewX(-12deg);
+  background: var(--tsukiori-primary);
+}
+.panel-title::before { left: -6px; height: 13px; }
+
+/* --- 4. Hairline technical frames (corner brackets) ----------------------- */
+.settings-card,
+.project-hero,
+.dashboard-grid > section {
+  position: relative;
+}
+.settings-card::before,
+.project-hero::before,
+.dashboard-grid > section::before,
+.settings-card::after,
+.project-hero::after,
+.dashboard-grid > section::after {
+  content: "";
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  pointer-events: none;
+  border-color: var(--ba-frame);
+  border-style: solid;
+  border-width: 0;
+}
+.settings-card::before,
+.project-hero::before,
+.dashboard-grid > section::before {
+  left: 6px;
+  top: 6px;
+  border-left-width: 1px;
+  border-top-width: 1px;
+}
+.settings-card::after,
+.project-hero::after,
+.dashboard-grid > section::after {
+  right: 6px;
+  bottom: 6px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+/* Both pseudo-elements on the work-panel entries are already in use, so the
+   bracket pair is drawn with background layers instead. */
+.work-panel-home > button {
+  background-image:
+    linear-gradient(var(--ba-frame),var(--ba-frame)),
+    linear-gradient(var(--ba-frame),var(--ba-frame)),
+    linear-gradient(var(--ba-frame),var(--ba-frame)),
+    linear-gradient(var(--ba-frame),var(--ba-frame)),
+    linear-gradient(rgba(255,255,255,.86),rgba(255,255,255,.86));
+  background-repeat: no-repeat;
+  background-size: 10px 1px,1px 10px,10px 1px,1px 10px,100% 100%;
+  background-position: 7px 7px,7px 7px,right 7px bottom 7px,right 7px bottom 7px,0 0;
+}
+.metric-grid article::after {
+  content: "";
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  border-right: 1px solid var(--ba-frame);
+  border-top: 1px solid var(--ba-frame);
+}
+
+/* --- 5. Micro-caps annotation --------------------------------------------- */
+.kicker {
+  display: inline-block;
+  padding: 3px 11px;
+  color: white;
+  background: linear-gradient(100deg,var(--tsukiori-primary),var(--tsukiori-primary-300));
+  clip-path: var(--ba-clip-para);
+  text-transform: uppercase;
+  letter-spacing: .2em;
+}
+.page-index {
+  font-style: italic;
+  letter-spacing: -.03em;
+}
+.boundary-note,
+.panel-illustration span {
+  text-transform: uppercase;
+  letter-spacing: .18em;
+}
+.message-meta {
+  letter-spacing: .16em;
+}
+.panel-illustration span {
+  color: var(--tsukiori-primary);
+  opacity: .5;
+  font-weight: 700;
+}
+
+/* --- 6. Stream surfaces: user bubble, tool cards, thinking blocks --------- */
+/* .chat-message.assistant keeps its transparent background and left rail. */
+.chat-message.user {
+  border-radius: 0;
+  clip-path: polygon(var(--ba-cut-sm) 0,100% 0,100% 100%,0 100%);
+}
+.chat-message.tool,
+.chat-message.error,
+.thinking-block {
+  border-radius: 0;
+  clip-path: var(--ba-clip-right);
+}
+.tool-phase {
+  border-radius: 0;
+  clip-path: var(--ba-clip-para-sm);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+.thinking-block summary {
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+/* --- 7. Two previously unstyled surfaces --------------------------------- */
+/* .attention-item is created in renderer.js but had no rule in this sheet. */
+.attention-item {
+  display: grid;
+  grid-template-columns: 4px minmax(0,1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 11px;
+  margin-bottom: 6px;
+  border: 1px solid var(--ba-frame-soft);
+  background: rgba(255,255,255,.92);
+  clip-path: var(--ba-clip-tile);
+  font-size: 11px;
+}
+.attention-item::before {
+  content: "";
+  align-self: stretch;
+  background: var(--tsukiori-primary);
+}
+.attention-item.failed::before { background: var(--tsukiori-danger); }
+.attention-item.healthy::before { background: var(--tsukiori-success); }
+/* support-<level> chips rendered from Codex native capabilities. */
+.native-capability [data-field="supportLevel"] {
+  padding: 2px 8px;
+  color: #5f7889;
+  background: #eef6fa;
+  clip-path: var(--ba-clip-para-sm);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.native-capability.support-verified [data-field="supportLevel"] { color: #1f7d5f; background: #e4f7f0; }
+.native-capability.support-unsupported [data-field="supportLevel"] { color: #bf4657; background: #ffe9ec; }
+.native-capability.support-unknown [data-field="supportLevel"] { color: #7a6ab8; background: #f1eeff; }
+
+/* --- 8. Motion: slight overshoot on dialog entry -------------------------- */
+/* Same animation name the motion gate asserts; only the curve changes. */
+@keyframes tsukiori-dialog-in {
+  0% { opacity: 0; transform: translateY(14px) scale(.982); }
+  62% { opacity: 1; transform: translateY(-3px) scale(1.004); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* --- 9. Remaining rounded surfaces ---------------------------------------- */
+/* Caught by reviewing the first capture: these kept their radius and broke the
+   angular language, most visibly the active settings-nav item. */
+.settings-shell nav button,
+.settings-shell > aside > #report-bug,
+.settings-card button,
+.setting-row select,
+.composer-selectors label,
+.permission-card,
+.empty-actions button,
+.git-actions button,
+.dashboard-actions button,
+.provider-editor input,
+.provider-editor select,
+.team-agent input,
+.team-agent select,
+.history-query,
+.terminal-command {
+  border-radius: 0;
+  clip-path: var(--ba-clip-tile);
+}
+.session-dialog,
+.settings-dialog,
+.team-dialog {
+  border-radius: 0;
+  clip-path: var(--ba-clip-card);
+}
+/* Active settings-nav item gains the BA leading accent bar. */
+.settings-shell nav button.active {
+  box-shadow: inset 3px 0 rgba(255,255,255,.85),0 5px 12px rgba(37,143,232,.15);
+}
+.composer-actions button,
+.titlebar-actions button,
+.rail-footer > button,
+.session-header button,
+.rail-section-header button {
+  border-radius: 0;
+  clip-path: var(--ba-clip-para-sm);
+}
+/* Genuinely circular things stay circular. */
+.online-dot,
+.status-dot,
+.presence,
+.selector-dot,
+.runtime-orb,
+.profile-avatar,
+.accent-preview span,
+.runtime-summary::before,
+.attention-item::before {
+  clip-path: none;
+}
+
+/* ============================================================================
+   SCHALE OS composition layer (L0-L4)
+   ----------------------------------------------------------------------------
+   The geometry layer above changed shapes but not structure, so the result read
+   as "white boxes with cut corners". This layer adds the three things that
+   actually carry the BA look:
+
+     L0  a dark ink value anchor (the rail) so the canvas has 3 value tiers
+     L1  a display type scale, so the jump from label to number is ~4x not 2x
+     L2  canvas composition: hero and metrics side by side, tray fills the
+         viewport bottom instead of leaving ~380px of dead space
+     L3  component substance: metric tiles, hero, duotone icon blocks
+     L4  decoration at visible strength
+
+   Constraints held: --rail-width, the app-shell grid-template, the 13px body /
+   12px terminal readability scale and .chat-message.assistant transparency are
+   all asserted by tests/ui and are NOT touched. Geometry stays on clip-path
+   because the reduced-motion guard forces transform:none on buttons/dialogs;
+   the numeral slant uses font-style:italic for the same reason.
+   ============================================================================ */
+:root {
+  --ba-ink: #16233a;
+  --ba-ink-3: #2a3f5f;
+  --ba-cyan: #6fd3f5;
+  /* #e6f1fa was only a ~4% step off white and read as no plane at all. */
+  --ba-tray: #d5e6f4;
+  --ba-tray-2: #e3eff9;
+  --ba-amber: #ffc63d;
+  --ba-rail-text: #cfe0ef;
+  --ba-rail-dim: #85aac9;
+  --ba-hatch-cyan: repeating-linear-gradient(45deg,rgba(111,211,245,.16) 0 2px,transparent 2px 6px);
+  /* L4: the previous values (.085 / .16 / .52) read as render artifacts. */
+  --ba-hatch: repeating-linear-gradient(45deg,rgba(37,143,232,.14) 0 2px,transparent 2px 6px);
+  --ba-hatch-strong: repeating-linear-gradient(45deg,rgba(37,143,232,.22) 0 2px,transparent 2px 5px);
+  --ba-frame: rgba(37,143,232,.62);
+}
+
+/* --- L0. Ink rail --------------------------------------------------------- */
+.session-rail {
+  border-right-color: rgba(111,211,245,.20);
+  color: var(--ba-rail-text);
+  background: var(--ba-ink);
+}
+.session-rail::before { opacity: .5; }
+.workspace-identity strong { color: #f2f8ff; }
+.workspace-identity small,
+.workspace-identity button { color: var(--ba-rail-dim); }
+.workspace-avatar { box-shadow: inset 0 0 0 1px rgba(111,211,245,.30),0 5px 14px rgba(0,0,0,.28); }
+
+/* The single amber CTA: highest contrast object in the rail. */
+.new-chat {
+  border-color: rgba(255,198,61,.55);
+  color: #2b2100;
+  background: linear-gradient(100deg,var(--ba-amber),#ffd873);
+  box-shadow: 0 7px 18px rgba(255,198,61,.20);
+  font-weight: 700;
+}
+.rail-section-header {
+  color: var(--ba-cyan);
+  letter-spacing: .08em;
+  background-image: var(--ba-hatch-cyan);
+}
+.rail-section-header::before { background: var(--ba-amber); }
+.rail-section-header button { color: var(--ba-rail-dim); }
+.rail-section-header button:hover { color: var(--ba-ink); background: var(--ba-cyan); }
+.rail-item { color: var(--ba-rail-text); }
+.rail-item:hover { background: rgba(111,211,245,.09); }
+.rail-item.active {
+  border-color: rgba(255,198,61,.34);
+  color: #fff;
+  background: linear-gradient(90deg,rgba(255,198,61,.17),rgba(111,211,245,.05));
+  box-shadow: inset 3px 0 var(--ba-amber);
+}
+.rail-item i { color: var(--ba-cyan); }
+.rail-item small { color: #7fa3c2; }
+.history-query {
+  border-color: rgba(111,211,245,.24);
+  color: #e8f3fb;
+  background: rgba(8,15,28,.52);
+}
+.history-query::placeholder { color: #6f92b0; }
+.rail-runtime { border-top-color: rgba(111,211,245,.16); }
+.rail-runtime > button {
+  border-color: rgba(111,211,245,.20);
+  color: var(--ba-rail-text);
+  background: rgba(111,211,245,.06);
+}
+.rail-runtime strong { color: #f2f8ff; }
+.rail-runtime small { color: var(--ba-rail-dim); }
+.rail-footer > button { color: #9dbdd8; }
+.rail-footer > button:hover { color: var(--ba-ink); background: var(--ba-cyan); }
+.rail-footer button span { background: var(--ba-amber); }
+.daemon-status { color: #7fa3c2; }
+.presence { background: #6b8399; }
+
+/* --- L1. Display type scale ----------------------------------------------- */
+/* Micro-label floor. These were 6-8px and sat below a comfortable reading
+   size; the readability block above had never covered them. */
+.kicker { font-size: 11px; }
+.tool-phase,
+.thinking-block summary b,
+.attachment-chip,
+.team-row small,
+.native-capability small { font-size: 10px; }
+.thinking-block summary { font-size: 11px; }
+.panel-illustration span { font-size: 8px; }
+
+/* --- L2. Canvas composition ----------------------------------------------- */
+.project-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0,7fr) minmax(0,5fr);
+  grid-template-rows: auto auto minmax(0,1fr);
+  grid-template-areas:
+    "head head"
+    "hero metrics"
+    "tray tray";
+  gap: 16px;
+  align-content: start;
+  padding: 22px 26px 0;
+}
+.project-dashboard > header {
+  grid-area: head;
+  margin: 0;
+  padding-bottom: 14px;
+  border-bottom-color: rgba(22,35,58,.14);
+}
+.project-dashboard > header > div { grid-template-columns: 66px 1fr; }
+.project-dashboard h1 { font-size: 27px; letter-spacing: -.01em; }
+.page-index { font-size: 44px; color: var(--ba-ink); }
+.project-hero { grid-area: hero; margin-top: 0; }
+.metric-grid { grid-area: metrics; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 0; }
+/* Full-bleed tray: cancels the dashboard's 26px side padding so the plane
+   reaches the viewport edges, and minmax(0,1fr) makes it absorb the space the
+   old stacked layout left empty. */
+.dashboard-grid {
+  grid-area: tray;
+  position: relative;
+  gap: 14px;
+  align-content: start;
+  margin: 0 -26px;
+  padding: 18px 26px 22px;
+  border-top: 1px solid rgba(22,35,58,.15);
+  overflow: hidden;
+  /* Edge ticks along the top rule, then the plane itself. */
+  background:
+    repeating-linear-gradient(90deg,rgba(22,35,58,.22) 0 1px,transparent 1px 16px) left top / 100% 5px no-repeat,
+    linear-gradient(180deg,var(--ba-tray),var(--ba-tray-2));
+}
+/* height:100% ballooned both panels to fill the tray, which made the emptiness
+   worse rather than better. The plane absorbs the slack; the panels do not. */
+.dashboard-grid > section {
+  min-height: 220px;
+  height: auto;
+  align-self: start;
+  z-index: 1;
+}
+/* The tray is intentionally larger than its content. BA fills that kind of
+   surplus with a corner composition rather than stretched containers. */
+.dashboard-grid::after {
+  content: "✣";
+  position: absolute;
+  right: 18px;
+  bottom: -46px;
+  z-index: 0;
+  width: 320px;
+  height: 320px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: rgba(22,35,58,.10);
+  font-size: 208px;
+  line-height: 1;
+  background:
+    radial-gradient(circle at 50% 50%,rgba(22,35,58,.13) 0 1.4px,transparent 1.7px) 0 0 / 9px 9px,
+    linear-gradient(135deg,transparent 45%,rgba(22,35,58,.10) 45.5% 47.5%,transparent 48%);
+  -webkit-mask-image: radial-gradient(circle at 58% 58%,#000 0,transparent 70%);
+  mask-image: radial-gradient(circle at 58% 58%,#000 0,transparent 70%);
+}
+@media (max-width: 1240px) {
+  .project-dashboard {
+    grid-template-columns: minmax(0,1fr);
+    grid-template-areas: "head" "hero" "metrics" "tray";
+  }
+}
+
+/* --- L3. Component substance ---------------------------------------------- */
+.project-hero {
+  padding: 22px;
+  border-color: rgba(111,211,245,.28);
+  background-image: var(--ba-hatch-cyan),linear-gradient(112deg,var(--ba-ink) 0,var(--ba-ink-3) 62%,#31527a 100%);
+  background-repeat: no-repeat,no-repeat;
+  background-size: 190px 100%,100% 100%;
+  background-position: right center,0 0;
+}
+.project-hero::before,
+.project-hero::after { border-color: rgba(111,211,245,.55); }
+.project-hero .kicker { color: #2b2100; background: linear-gradient(100deg,var(--ba-amber),#ffd873); }
+.project-hero h2 { margin: 9px 0 7px; color: #fff; font-size: 34px; letter-spacing: -.02em; }
+.project-hero #project-path { color: #9dc4e2; }
+.project-branch { color: var(--ba-ink); background: var(--ba-cyan); font-weight: 700; }
+
+.metric-grid article {
+  grid-template-columns: minmax(0,1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 4px 8px;
+  padding: 13px 15px 11px;
+  background-image: var(--ba-hatch-strong);
+  background-repeat: no-repeat;
+  background-size: 62px 100%;
+  background-position: right bottom;
+}
+/* Accent moves from a left stub to a full top edge; per-tile colours already
+   come from the nth-child rules in the geometry layer. */
+.metric-grid article::before { left: 0; right: 0; top: 0; bottom: auto; width: auto; height: 3px; }
+.metric-grid i {
+  grid-row: 1;
+  grid-column: 2;
+  align-self: start;
+  color: rgba(37,143,232,.40);
+  font-size: 15px;
+}
+.metric-grid span {
+  grid-row: 1;
+  grid-column: 1;
+  color: #6d879c;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.metric-grid strong {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  color: var(--ba-ink);
+  font-size: 44px;
+  font-style: italic;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-grid > section { background: #fff; }
+.dashboard-grid header { letter-spacing: .03em; }
+/* Duotone icon block, replacing the pale tinted square. */
+.work-panel-home i {
+  border-radius: 0;
+  color: var(--ba-cyan);
+  background: var(--ba-ink);
+  clip-path: var(--ba-clip-tile);
+}
+
+/* Tray panels are now white-on-tinted, so they need a real edge. */
+.dashboard-grid > section { border-color: rgba(22,35,58,.15); }
+.dashboard-grid > section > header {
+  position: relative;
+  border-bottom-color: rgba(22,35,58,.10);
+  background-image: var(--ba-hatch);
+  background-repeat: no-repeat;
+  background-size: 58px 100%;
+  background-position: right center;
+}
+/* Same leading tick the rail and panel titles carry. */
+.dashboard-grid > section > header::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 3px;
+  width: 3px;
+  height: 13px;
+  transform: skewX(-12deg);
+  background: var(--tsukiori-primary);
+}
+
+/* --- L4. Decoration at readable strength ---------------------------------- */
+/* The work panel bottoms out well above the viewport edge; at .18/140px the
+   illustration was too faint to register as anything but a smudge. */
+.panel-illustration {
+  width: 208px;
+  height: 232px;
+  opacity: .30;
+}
+.panel-illustration span { letter-spacing: .2em; }
+
 .checkpoint-panel { margin-top: 14px; padding-top: 4px; border-top: 1px solid rgba(37,143,232,.22); }
 .checkpoint-create { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 6px; margin: 8px 0; }
 .checkpoint-create input { min-width: 0; padding: 7px; border: 1px solid rgba(37,143,232,.25); border-radius: 5px; font-size: 10px; }
@@ -355,3 +980,110 @@ body.density-compact .message-body,body.density-compact .composer textarea { fon
 .checkpoint-row strong { font-size: 10px; white-space: nowrap; }
 .checkpoint-row small { margin-top: 3px; color: #71899c; font-size: 8px; line-height: 1.35; }
 .checkpoint-event { color: #1e7ebc; border-color: rgba(37,143,232,.22); }
+
+/* ============================================================================
+   L5. Generated art assets (apps/desktop/renderer/assets/)
+   Raster decorations use url() + a 2dppx media query rather than image-set()
+   so this does not depend on the Chromium version Electron ships.
+   Icons are masks, not <img>: the SVGs are stroke="currentColor", which an
+   <img> cannot inherit. mask + background-color:currentColor keeps them
+   themeable and needs no markup change.
+   ============================================================================ */
+
+/* --- Hero: the generated file is opaque and already contains the gradient,
+   so it replaces the hatch layer. The CSS gradient stays underneath purely as
+   a fallback -- if the image 404s, white display type must not land on white. */
+.project-hero {
+  background-image:
+    url("assets/hero-decor.webp"),
+    linear-gradient(112deg,var(--ba-ink) 0,var(--ba-ink-3) 62%,#31527a 100%);
+  background-repeat: no-repeat,no-repeat;
+  background-size: cover,100% 100%;
+  background-position: center,0 0;
+}
+
+/* --- Tray watermark: the asset's baked-in fade is far weaker than the 8% the
+   prompt asked for, so it read as a hard grey artifact floating mid-tray.
+   Pinned into the actual corner and dimmed with opacity; the mask stays off
+   because the asset does carry some fade of its own. */
+.dashboard-grid::after {
+  content: "";
+  width: 300px;
+  height: 300px;
+  right: -18px;
+  bottom: -34px;
+  color: transparent;
+  font-size: 0;
+  opacity: .16;
+  background:
+    url("assets/tray-watermark.webp") right bottom / contain no-repeat;
+  -webkit-mask-image: none;
+          mask-image: none;
+}
+
+/* --- Work panel illustration: drops the CSS arch (border + ::before) in
+   favour of the drawn one. The rotated caption stays -- it is real text. */
+.panel-illustration {
+  width: 212px;
+  height: 232px;
+  border: 0;
+  clip-path: none;
+  opacity: .34;
+  background: url("assets/panel-illustration.webp") center bottom / contain no-repeat;
+}
+.panel-illustration::before { content: none; }
+
+/* --- Empty states: illustration above the label, hatch retained behind. */
+.empty-state {
+  padding-top: 92px;
+  background-image:
+    url("assets/empty-state.webp"),
+    var(--ba-hatch);
+  background-repeat: no-repeat,repeat;
+  background-size: 104px auto,auto;
+  background-position: center 16px,0 0;
+}
+
+@media (min-resolution: 2dppx) {
+  .project-hero { background-image: url("assets/hero-decor@2x.webp"),linear-gradient(112deg,var(--ba-ink) 0,var(--ba-ink-3) 62%,#31527a 100%); }
+  .dashboard-grid::after { background-image: url("assets/tray-watermark@2x.webp"); }
+  .panel-illustration { background-image: url("assets/panel-illustration@2x.webp"); }
+  .empty-state { background-image: url("assets/empty-state@2x.webp"),var(--ba-hatch); }
+}
+
+/* --- Icon masks ----------------------------------------------------------- */
+/* font-size:0 hides the Unicode fallback glyph while leaving `color` live for
+   currentColor. The glyph stays in the DOM as the no-CSS fallback. */
+.metric-grid i,
+.work-panel-home i { font-size: 0; }
+
+/* The inherited rgba(37,143,232,.40) was tuned for a solid glyph; as a 16px
+   stroked mask over the header hatch it washed out, so the colour is set
+   explicitly here rather than inherited. */
+.metric-grid i {
+  width: 17px;
+  height: 17px;
+  background-color: rgba(37,143,232,.72);
+  -webkit-mask: var(--ba-icon) center / contain no-repeat;
+          mask: var(--ba-icon) center / contain no-repeat;
+}
+.metric-grid article:nth-child(1) i { --ba-icon: url("assets/icons/worktree-fork.svg"); }
+.metric-grid article:nth-child(2) i { --ba-icon: url("assets/icons/file-folded.svg"); }
+.metric-grid article:nth-child(3) i { --ba-icon: url("assets/icons/play-chamfered.svg"); }
+.metric-grid article:nth-child(4) i { --ba-icon: url("assets/icons/diamond-alert.svg"); }
+
+/* The work-panel tile keeps its ink background, so the mask goes on ::before
+   rather than on the <i> itself. */
+.work-panel-home i::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background-color: var(--ba-cyan);
+  -webkit-mask: var(--ba-icon) center / contain no-repeat;
+          mask: var(--ba-icon) center / contain no-repeat;
+}
+.work-panel-home > button:nth-of-type(1) i { --ba-icon: url("assets/icons/chat-bubble.svg"); }
+.work-panel-home > button:nth-of-type(2) i { --ba-icon: url("assets/icons/folder-tree.svg"); }
+.work-panel-home > button:nth-of-type(3) i { --ba-icon: url("assets/icons/diff-arrows.svg"); }
+.work-panel-home > button:nth-of-type(4) i { --ba-icon: url("assets/icons/browser-window.svg"); }
+.work-panel-home > button:nth-of-type(5) i { --ba-icon: url("assets/icons/crosshair.svg"); }
