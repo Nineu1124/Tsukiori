@@ -118,7 +118,74 @@ try {
   if (!dialogs || Object.values(dialogs).some((passed) => passed !== true)) {
     throw new Error('Dialog dismissal probe failed: ' + JSON.stringify({ dialogs, dialogResponse }));
   }
-  process.stdout.write(JSON.stringify({ schemaVersion: 1, resizableWorkPanel: 'passed', dialogs: 'passed', ...result, dialogResults: dialogs }) + '\n');
+  const interactionExpression = `(async () => {
+    const wait = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
+    const results = {};
+
+    document.querySelector('#open-settings').click();
+    await wait();
+    const dialog = document.querySelector('#settings-dialog');
+    const save = document.querySelector('#save-settings');
+    const saveRect = save.getBoundingClientRect();
+    const dialogRect = dialog.getBoundingClientRect();
+    const shellRect = document.querySelector('.settings-shell').getBoundingClientRect();
+    const mainRect = document.querySelector('.settings-shell > main').getBoundingClientRect();
+    const footerRect = document.querySelector('.settings-footer').getBoundingClientRect();
+    results.settingsGeometry = [dialogRect,shellRect,mainRect,footerRect,saveRect].map((rect) => Math.round(rect.top) + ':' + Math.round(rect.bottom)).join('|');
+    results.settingsSaveFullyVisible = saveRect.top >= dialogRect.top && saveRect.bottom <= dialogRect.bottom;
+    results.settingsSaveHitTarget = document.elementFromPoint(saveRect.left + saveRect.width / 2, saveRect.top + saveRect.height / 2) === save;
+    save.click();
+    await wait(220);
+    results.settingsSaveClicked = document.querySelector('#settings-save-status').textContent.includes('已保存');
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    await wait();
+    results.settingsEscAfterSave = !dialog.open;
+
+    const pin = document.querySelector('[data-project-pin="ui-probe-project"]');
+    pin?.click();
+    await wait(180);
+    const pinnedSnapshot = await window.tsukiori.workspace.snapshot();
+    results.projectPinned = pinnedSnapshot.projects.find((project) => project.id === 'ui-probe-project')?.pinned === true;
+
+    const opened = [];
+    for (const name of ['review','terminal','browser','files','chat','computer']) {
+      document.querySelector('[data-panel-tab="' + name + '"]').click();
+      await wait(40);
+      const view = document.querySelector('[data-panel-view="' + name + '"]');
+      if (!view.hidden && document.querySelector('#work-panel-title').textContent) opened.push(name);
+      document.querySelector('#work-panel-back').click();
+    }
+    results.workPanels = opened.join(',');
+
+    const shell = document.querySelector('.app-shell');
+    document.querySelector('#toggle-right-panel').click();
+    results.rightCollapsed = shell.classList.contains('right-collapsed') && document.querySelector('#toggle-right-panel').getAttribute('aria-pressed') === 'false';
+    document.querySelector('#toggle-right-panel').click();
+    document.querySelector('#toggle-left-panel').click();
+    results.leftCollapsed = shell.classList.contains('left-collapsed') && document.querySelector('#toggle-left-panel').getAttribute('aria-pressed') === 'false';
+    document.querySelector('#toggle-left-panel').click();
+
+    const terminalHandle = document.querySelector('#terminal-resizer');
+    terminalHandle.setPointerCapture = () => {};
+    terminalHandle.releasePointerCapture = () => {};
+    const terminalBefore = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--terminal-height'), 10);
+    terminalHandle.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 8, button: 0, clientY: 700, bubbles: true }));
+    terminalHandle.dispatchEvent(new PointerEvent('pointermove', { pointerId: 8, buttons: 1, clientY: 650, bubbles: true }));
+    terminalHandle.dispatchEvent(new PointerEvent('pointerup', { pointerId: 8, button: 0, clientY: 650, bubbles: true }));
+    await wait(180);
+    const terminalAfter = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--terminal-height'), 10);
+    const terminalSnapshot = await window.tsukiori.workspace.snapshot();
+    results.terminalResized = terminalAfter > terminalBefore && terminalSnapshot.settings.terminalHeight === terminalAfter && Number(terminalHandle.getAttribute('aria-valuenow')) === terminalAfter;
+    return results;
+  })()`;
+  const interactionResponse = await cdp.call('Runtime.evaluate', { expression: interactionExpression, awaitPromise: true, returnByValue: true });
+  const interactions = interactionResponse.result?.result?.value;
+  const expectedPanels = 'review,terminal,browser,files,chat,computer';
+  if (!interactions || interactions.workPanels !== expectedPanels
+    || Object.entries(interactions).some(([key, passed]) => !['workPanels','settingsGeometry'].includes(key) && passed !== true)) {
+    throw new Error('Workspace interaction probe failed: ' + JSON.stringify({ interactions, interactionResponse }));
+  }
+  process.stdout.write(JSON.stringify({ schemaVersion: 2, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions }) + '\n');
   await cdp.call('Runtime.evaluate', { expression: 'window.close()' }).catch(() => undefined);
   cdp.close();
   await waitForExit(child, 15_000);

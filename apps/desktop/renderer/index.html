@@ -13,9 +13,9 @@
         <div class="titlebar-brand"><span class="star-logo" aria-hidden="true">✣</span><strong>Tsukiori</strong></div>
         <div class="titlebar-center" aria-hidden="true"><span></span><i></i><span></span></div>
         <div class="titlebar-actions">
-          <button id="toggle-left-panel" type="button" title="折叠左栏">☰</button>
-          <button id="toggle-terminal" type="button" title="折叠终端">⌁</button>
-          <button id="toggle-right-panel" type="button" title="折叠工作面板">▣</button>
+          <button id="toggle-left-panel" type="button" title="折叠左栏" aria-pressed="false">☰</button>
+          <button id="toggle-terminal" type="button" title="切换底部终端" aria-pressed="true">⌁</button>
+          <button id="toggle-right-panel" type="button" title="切换工作面板" aria-pressed="true">▣</button>
         </div>
       </header>
 
@@ -27,11 +27,9 @@
         </section>
         <button id="rail-new-session" class="new-chat" type="button"><span>新对话</span><b>＋</b></button>
         <section id="interactive-navigation" class="navigation-body">
-          <header class="rail-section-header"><span>本地项目</span><div><button id="add-project" type="button" title="添加项目">＋</button><button id="project-filter" type="button" title="筛选项目与会话">☷</button></div></header>
-          <div id="project-list" class="project-list"></div>
-          <header class="rail-section-header history-heading"><span>对话历史</span><button id="history-search" type="button" title="搜索会话">⌕</button></header>
-          <input id="history-query" class="history-query" type="search" placeholder="搜索、筛选会话…" hidden />
-          <div id="session-list" class="session-list"></div>
+          <header class="rail-section-header"><span>项目与作业</span><div><button id="add-project" type="button" title="创建或打开项目">＋</button><button id="project-filter" type="button" title="搜索项目与作业">⌕</button></div></header>
+          <input id="history-query" class="history-query" type="search" placeholder="搜索项目或作业…" hidden />
+          <div id="project-list" class="project-list" aria-label="项目与作业列表"></div>
         </section>
         <section class="rail-runtime">
           <button id="runtime-quick-switch" type="button"><span class="runtime-orb codex">C</span><span><strong>Codex</strong><small>点击切换 Runtime</small></span><b>⌄</b></button>
@@ -88,6 +86,7 @@
               </div>
             </form>
             <section id="terminal-panel" class="terminal-panel" aria-label="运行日志">
+              <div id="terminal-resizer" class="terminal-resizer" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="调整底部终端高度" aria-valuemin="120" aria-valuemax="560" aria-valuenow="220"></div>
               <header><div><button id="terminal-tab-shell" class="terminal-tab active" type="button">终端⌄</button><button id="terminal-new" type="button" title="重启终端">＋</button></div><div><span>交互式 PowerShell</span><button id="clear-terminal" type="button">清空</button><button id="terminal-collapse" type="button">⌃</button></div></header>
               <pre id="terminal-output" tabindex="0">PowerShell 将在当前 Session Worktree 中启动。</pre>
               <form id="terminal-form" class="terminal-command"><span>PS&gt;</span><input id="terminal-input" autocomplete="off" spellcheck="false" placeholder="输入命令并按 Enter" /><button id="terminal-run" type="submit">运行</button></form>
@@ -99,20 +98,22 @@
 
       <aside id="attention-center" class="attention-panel" aria-label="工作面板">
         <div id="work-panel-resizer" class="work-panel-resizer" role="separator" tabindex="0" aria-orientation="vertical" aria-label="调整工作面板宽度" aria-valuemin="260" aria-valuemax="720" aria-valuenow="360"></div>
-        <header><div><span>»</span><strong>工作面板</strong></div><div><button id="work-panel-back" type="button">‹</button><button id="work-panel-close" type="button">▯</button></div></header>
+        <header><div><span>»</span><strong id="work-panel-title">工作面板</strong></div><div><button id="work-panel-back" type="button" title="工具入口">‹</button><button id="work-panel-close" type="button" title="关闭工作面板">▯</button></div></header>
         <section id="work-panel-home" class="work-panel-home">
-          <button type="button" data-panel-tab="chat"><i>▱</i><span><strong>侧边对话</strong><small>与 AI 进行并行交流，探索更多思路</small></span><b>›</b></button>
-          <button type="button" data-panel-tab="files"><i>▱</i><span><strong>文件</strong><small>浏览与管理项目文件结构</small></span><b>›</b></button>
-          <button type="button" data-panel-tab="changes"><i>♧</i><span><strong>全部变更</strong><small>查看当前所有代码变更</small></span><b>›</b></button>
-          <button type="button" data-panel-tab="browser"><i>◎</i><span><strong>浏览器</strong><small>在浏览器中预览与调试</small></span><b>›</b></button>
-          <button type="button" data-panel-tab="computer"><i>⌖</i><span><strong>Computer Use</strong><small>锁定前台应用后逐次确认桌面动作</small></span><b>›</b></button>
+          <button type="button" data-panel-tab="review"><i>♧</i><span><strong>审阅</strong><small>Diff、暂存、提交与 Checkpoint</small></span><kbd>Ctrl+Shift+G</kbd></button>
+          <button type="button" data-panel-tab="terminal"><i>⌁</i><span><strong>终端</strong><small>打开当前 Worktree 的底部终端</small></span><kbd>Ctrl+J</kbd></button>
+          <button type="button" data-panel-tab="browser"><i>◎</i><span><strong>浏览器</strong><small>预览本地开发服务器并调试</small></span><kbd>Ctrl+T</kbd></button>
+          <button type="button" data-panel-tab="files"><i>▱</i><span><strong>文件</strong><small>浏览与读取当前 Worktree 文件</small></span><kbd>Ctrl+P</kbd></button>
+          <button type="button" data-panel-tab="chat"><i>▱</i><span><strong>侧边聊天</strong><small>选择另一个 Agent 作业并行对话</small></span><kbd>Ctrl+Alt+S</kbd></button>
+          <button type="button" data-panel-tab="computer"><i>⌖</i><span><strong>桌面控制</strong><small>逐次确认的 Windows Computer Use</small></span><kbd>高级</kbd></button>
         </section>
-        <section data-panel-view="chat" hidden><div class="panel-title"><span>Agent 协作与待处理</span><b id="attention-count">0</b></div><p class="panel-description">权限、失败、完成与并行 Agent Team 集中在这里。</p><button id="panel-new-team" class="panel-primary" type="button">＋ 创建 Agent Team</button><div id="team-list" class="team-list"></div><div id="attention-list" class="attention-list"><p class="empty-state">暂无待处理事项</p></div></section>
+        <section data-panel-view="chat" hidden><div class="panel-title"><span>侧边聊天</span><button id="side-chat-new" type="button">＋ 新建 Agent</button></div><p class="panel-description">选择项目内另一个 Agent Session 并行沟通；消息仍经过该 Session 的 Runtime、Provider 与权限策略。</p><div class="side-chat-toolbar"><select id="side-chat-session" aria-label="侧边聊天 Agent Session"></select><span id="side-chat-status" class="operation-status"></span></div><div id="side-chat-messages" class="side-chat-messages"><p class="empty-state">选择 Agent Session 后开始对话</p></div><form id="side-chat-form" class="side-chat-form"><textarea id="side-chat-input" rows="3" maxlength="64000" placeholder="向侧边 Agent 发送任务…"></textarea><button class="primary" type="submit">发送</button></form><div class="panel-title"><span>协作与待处理</span><b id="attention-count">0</b></div><button id="panel-new-team" class="panel-primary" type="button">＋ 创建 Agent Team</button><div id="team-list" class="team-list"></div><div id="attention-list" class="attention-list"><p class="empty-state">暂无待处理事项</p></div></section>
         <section data-panel-view="files" hidden><div class="panel-title"><span>文件</span><button id="open-worktree" type="button">在资源管理器打开</button></div><p id="worktree-path" class="mono boundary-note">选择会话后查看文件</p><div class="file-toolbar"><input id="file-query" type="search" placeholder="筛选 Worktree 文件" /><button id="refresh-files" type="button">刷新</button></div><div id="panel-file-list" class="panel-file-list"><p class="empty-state">暂无文件信息</p></div><div class="file-preview-header"><span id="file-preview-name">文件预览</span><button id="copy-file-content" type="button">复制</button></div><pre id="file-preview" class="file-preview">选择文本文件查看内容</pre></section>
-        <section data-panel-view="changes" hidden>
+        <section data-panel-view="review" hidden>
           <section class="git-panel"><div class="panel-title"><span>全部变更</span><button id="refresh-git" type="button">刷新</button></div><div id="git-files" class="git-files"><p class="empty-state">暂无改动</p></div><pre id="git-diff" class="diff-preview">选择文件查看 Diff</pre><div class="git-actions"><button id="stage-files" type="button">暂存</button><button id="unstage-files" type="button">取消暂存</button><input id="commit-subject" maxlength="200" placeholder="提交说明" /><button id="commit-files" class="primary" type="button">提交</button><span id="git-status" class="operation-status"></span></div></section>
           <section class="checkpoint-panel" aria-label="Conversation Checkpoints"><div class="panel-title"><span>Checkpoint / Rewind</span><button id="refresh-checkpoints" type="button">刷新</button></div><p class="panel-description">同时保存对话、Index 与 Worktree；回退不会移动分支 HEAD，并会先建立恢复点。</p><div class="checkpoint-create"><input id="checkpoint-label" maxlength="80" placeholder="检查点名称" /><button id="create-checkpoint" class="primary" type="button">创建</button></div><div id="checkpoint-list" class="checkpoint-list"><p class="empty-state">暂无 Checkpoint</p></div><span id="checkpoint-status" class="operation-status" aria-live="polite"></span></section>
         </section>
+        <section data-panel-view="terminal" hidden><div class="panel-title"><span>终端</span><button id="side-terminal-restart" type="button">重启</button></div><p class="panel-description">终端实际运行在当前 Session 的独立 Worktree；此处控制底部面板，不复制或模拟 Shell。</p><div class="side-terminal-card"><strong id="side-terminal-session">尚未选择 Session</strong><small id="side-terminal-path">选择作业后启动 ConPTY</small><button id="side-terminal-open" class="primary" type="button">在底部打开终端</button></div><pre id="side-terminal-preview" class="side-terminal-preview">终端尚未启动</pre></section>
         <section data-panel-view="browser" hidden><div class="panel-title"><span>本地预览</span><button id="open-browser-external" type="button">系统浏览器</button></div><p class="panel-description">本地开发服务器在沙箱 iframe 中预览；外部站点可能拒绝嵌入。</p><div class="browser-launch"><input id="browser-url" value="http://localhost:3000" aria-label="预览地址" /><button id="open-browser-url" class="primary" type="button">载入</button><span id="browser-status" class="operation-status"></span></div><iframe id="browser-preview" sandbox="allow-scripts allow-forms allow-same-origin" title="本地应用预览"></iframe></section>
         <section data-panel-view="computer" hidden class="computer-use-panel" aria-label="Computer Use">
           <div class="panel-title"><span>Computer Use</span><b id="computer-support-level">unknown</b></div>

@@ -61,6 +61,8 @@ type ProjectState = {
   rootPath: string;
   gitRoot: string;
   branch: string;
+  pinned?: boolean;
+  updatedAt?: number;
 };
 
 type SessionState = {
@@ -117,6 +119,7 @@ type WorkspaceSettings = {
   persistConversation: boolean;
   confirmHighRisk: boolean;
   workPanelWidth: number;
+  terminalHeight: number;
   terminalShell: 'powershell' | 'pwsh' | 'cmd';
 };
 
@@ -192,7 +195,7 @@ const defaultSettings: WorkspaceSettings = {
   defaultRuntime: 'codex', defaultProviderId: 'provider:chatgpt', defaultModel: 'auto',
   defaultPermissionMode: 'manual',
   persistConversation: true, confirmHighRisk: true,
-  workPanelWidth: 360,
+  workPanelWidth: 360, terminalHeight: 220,
   terminalShell: 'powershell',
 };
 
@@ -364,6 +367,9 @@ export class InteractiveWorkspace {
       workPanelWidth: Number.isFinite(input.workPanelWidth)
         ? Math.max(260, Math.min(720, Math.round(input.workPanelWidth as number)))
         : current.workPanelWidth,
+      terminalHeight: Number.isFinite(input.terminalHeight)
+        ? Math.max(120, Math.min(560, Math.round(input.terminalHeight as number)))
+        : current.terminalHeight,
       terminalShell: input.terminalShell === 'pwsh' || input.terminalShell === 'cmd'
         ? input.terminalShell
         : input.terminalShell === 'powershell' ? 'powershell' : current.terminalShell,
@@ -571,7 +577,7 @@ export class InteractiveWorkspace {
     if (duplicate) return duplicate;
     const branch = this.#git(canonicalGitRoot, ['branch', '--show-current']).trim() || 'detached';
     const id = 'project:' + createHash('sha256').update(canonicalGitRoot.toLowerCase()).digest('hex').slice(0, 20);
-    const project = { id, name: basename(canonicalGitRoot), rootPath: canonical, gitRoot: canonicalGitRoot, branch };
+    const project = { id, name: basename(canonicalGitRoot), rootPath: canonical, gitRoot: canonicalGitRoot, branch, updatedAt: Date.now() };
     this.#state.projects.push(project);
     this.#save();
     this.#emit({ type: 'project.added', payload: { projectId: id, name: project.name } });
@@ -702,6 +708,15 @@ export class InteractiveWorkspace {
     this.#state.projects.splice(index, 1);
     this.#save();
     this.#emit({ type: 'project.removed', payload: { projectId } });
+  }
+
+  pinProject(projectId: string, pinned: boolean): ProjectState {
+    const project = this.#project(projectId);
+    project.pinned = pinned;
+    project.updatedAt = Date.now();
+    this.#save();
+    this.#emit({ type: 'project.pinned', payload: { projectId, pinned } });
+    return project;
   }
 
   githubStatus(projectId: string): Record<string, unknown> {
@@ -1628,7 +1643,7 @@ export class InteractiveWorkspace {
     if (!existsSync(source)) return;
     try {
       const value = JSON.parse(readFileSync(source, 'utf8')) as Record<string, unknown>;
-      const projects = Array.isArray(value.projects) ? value.projects as ProjectState[] : [];
+      const projects = Array.isArray(value.projects) ? value.projects.map((raw) => migrateProject(object(raw))) : [];
       const sessions = Array.isArray(value.sessions) ? value.sessions.map((raw) => migrateSession(object(raw))) : [];
       const settings = Number(value.schemaVersion) >= 2 ? { ...defaultSettings, ...object(value.settings) } as WorkspaceSettings : { ...defaultSettings };
       const providers = Number(value.schemaVersion) >= 2 && Array.isArray(value.providers) ? value.providers as ProviderConfig[] : [];
@@ -1715,6 +1730,18 @@ function migrateSession(value: Record<string, unknown>): SessionState {
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     ...(value.pinned === true ? { pinned: true } : {}),
     ...(typeof value.archivedAt === 'number' ? { archivedAt: value.archivedAt } : {}),
+  };
+}
+
+function migrateProject(value: Record<string, unknown>): ProjectState {
+  return {
+    id: String(value.id),
+    name: String(value.name),
+    rootPath: String(value.rootPath),
+    gitRoot: String(value.gitRoot),
+    branch: typeof value.branch === 'string' ? value.branch : 'detached',
+    ...(value.pinned === true ? { pinned: true } : {}),
+    ...(typeof value.updatedAt === 'number' ? { updatedAt: value.updatedAt } : {}),
   };
 }
 

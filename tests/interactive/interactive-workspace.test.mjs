@@ -611,10 +611,14 @@ test('resizable work panel, terminal shell, and diagnostics persist without prom
   const f = fixture(t);
   const project = f.workspace.addProject(f.repository);
   const session = await f.workspace.createSession(project.id);
-  const settings = f.workspace.updateSettings({ workPanelWidth: 900, terminalShell: 'pwsh' });
+  const settings = f.workspace.updateSettings({ workPanelWidth: 900, terminalHeight: 999, terminalShell: 'pwsh' });
   assert.equal(settings.workPanelWidth, 720);
+  assert.equal(settings.terminalHeight, 560);
   assert.equal(settings.terminalShell, 'pwsh');
   assert.equal(f.workspace.terminalShell(), 'pwsh');
+  const pinned = f.workspace.pinProject(project.id, true);
+  assert.equal(pinned.pinned, true);
+  assert.equal(f.workspace.snapshot().projects.find((item) => item.id === project.id)?.pinned, true);
   const diagnostic = f.workspace.diagnosticSummary();
   assert.equal(diagnostic.projects, 1);
   assert.equal(diagnostic.sessions, 1);
@@ -623,6 +627,7 @@ test('resizable work panel, terminal shell, and diagnostics persist without prom
   assert.equal(diagnostic.containsUserSource, false);
   const persisted = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
   assert.match(persisted, /"workPanelWidth": 720/);
+  assert.match(persisted, /"terminalHeight": 560/);
   assert.match(persisted, /"terminalShell": "pwsh"/);
   assert.doesNotMatch(JSON.stringify(diagnostic), new RegExp(session.worktreePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });

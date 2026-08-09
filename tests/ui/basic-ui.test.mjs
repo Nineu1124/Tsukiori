@@ -16,12 +16,15 @@ async function rendererFiles() {
   ]);
 }
 
-test('main workspace matches the V1.0 four-region information architecture', async () => {
-  const [html,, styles] = await rendererFiles();
-  for (const id of ['project-list','session-list','conversation','prompt-input','terminal-panel','attention-center']) {
+test('main workspace matches the Codex-style four-region information architecture', async () => {
+  const [html, script, styles, preload] = await rendererFiles();
+  for (const id of ['project-list','conversation','prompt-input','terminal-panel','terminal-resizer','attention-center']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  for (const label of ['侧边对话','文件','全部变更','浏览器','Computer Use']) assert.match(html, new RegExp(label));
+  for (const label of ['侧边聊天','文件','全部变更','浏览器','Computer Use','审阅','终端']) assert.match(html, new RegExp(label));
+  for (const tab of ['review','terminal','browser','files','chat','computer']) assert.match(html,new RegExp(`data-panel-tab="${tab}"`));
+  for (const token of ['project-group','project-session-list','project-pin','project-add-session']) assert.match(script,new RegExp(token));
+  assert.match(preload,/pinProject/);
   for (const token of ['#f5fbff','#258fe8','#4bb9ef','#20364b','#526b80','#45c995','#f3c94f','#ef6b7c','#8e7bef']) {
     assert.ok(styles.toLowerCase().includes(token));
   }
@@ -128,15 +131,16 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
     'terminal-input','file-query','file-preview','browser-preview','team-dialog','new-team',
     'refresh-native-capabilities','native-capability-list','setting-persist-conversation',
     'refresh-checkpoints','checkpoint-label','create-checkpoint','checkpoint-list','checkpoint-status',
+    'side-chat-session','side-chat-input','side-chat-form','side-terminal-open','side-terminal-preview','terminal-resizer',
   ]) assert.match(html, new RegExp(`id="${id}"`));
   for (const method of [
     'renameSession','pinSession','forkSession','searchSessions','archiveSession','listFiles','readFile','pickAttachments','codexNative',
-    'createTeam','startTerminal','terminalInput','stopTerminal','copyText',
+    'createTeam','startTerminal','terminalInput','stopTerminal','copyText','pinProject',
     'listCheckpoints','createCheckpoint','previewCheckpoint','rewindCheckpoint','extensionHealth',
   ]) assert.match(preload, new RegExp(method));
   for (const functionName of [
     'renderMarkdownBody','refreshFiles','loadFilePreview','loadCodexNative','createTeam','ensureTerminal',
-    'renderCheckpoints','refreshCheckpoints','rewindToCheckpoint',
+    'renderCheckpoints','refreshCheckpoints','rewindToCheckpoint','renderSideChat','sendSidePrompt','renderSideTerminal','setupTerminalResize',
     'renderCcHahaImport','pickCcHahaSource','scanCcHahaImport','runCcHahaImport',
   ]) assert.match(script, new RegExp(`function ${functionName}`));
   assert.match(styles, /\.terminal-command/);
@@ -158,6 +162,9 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
   assert.match(html, /不导入密钥、登录态、工具原始参数或运行中进程/);
   assert.match(html, /未知状态不会伪装成已生效/);
   assert.match(styles, /\.checkpoint-row/);
+  assert.match(styles, /\.project-session-list/);
+  assert.match(styles, /\.side-chat-messages/);
+  assert.match(styles, /\.terminal-resizer[^}]*cursor:\s*ns-resize/);
 });
 
 test('Computer Use exposes a locked, one-time-approved Windows action surface', async () => {

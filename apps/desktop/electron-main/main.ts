@@ -16,6 +16,7 @@ const daemonEntry = app.isPackaged
 const preloadEntry = resolve(currentDirectory, '..', 'preload', 'index.cjs');
 const rendererEntry = resolve(currentDirectory, '..', 'renderer', 'index.html');
 const smokeMode = process.env.TSUKIORI_DESKTOP_SMOKE === '1';
+const smokeProgress = (value: string): void => { if (smokeMode) process.stderr.write('[desktop-smoke] ' + value + '\n'); };
 const captureDesktopPath = process.env.TSUKIORI_DESKTOP_CAPTURE_PATH;
 const captureDesktopView = process.env.TSUKIORI_DESKTOP_CAPTURE_VIEW;
 const captureSanitized = process.env.TSUKIORI_DESKTOP_CAPTURE_SANITIZED === '1';
@@ -148,15 +149,28 @@ function createWindow(): BrowserWindow {
 }
 
 async function runSmoke(window: BrowserWindow): Promise<void> {
+  smokeProgress('runSmoke entered');
   const fakeRuntime = new FakeRuntimeAdapter();
   const fakeSession = fakeRuntime.createSession();
   fakeRuntime.runScript(fakeSession, [{ kind: 'event', nativeType: 'message.started', payload: { sanitized: true } }]);
   await new Promise<void>((resolveLoad, rejectLoad) => {
-    window.webContents.once('did-finish-load', () => resolveLoad());
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      resolveLoad();
+    };
+    window.webContents.once('did-finish-load', finish);
     window.webContents.once('did-fail-load', (_event, code, description) => {
+      if (settled) return;
+      settled = true;
       rejectLoad(new Error('Renderer failed to load: ' + code + ' ' + description));
     });
+    // A fast local file can finish between createWindow() and runSmoke().
+    // Do not wait forever when the expected file document is already ready.
+    if (!window.webContents.isLoadingMainFrame() && window.webContents.getURL().startsWith('file:')) finish();
   });
+  smokeProgress('renderer loaded');
 
   const rendererState = await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
     let attempts = 0;
@@ -220,6 +234,7 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
       }
     }, 50);
   })`, true) as Record<string, unknown>;
+  smokeProgress('renderer state captured');
   const alphaCommandResult = await window.webContents.executeJavaScript(
     `window.tsukiori.workspace.stage(['alpha-runtime.txt'])`,
     true,
@@ -237,6 +252,7 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
   });
   window.webContents.forcefullyCrashRenderer();
   const details = await crash;
+  smokeProgress('renderer crash observed');
   const status = await supervisor.probe();
 
   process.stdout.write(
@@ -260,7 +276,8 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
       '\n',
   );
 
-  await supervisor.stop();
+    await supervisor.stop();
+  smokeProgress('daemon stopped');
   quitting = true;
   app.quit();
 }
@@ -365,6 +382,9 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       workspace.removeProject(String(command.projectId ?? ''));
       return { ok: true };
     }
+    if (command.type === 'pin_project') return {
+      ok: true, project: workspace.pinProject(String(command.projectId ?? ''), command.pinned === true),
+    };
     if (command.type === 'refresh_runtimes') return { ok: true, runtime: workspace.refreshRuntimes() };
     if (command.type === 'poll_events') return {
       ok: true,
@@ -669,8 +689,11 @@ app.on('before-quit', (event) => {
 
 app.whenReady()
   .then(async () => {
+    smokeProgress('app ready');
     await supervisor.start();
+    smokeProgress('daemon started');
     const window = createWindow();
+    smokeProgress('window created');
     if (!smokeMode) {
       interactiveWorkspace = new InteractiveWorkspace({
         userDataPath: app.getPath('userData'),

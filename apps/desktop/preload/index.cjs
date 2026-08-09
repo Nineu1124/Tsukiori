@@ -16,6 +16,7 @@ const api = Object.freeze({
       'workspace:command', { type: 'import_cc_haha', sourcePath, sourceFingerprint, candidateIds },
     ),
     removeProject: (projectId) => ipcRenderer.invoke('workspace:command', { type: 'remove_project', projectId }),
+    pinProject: (projectId, pinned) => ipcRenderer.invoke('workspace:command', { type: 'pin_project', projectId, pinned: pinned === true }),
     refreshRuntimes: () => ipcRenderer.invoke('workspace:command', { type: 'refresh_runtimes' }),
     createSession: (projectId, selection) => ipcRenderer.invoke(
       'workspace:command', { type: 'create_session', projectId, ...(selection ?? {}) },

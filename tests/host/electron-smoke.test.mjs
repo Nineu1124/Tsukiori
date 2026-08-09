@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -10,8 +12,9 @@ const desktopRoot = join(repositoryRoot, 'apps', 'desktop');
 const requireFromDesktop = createRequire(join(desktopRoot, 'package.json'));
 const electronExecutable = requireFromDesktop('electron');
 
-test('a real Renderer crash does not terminate the independently spawned Daemon', async () => {
-  const child = spawn(electronExecutable, [desktopRoot], {
+test('a real Renderer crash does not terminate the independently spawned Daemon', async (t) => {
+  const userData = mkdtempSync(join(tmpdir(), 'tsukiori-electron-smoke-'));
+  const child = spawn(electronExecutable, [desktopRoot, `--user-data-dir=${userData}`], {
     cwd: repositoryRoot,
     env: {
       ...process.env,
@@ -20,6 +23,11 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
+  });
+  t.after(async () => {
+    if (child.exitCode === null) child.kill('SIGKILL');
+    await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+    rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   let stdout = '';

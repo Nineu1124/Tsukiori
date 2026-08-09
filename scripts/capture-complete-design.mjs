@@ -156,7 +156,7 @@ try {
   })()`);
   await shoot(cdp, join(outDir, '07-work-panel-files.png'));
 
-  await activatePanel(cdp, 'changes');
+  await activatePanel(cdp, 'review');
   await evaluate(cdp, `(() => {
     document.querySelector('#git-files').innerHTML = '<label class="git-file"><input type="checkbox" checked><span>apps/desktop/renderer/styles.css</span><b class="git-file-status">M</b></label><label class="git-file"><input type="checkbox" checked><span>docs/design/v1.1/README.md</span><b class="git-file-status">A</b></label>';
     document.querySelector('#git-diff').textContent = 'diff --git a/styles.css b/styles.css\\n+ .empty-workspace {\\n+   background-image: url(onboarding-hero.png);\\n+ }';
