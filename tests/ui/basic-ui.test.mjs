@@ -55,6 +55,23 @@ test('settings center exposes all specification categories and functional contro
   }
 });
 
+test('dialogs provide consistent cancel, close, Escape, and backdrop dismissal', async () => {
+  const [html, script] = await rendererFiles();
+  const probe = await readFile(join(root, 'scripts', 'probe-ui-interactions.mjs'), 'utf8');
+  for (const id of ['session-dialog','team-dialog','settings-dialog']) {
+    assert.match(script, new RegExp(`bindDialogDismissal\\(byId\\('${id}'\\)`));
+  }
+  assert.equal((html.match(/data-dialog-dismiss/g) ?? []).length, 5);
+  assert.doesNotMatch(html, /value="cancel" type="submit"/);
+  assert.match(script, /event\.submitter\?\.value==='cancel'/);
+  assert.match(script, /addEventListener\('cancel'/);
+  assert.match(script, /event\.target === dialog/);
+  assert.match(script, /queueMicrotask\(\(\) => invoker\.focus\(\)\)/);
+  for (const result of ['teamFooterCancel','teamHeaderClose','teamEscape','teamBackdrop','sessionCancel','settingsClose','noDialogLeftOpen']) {
+    assert.match(probe, new RegExp(result));
+  }
+});
+
 test('Provider and Runtime selection includes API providers and two executable runtimes', async () => {
   const [html, script,, preload] = await rendererFiles();
   for (const kind of ['openai','anthropic','deepseek','openai-compatible','anthropic-compatible']) assert.match(html, new RegExp(`value="${kind}"`));

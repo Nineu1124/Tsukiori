@@ -134,17 +134,17 @@
 
     <dialog id="session-dialog" class="session-dialog">
       <form method="dialog" id="session-create-form">
-        <header><div><p class="kicker">NEW AGENT SESSION</p><h2>创建独立会话</h2></div><button value="cancel" type="submit">×</button></header>
+        <header><div><p class="kicker">NEW AGENT SESSION</p><h2>创建独立会话</h2></div><button data-dialog-dismiss type="button" aria-label="关闭创建会话弹窗">×</button></header>
         <p>每个会话会创建独立 Git Worktree；Runtime 与 Provider 在首个 Turn 后锁定。</p>
         <div class="form-grid"><label>Runtime<select id="create-runtime"></select></label><label>Provider<select id="create-provider"></select></label><label>Model<select id="create-model"></select></label><label>权限模式<select id="create-permission"></select></label></div>
         <p id="create-session-status" class="operation-status"></p>
-        <footer><button value="cancel" type="submit">取消</button><button id="confirm-create-session" value="default" class="primary" type="submit">创建会话</button></footer>
+        <footer><button data-dialog-dismiss type="button">取消</button><button id="confirm-create-session" value="default" class="primary" type="submit">创建会话</button></footer>
       </form>
     </dialog>
 
     <dialog id="team-dialog" class="session-dialog team-dialog">
       <form method="dialog" id="team-create-form">
-        <header><div><p class="kicker">MULTI-AGENT TEAM</p><h2>创建并行 Agent Team</h2></div><button value="cancel" type="submit">×</button></header>
+        <header><div><p class="kicker">MULTI-AGENT TEAM</p><h2>创建并行 Agent Team</h2></div><button data-dialog-dismiss type="button" aria-label="关闭创建团队弹窗">×</button></header>
         <p>每个成员使用独立 Worktree。创建后同时派发同一目标，成员不会共享未提交文件。</p>
         <label class="team-goal-label">团队目标<textarea id="team-goal" maxlength="8000" rows="4" placeholder="描述要并行完成的目标、交付物和边界"></textarea></label>
         <div class="team-agent-grid">
@@ -152,7 +152,7 @@
           <section class="team-agent" data-team-agent="1"><strong>Agent B</strong><input data-team-role maxlength="80" value="测试与审查" /><select data-team-runtime></select><select data-team-provider></select><select data-team-model></select></section>
         </div>
         <p id="team-create-status" class="operation-status"></p>
-        <footer><button value="cancel" type="submit">取消</button><button id="confirm-create-team" value="default" class="primary" type="submit">创建并派发</button></footer>
+        <footer><button data-dialog-dismiss type="button">取消</button><button id="confirm-create-team" value="default" class="primary" type="submit">创建并派发</button></footer>
       </form>
     </dialog>
 
@@ -162,7 +162,7 @@
           <button data-settings-page="general" class="active">⚙ <span>通用</span></button><button data-settings-page="appearance">◩ <span>外观</span></button><button data-settings-page="account">♙ <span>账号</span></button><button data-settings-page="agent">✣ <span>Provider</span></button><button data-settings-page="terminal">▱ <span>终端</span></button><button data-settings-page="mcp">▣ <span>MCP</span></button><button data-settings-page="agents">♙ <span>Agents</span></button><button data-settings-page="skills">✧ <span>技能</span></button><button data-settings-page="memory">▤ <span>记忆</span></button><button data-settings-page="scheduled">◷ <span>定时任务</span></button><button data-settings-page="usage">▥ <span>Token 用量</span></button><button data-settings-page="trace">⌘ <span>Trace</span></button><button data-settings-page="diagnostics">⌁ <span>诊断</span></button><button data-settings-page="projects">▧ <span>项目</span></button><button data-settings-page="devices">▣ <span>设备</span></button><button data-settings-page="github">◉ <span>GitHub</span></button><button data-settings-page="shortcuts">⌘ <span>键盘快捷键</span></button><button data-settings-page="billing">▤ <span>账单</span></button><button data-settings-page="about">ⓘ <span>关于</span></button>
         </nav><button id="report-bug" type="button">☼ 报告 Bug <span>›</span></button></aside>
         <main>
-          <header class="settings-header"><div><h2 id="settings-title">通用</h2><p id="settings-subtitle">启动行为、语言、更新与默认工作方式</p></div><button id="close-settings" type="button">×</button></header>
+          <header class="settings-header"><div><h2 id="settings-title">通用</h2><p id="settings-subtitle">启动行为、语言、更新与默认工作方式</p></div><button id="close-settings" data-dialog-dismiss type="button" aria-label="关闭设置">×</button></header>
           <div class="settings-content">
             <section data-settings-view="general"><div class="settings-card"><h3>启动与更新</h3><label class="setting-row"><span><strong>界面语言</strong><small>更改 Tsukiori 的显示语言</small></span><select id="setting-language"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label><label class="setting-row"><span><strong>自动检查更新</strong><small>启动时检查可用的新版本</small></span><input id="setting-auto-update" type="checkbox" /></label><label class="setting-row"><span><strong>最小化启动</strong><small>启动后保持在后台</small></span><input id="setting-start-minimized" type="checkbox" /></label><label class="setting-row"><span><strong>持久化对话正文</strong><small>仅保存到本机用户数据目录，可在重启后恢复</small></span><input id="setting-persist-conversation" type="checkbox" /></label><label class="setting-row"><span><strong>高风险操作确认</strong><small>命令、文件修改和网络请求仍需确认</small></span><input id="setting-confirm-high-risk" type="checkbox" /></label><div class="setting-inline-action"><button id="check-updates" type="button">立即检查更新</button><span id="update-status">尚未检查</span></div></div><div class="settings-card"><h3>默认会话</h3><label class="setting-row"><span><strong>默认 Runtime</strong><small>新建会话时的初始选择</small></span><select id="setting-default-runtime"></select></label><label class="setting-row"><span><strong>默认 Provider</strong><small>模型请求的数据出口</small></span><select id="setting-default-provider"></select></label></div></section>
             <section data-settings-view="appearance" hidden><div class="settings-card"><h3>外观设置</h3><label class="setting-row"><span><strong>主题模式</strong><small>设计稿默认使用明亮模式</small></span><select id="setting-theme"><option value="light">明亮</option><option value="system">跟随系统</option></select></label><label class="setting-row"><span><strong>界面密度</strong><small>调整导航和列表间距</small></span><select id="setting-density"><option value="comfortable">舒适</option><option value="compact">紧凑</option></select></label><label class="setting-row"><span><strong>减少动态效果</strong><small>关闭扫光与面板位移动画</small></span><input id="setting-reduce-motion" type="checkbox" /></label><div class="accent-preview"><span></span><span></span><span></span><span></span><span></span><span></span></div></div></section>

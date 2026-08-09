@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -10,6 +10,20 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const desktopRoot = join(root, 'apps', 'desktop');
 const electron = createRequire(join(desktopRoot, 'package.json'))('electron');
 const userData = mkdtempSync(join(tmpdir(), 'tsukiori-ui-probe-'));
+writeFileSync(join(userData, 'workspace-state-v3.json'), JSON.stringify({
+  schemaVersion: 3,
+  projects: [{
+    id: 'ui-probe-project',
+    name: 'UI Probe',
+    rootPath: join(userData, 'fixture-project'),
+    gitRoot: join(userData, 'fixture-project'),
+    branch: 'main',
+  }],
+  sessions: [],
+  teams: [],
+  providers: [],
+  settings: {},
+}), 'utf8');
 const port = await availablePort();
 const child = spawn(electron, [desktopRoot, `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`], {
   cwd: root,
@@ -51,7 +65,60 @@ try {
     || result.ariaValue !== result.after || result.resizingClassCleared !== true) {
     throw new Error('Resizable panel probe failed: ' + JSON.stringify({ result, response }));
   }
-  process.stdout.write(JSON.stringify({ schemaVersion: 1, resizableWorkPanel: 'passed', ...result }) + '\n');
+  const dialogExpression = `(async () => {
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 60));
+    const state = () => ({
+      session: document.querySelector('#session-dialog').open,
+      team: document.querySelector('#team-dialog').open,
+      settings: document.querySelector('#settings-dialog').open,
+    });
+    const results = {};
+
+    document.querySelector('#new-team').click();
+    await wait();
+    results.teamOpened = state().team;
+    document.querySelector('#team-dialog footer button[data-dialog-dismiss]').click();
+    await wait();
+    results.teamFooterCancel = !state().team;
+
+    document.querySelector('#new-team').click();
+    await wait();
+    document.querySelector('#team-dialog header button[data-dialog-dismiss]').click();
+    await wait();
+    results.teamHeaderClose = !state().team;
+
+    document.querySelector('#new-team').click();
+    await wait();
+    document.querySelector('#team-dialog').dispatchEvent(new Event('cancel', { cancelable: true }));
+    await wait();
+    results.teamEscape = !state().team;
+
+    document.querySelector('#new-team').click();
+    await wait();
+    document.querySelector('#team-dialog').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await wait();
+    results.teamBackdrop = !state().team;
+
+    document.querySelector('#new-session').click();
+    await wait();
+    document.querySelector('#session-dialog footer button[data-dialog-dismiss]').click();
+    await wait();
+    results.sessionCancel = !state().session;
+
+    document.querySelector('#open-settings').click();
+    await wait();
+    document.querySelector('#close-settings').click();
+    await wait();
+    results.settingsClose = !state().settings;
+    results.noDialogLeftOpen = Object.values(state()).every((open) => !open);
+    return results;
+  })()`;
+  const dialogResponse = await cdp.call('Runtime.evaluate', { expression: dialogExpression, awaitPromise: true, returnByValue: true });
+  const dialogs = dialogResponse.result?.result?.value;
+  if (!dialogs || Object.values(dialogs).some((passed) => passed !== true)) {
+    throw new Error('Dialog dismissal probe failed: ' + JSON.stringify({ dialogs, dialogResponse }));
+  }
+  process.stdout.write(JSON.stringify({ schemaVersion: 1, resizableWorkPanel: 'passed', dialogs: 'passed', ...result, dialogResults: dialogs }) + '\n');
   await cdp.call('Runtime.evaluate', { expression: 'window.close()' }).catch(() => undefined);
   cdp.close();
   await waitForExit(child, 15_000);
