@@ -28,6 +28,7 @@
     "probe:interactive-codex": "pnpm run build && node scripts/probe-interactive-codex.mjs",
     "probe:ui-interactions": "pnpm run build && node scripts/probe-ui-interactions.mjs",
     "probe:t5.7-runtimes": "pnpm run build && node scripts/probe-t5.7-runtimes.mjs",
+    "capture:design": "pnpm run build && node scripts/capture-complete-design.mjs",
     "test:windows": "node --test spikes/windows/*.test.mjs",
     "test:computer-use": "pnpm run build && node --test tests/computer-use/*.test.mjs",
     "spike:windows": "node spikes/windows/harness.mjs",

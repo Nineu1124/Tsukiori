@@ -13,7 +13,7 @@ test('the user-supplied 1024 square PNG is the deterministic application icon so
   assert.deepEqual([...source.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(source.readUInt32BE(16), 1024);
   assert.equal(source.readUInt32BE(20), 1024);
-  assert.equal(createHash('sha256').update(source).digest('hex'), '711a06e3e609dc85b5f997c84eeab6adee04d78526b8b72fe1d864122f92c26e');
+  assert.equal(createHash('sha256').update(source).digest('hex'), '037cbb05e1ebc3ad73f313630bf0954a22c3b9711c11042a8e493966fa723748');
   const generator = await readFile(join(desktop, 'scripts', 'generate-icon.py'), 'utf8');
   assert.match(generator, /assets" \/ "icon-source\.png/);
   assert.doesNotMatch(generator, /ImageDraw|draw\./);

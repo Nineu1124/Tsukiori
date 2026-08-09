@@ -1087,3 +1087,150 @@ body.density-compact .message-body,body.density-compact .composer textarea { fon
 .work-panel-home > button:nth-of-type(3) i { --ba-icon: url("assets/icons/diff-arrows.svg"); }
 .work-panel-home > button:nth-of-type(4) i { --ba-icon: url("assets/icons/browser-window.svg"); }
 .work-panel-home > button:nth-of-type(5) i { --ba-icon: url("assets/icons/crosshair.svg"); }
+
+/* ============================================================================
+   V1.1 generated visual system
+   Original Tsukiori artwork generated from the current Blue Archive-inspired
+   interface direction. The source PNGs remain in renderer/assets/generated so
+   packaged builds and visual captures consume the same files.
+   ============================================================================ */
+
+.empty-workspace {
+  position: relative;
+  justify-items: start;
+  padding: 68px clamp(48px,7vw,108px);
+  text-align: left;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.94) 38%,rgba(255,255,255,.12) 68%),
+    url("assets/generated/v1.1/onboarding-hero.png") center / cover no-repeat;
+}
+.empty-workspace::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 18px;
+  pointer-events: none;
+  border: 1px solid rgba(37,143,232,.16);
+  clip-path: polygon(0 0,25% 0,25% 2px,75% 2px,75% 0,100% 0,100% 100%,74% 100%,74% calc(100% - 2px),26% calc(100% - 2px),26% 100%,0 100%);
+}
+.empty-workspace .empty-geometry {
+  width: 76px;
+  height: 76px;
+  margin-bottom: 24px;
+  color: var(--ba-cyan);
+  font-size: 30px;
+  border-radius: 0;
+  clip-path: var(--ba-clip-tile);
+  background: rgba(20,36,61,.96);
+  box-shadow: 0 0 0 1px rgba(37,143,232,.25), 12px 12px 0 rgba(37,143,232,.07);
+}
+.empty-workspace .empty-geometry::after {
+  inset: 11px;
+  border-color: rgba(255,255,255,.25);
+}
+.empty-workspace h1,
+.empty-workspace > p,
+.empty-workspace .empty-actions,
+.empty-workspace .runtime-overview,
+.empty-workspace .operation-status { position: relative; z-index: 1; }
+.empty-workspace h1 { max-width: 620px; font-size: clamp(30px,3vw,46px); line-height: 1.1; letter-spacing: -.035em; }
+.empty-workspace > p:not(.kicker) { max-width: 560px; font-size: 13px; line-height: 1.7; }
+.empty-workspace .runtime-overview { width: min(560px,58vw); }
+
+.project-hero {
+  min-height: 196px;
+  align-items: flex-start;
+  padding: 24px;
+  background-color: #f8fcff;
+  background-image: url("assets/generated/v1.1/project-worktrees.png");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+}
+.project-hero > div { position: relative; z-index: 1; max-width: 43%; }
+.project-hero h2 { color: var(--ba-ink); text-shadow: 0 1px 0 rgba(255,255,255,.8); }
+.project-hero #project-path { color: #557189; text-shadow: 0 1px 0 white; }
+.project-hero .project-branch {
+  position: relative;
+  z-index: 1;
+  color: white;
+  border: 1px solid rgba(111,211,245,.58);
+  border-radius: 0;
+  background: var(--ba-ink);
+  clip-path: var(--ba-clip-small);
+}
+
+.native-management {
+  min-height: 250px;
+  padding-right: min(38%,330px);
+  background-color: rgba(255,255,255,.96);
+  background-image:
+    linear-gradient(90deg,#fff 0%,rgba(255,255,255,.98) 54%,rgba(255,255,255,.18) 76%),
+    url("assets/generated/v1.1/capability-hub.png");
+  background-repeat: no-repeat;
+  background-size: 100% 100%, min(38%,330px) auto;
+  background-position: 0 0, right 12px center;
+}
+
+.panel-illustration {
+  right: -24px;
+  bottom: -66px;
+  width: 330px;
+  height: 440px;
+  opacity: .28;
+  background: url("assets/generated/v1.1/work-panel-watermark.png") center bottom / contain no-repeat;
+  mix-blend-mode: multiply;
+}
+.attention-panel { overflow-x: hidden; }
+.panel-illustration span {
+  right: 23px;
+  bottom: 118px;
+  color: #176da7;
+  opacity: .72;
+}
+
+.empty-state {
+  min-height: 142px;
+  padding: 112px 12px 18px;
+  background-color: rgba(248,252,255,.72);
+  background-image:
+    url("assets/generated/v1.1/multi-agent-empty-state.png"),
+    var(--ba-hatch);
+  background-repeat: no-repeat,repeat;
+  background-size: 118px auto,auto;
+  background-position: center 12px,0 0;
+}
+
+@media (max-width: 1180px) {
+  .empty-workspace {
+    padding-inline: 48px;
+    background-position: 58% center;
+  }
+  .empty-workspace .runtime-overview { width: min(520px,70vw); }
+  .native-management {
+    padding-right: 14px;
+    padding-bottom: 184px;
+    background-size: 100% 100%, 230px auto;
+    background-position: 0 0, right 12px bottom 10px;
+  }
+}
+
+@media (max-width: 900px) {
+  .empty-workspace {
+    align-content: end;
+    background-image:
+      linear-gradient(0deg,rgba(255,255,255,.99) 0%,rgba(255,255,255,.96) 52%,rgba(255,255,255,.20) 82%),
+      url("assets/generated/v1.1/onboarding-hero.png");
+    background-position: center;
+  }
+  .empty-workspace .runtime-overview { width: 100%; }
+  .project-hero { background-position: 58% center; }
+  .project-hero > div { max-width: 56%; }
+}
+
+body.reduce-motion .empty-workspace,
+body.reduce-motion .project-hero,
+body.reduce-motion .native-management,
+body.reduce-motion .panel-illustration { animation: none !important; }

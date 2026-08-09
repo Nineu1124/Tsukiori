@@ -11,7 +11,7 @@ async function manifest(path) {
 }
 
 test('workspace package dependency direction follows the architecture boundary', async () => {
-  const [protocol, domain, credentialBroker, database, runtimeCore, observability, fakeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop] = await Promise.all([
+  const [protocol, domain, credentialBroker, database, runtimeCore, observability, fakeAdapter, claudeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop] = await Promise.all([
     manifest('packages/protocol'),
     manifest('packages/domain'),
     manifest('packages/credential-broker'),
@@ -19,6 +19,7 @@ test('workspace package dependency direction follows the architecture boundary',
     manifest('packages/runtime-core'),
     manifest('packages/observability'),
     manifest('packages/adapter-fake'),
+    manifest('packages/adapter-claude'),
     manifest('packages/adapter-codex'),
     manifest('packages/adapter-opencode'),
     manifest('packages/permission-broker'),
@@ -41,6 +42,7 @@ test('workspace package dependency direction follows the architecture boundary',
   assert.deepEqual(runtimeCore.dependencies, { '@tsukiori/domain': 'workspace:*' });
   assert.deepEqual(observability.dependencies, { '@tsukiori/runtime-core': 'workspace:*' });
   assert.deepEqual(fakeAdapter.dependencies, { '@tsukiori/runtime-core': 'workspace:*' });
+  assert.deepEqual(claudeAdapter.dependencies ?? {}, {});
   assert.deepEqual(codexAdapter.dependencies, {
     '@tsukiori/database': 'workspace:*',
     '@tsukiori/domain': 'workspace:*',
@@ -87,13 +89,14 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/protocol': 'workspace:*',
   });
   assert.deepEqual(desktop.dependencies, {
+    '@tsukiori/adapter-claude': 'workspace:*',
     '@tsukiori/adapter-fake': 'workspace:*',
     '@tsukiori/credential-broker': 'workspace:*',
     '@tsukiori/protocol': 'workspace:*',
     'node-pty': '1.1.0',
   });
 
-  const manifests = [protocol, domain, credentialBroker, database, runtimeCore, observability, fakeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop];
+  const manifests = [protocol, domain, credentialBroker, database, runtimeCore, observability, fakeAdapter, claudeAdapter, codexAdapter, opencodeAdapter, permissionBroker, projectManager, worktreeManager, workspaceManager, gitService, recoveryManager, testkit, daemon, desktop];
   for (const packageJson of manifests) {
     const dependencies = {
       ...packageJson.dependencies,
