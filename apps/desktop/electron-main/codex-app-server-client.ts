@@ -153,6 +153,15 @@ export class CodexAppServerClient {
     return id;
   }
 
+  async forkThread(threadId: string, lastTurnId: string): Promise<string> {
+    const response = object(await this.request('thread/fork', {
+      threadId, lastTurnId, ephemeral: false,
+    }, 60_000));
+    const id = object(response.thread).id;
+    if (typeof id !== 'string') throw new Error('Codex thread/fork 未返回 Thread ID');
+    return id;
+  }
+
   async startTurn(threadId: string, text: string): Promise<string> {
     const response = object(await this.request('turn/start', {
       threadId, input: [{ type: 'text', text }],

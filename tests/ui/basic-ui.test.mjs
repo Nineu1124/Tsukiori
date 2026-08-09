@@ -47,10 +47,10 @@ test('settings center exposes all specification categories and functional contro
     assert.match(html, new RegExp(`data-settings-page="${page}"`));
     assert.match(html, new RegExp(`data-settings-view="${page}"`));
   }
-  for (const id of ['save-settings','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','new-mcp','save-mcp','delete-provider','refresh-mcp','import-skill','refresh-skills','load-memory','save-memory','refresh-agent-activity','new-scheduled-task','save-scheduled-task','run-doctor','export-diagnostic-settings','export-settings']) {
+  for (const id of ['save-settings','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','new-mcp','save-mcp','delete-provider','refresh-mcp','import-skill','refresh-skills','load-memory','save-memory','refresh-agent-activity','new-scheduled-task','save-scheduled-task','run-doctor','export-diagnostic-settings','export-settings','pick-cc-haha-source','scan-cc-haha-import','run-cc-haha-import']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
-  for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','listMcp','saveMcp','deleteMcp','listSkills','skillDetail','pickSkillSource','installSkill','uninstallSkill','listMemory','readMemory','saveMemory','activity','stopBackgroundTask','listScheduledTasks','saveScheduledTask','setScheduledTaskEnabled','deleteScheduledTask','runScheduledTask','diagnosticSummary','exportDiagnostic','exportSettings']) {
+  for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','listMcp','saveMcp','deleteMcp','listSkills','skillDetail','pickSkillSource','installSkill','uninstallSkill','listMemory','readMemory','saveMemory','activity','stopBackgroundTask','listScheduledTasks','saveScheduledTask','setScheduledTaskEnabled','deleteScheduledTask','runScheduledTask','diagnosticSummary','exportDiagnostic','exportSettings','pickCcHahaSource','scanCcHahaImport','importCcHaha']) {
     assert.match(script, new RegExp(`workspace\.${method}`));
   }
 });
@@ -58,6 +58,7 @@ test('settings center exposes all specification categories and functional contro
 test('Provider and Runtime selection includes API providers and two executable runtimes', async () => {
   const [html, script,, preload] = await rendererFiles();
   for (const kind of ['openai','anthropic','deepseek','openai-compatible','anthropic-compatible']) assert.match(html, new RegExp(`value="${kind}"`));
+  assert.match(script, /claude-native/);
   for (const id of ['runtime-select','provider-select','model-select','environment-select','permission-select','create-runtime','create-provider','create-model','create-permission']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
@@ -75,8 +76,14 @@ test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/E
   assert.match(script, /return 'execute'/);
   assert.match(script, /return 'modify'/);
   assert.match(script, /return 'read'/);
+  assert.match(script, /function thinkingNode/);
+  assert.match(script, /function upsertToolEvent/);
+  assert.match(script, /state\.toolCards\.get\(id\)/);
+  assert.match(script, /assistant\.thinking\.delta/);
   assert.match(styles, /data-tool-kind="modify"/);
   assert.match(styles, /data-tool-kind="execute"/);
+  assert.match(styles, /\.thinking-block/);
+  assert.match(styles, /data-phase="completed"/);
   assert.match(workspace, /WorkspaceCapabilities/);
   assert.match(workspace, /saveMemory/);
   assert.match(workspace, /installSkill/);
@@ -100,22 +107,40 @@ test('legacy smoke fixtures remain isolated from the interactive product surface
 test('complete workbench exposes persisted sessions, files, attachments, ConPTY, preview, native tools, and Agent Team', async () => {
   const [html, script, styles, preload] = await rendererFiles();
   for (const id of [
-    'history-query','session-rename','session-pin','session-archive','attach-files','composer-attachments',
+    'history-query','session-rename','session-pin','session-fork','session-archive','attach-files','composer-attachments',
     'terminal-input','file-query','file-preview','browser-preview','team-dialog','new-team',
     'refresh-native-capabilities','native-capability-list','setting-persist-conversation',
+    'refresh-checkpoints','checkpoint-label','create-checkpoint','checkpoint-list','checkpoint-status',
   ]) assert.match(html, new RegExp(`id="${id}"`));
   for (const method of [
-    'renameSession','pinSession','archiveSession','listFiles','readFile','pickAttachments','codexNative',
+    'renameSession','pinSession','forkSession','searchSessions','archiveSession','listFiles','readFile','pickAttachments','codexNative',
     'createTeam','startTerminal','terminalInput','stopTerminal','copyText',
+    'listCheckpoints','createCheckpoint','previewCheckpoint','rewindCheckpoint','extensionHealth',
   ]) assert.match(preload, new RegExp(method));
   for (const functionName of [
     'renderMarkdownBody','refreshFiles','loadFilePreview','loadCodexNative','createTeam','ensureTerminal',
+    'renderCheckpoints','refreshCheckpoints','rewindToCheckpoint',
+    'renderCcHahaImport','pickCcHahaSource','scanCcHahaImport','runCcHahaImport',
   ]) assert.match(script, new RegExp(`function ${functionName}`));
   assert.match(styles, /\.terminal-command/);
   assert.match(styles, /#browser-preview/);
   assert.match(styles, /\.team-agent-grid/);
   assert.match(html, /id="browser-preview" sandbox="allow-scripts allow-forms allow-same-origin"/);
   assert.match(html, /frame-src http:\/\/localhost:\* http:\/\/127\.0\.0\.1:\* https:/);
+  assert.match(script, /window\.tsukiori\.workspace\.forkSession/);
+  assert.match(script, /function scheduleSessionSearch/);
+  assert.match(script, /未提交变更不会被复制/);
+  assert.match(script, /可能重复执行工具副作用/);
+  assert.match(script, /分支 HEAD 不会移动/);
+  assert.match(script, /自动创建恢复点/);
+  assert.match(script, /Runtime 实际观察/);
+  assert.match(script, /Runtime 原生/);
+  assert.match(script, /subagents/);
+  assert.match(script, /导入历史为只读/);
+  assert.match(script, /失败时整批回滚/);
+  assert.match(html, /不导入密钥、登录态、工具原始参数或运行中进程/);
+  assert.match(html, /未知状态不会伪装成已生效/);
+  assert.match(styles, /\.checkpoint-row/);
 });
 
 test('Computer Use exposes a locked, one-time-approved Windows action surface', async () => {

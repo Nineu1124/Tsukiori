@@ -3650,8 +3650,10 @@ src/helpers/
 - Checkpoints：
   - [ ] 原生模式与可选 Agent SDK 模式分别 Detect、Probe 和版本锁定
   - [ ] Session、Permission、Hooks、Skills、MCP、Subagents 和 Checkpoint 能力按实测分级
-  - [ ] 认证来源与 Provider 数据出口在 UI 中明确区分
+  - [x] 认证来源与 Provider 数据出口在 UI 中明确区分
   - [ ] Claude Adapter 通过完整合同、恢复、安全和 E2E 测试
+
+当前进展（2026-08-09）：`@tsukiori/adapter-claude` 已完成 Claude Code `2.1.226` 原生 `stream-json` 基线、版本锁、本机认证探测、Native/API Provider 隔离、Rich Event 映射、中断/失败收口，以及基于 Structured I/O 的一次性权限允许/拒绝与 Attention Center 跨层合同；Session/Transcript Search、受干净 Worktree 约束的 Claude Fork、显式 Retry 和宿主 Checkpoint/Rewind 也已形成 Fixture/跨层测试。Checkpoint 会保存 Git Index/Worktree Tree、Transcript 哈希和 Runtime Message 锚点，回退前建立 Recovery Checkpoint，且不移动分支 HEAD；Claude 下一 Turn 使用 `--resume-session-at` 派生新 Session。MCP/Skills 健康页现在按 Project 隔离本地 Scope，并把 Codex app-server 实际观察与宿主配置对账；Claude 只能观察 MCP 数量，具体名称/健康/Skill 继续显示 unknown。Claude Subagent 事件和 Codex collab item 已形成不含 Prompt/Message/Transcript Path 的脱敏 Activity 投影，并与宿主 Team/后台 Session 区分来源；完整控制与恢复仍未验证。基础 cc-haha 导入器已提供只读 Dry Run、Transcript/cwd/Git 验证、内容哈希幂等、批次回滚、只读导入历史和显式 Fork，不迁移凭据、设置、工具原始正文或运行中进程。详见 ADR-0004、ADR-0005、ADR-0006、`docs/spikes/B1-claude-native-stream-json.md`、`docs/spikes/S2-checkpoint-rewind.md`、`docs/spikes/S2-mcp-skills-health.md`、`docs/spikes/S2-subagent-activity.md` 与 `docs/spikes/S2-cc-haha-import.md`。隐藏权限/Fork/Message Rewind 的真实 Claude CLI 无副作用 E2E、Agent SDK 决策、Hooks/Skills/MCP/Subagent 深度语义、进程中途强杀恢复和统一 Event Store 仍未完成，因此 B1 及其组合 Checkpoint 保持未完成。
 
 ### B2 Generic ACP
 

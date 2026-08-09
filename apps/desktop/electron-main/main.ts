@@ -337,6 +337,30 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       if (selection.canceled || !selection.filePaths[0]) return { ok: true, canceled: true };
       return { ok: true, project: workspace.addProject(selection.filePaths[0]) };
     }
+    if (command.type === 'pick_cc_haha_source') {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const options: OpenDialogOptions = {
+        title: '选择 cc-haha / Claude 配置目录（或 projects 目录）',
+        properties: ['openDirectory'],
+      };
+      const selection = owner
+        ? await dialog.showOpenDialog(owner, options)
+        : await dialog.showOpenDialog(options);
+      if (selection.canceled || !selection.filePaths[0]) return { ok: true, canceled: true };
+      return { ok: true, sourcePath: selection.filePaths[0] };
+    }
+    if (command.type === 'scan_cc_haha_import') return {
+      ok: true,
+      scan: workspace.scanCcHahaImport(String(command.sourcePath ?? '')),
+    };
+    if (command.type === 'import_cc_haha') return {
+      ok: true,
+      result: workspace.importCcHaha(
+        String(command.sourcePath ?? ''),
+        String(command.sourceFingerprint ?? ''),
+        Array.isArray(command.candidateIds) ? command.candidateIds.map(String) : undefined,
+      ),
+    };
     if (command.type === 'remove_project') {
       workspace.removeProject(String(command.projectId ?? ''));
       return { ok: true };
@@ -354,6 +378,12 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
         ...(typeof command.permissionMode === 'string' ? { permissionMode: command.permissionMode as 'manual' | 'plan' | 'acceptEdits' | 'dontAsk' } : {}),
       }) };
     }
+    if (command.type === 'fork_session') return {
+      ok: true, session: await workspace.forkSession(String(command.sessionId ?? '')),
+    };
+    if (command.type === 'search_sessions') return {
+      ok: true, results: workspace.searchSessions(String(command.projectId ?? ''), String(command.query ?? '')),
+    };
     if (command.type === 'update_session_options') return {
       ok: true,
       session: await workspace.updateSessionOptions(String(command.sessionId ?? ''), {
@@ -380,7 +410,7 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       provider: workspace.saveProvider({
         ...(typeof command.id === 'string' ? { id: command.id } : {}),
         name: String(command.name ?? ''),
-        kind: String(command.kind ?? '') as 'chatgpt' | 'openai' | 'anthropic' | 'deepseek' | 'openai-compatible' | 'anthropic-compatible',
+        kind: String(command.kind ?? '') as 'chatgpt' | 'claude-native' | 'openai' | 'anthropic' | 'deepseek' | 'openai-compatible' | 'anthropic-compatible',
         ...(typeof command.baseUrl === 'string' ? { baseUrl: command.baseUrl } : {}),
         ...(Array.isArray(command.models) ? { models: command.models.map(String) } : {}),
         ...(typeof command.apiKey === 'string' ? { apiKey: command.apiKey } : {}),
@@ -503,6 +533,10 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       ok: true,
       native: await workspace.codexNativeCapabilities(String(command.sessionId ?? '')),
     };
+    if (command.type === 'extension_health') return {
+      ok: true,
+      health: await workspace.extensionHealth(String(command.sessionId ?? '')),
+    };
     if (command.type === 'github_status') return {
       ok: true, status: workspace.githubStatus(String(command.projectId ?? '')),
     };
@@ -527,7 +561,7 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
     };
     if (command.type === 'terminal_start') {
       const sessionId = String(command.sessionId ?? '');
-      terminalManager.start(sessionId, workspace.sessionWorktree(sessionId), Number(command.columns ?? 120), Number(command.rows ?? 28), workspace.terminalShell());
+      terminalManager.start(sessionId, workspace.writableSessionWorktree(sessionId), Number(command.columns ?? 120), Number(command.rows ?? 28), workspace.terminalShell());
       return { ok: true };
     }
     if (command.type === 'terminal_input') {
@@ -571,6 +605,23 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
         decision as 'allow_once' | 'deny_once' | 'cancel_turn',
       );
       return { ok: true };
+    }
+    if (command.type === 'list_checkpoints') return {
+      ok: true, checkpoints: workspace.listCheckpoints(String(command.sessionId ?? '')),
+    };
+    if (command.type === 'create_checkpoint') {
+      const sessionId = String(command.sessionId ?? '');
+      await terminalManager.stop(sessionId);
+      return { ok: true, checkpoint: workspace.createCheckpoint(sessionId, String(command.label ?? '')) };
+    }
+    if (command.type === 'preview_checkpoint') return {
+      ok: true,
+      preview: workspace.previewCheckpoint(String(command.sessionId ?? ''), String(command.checkpointId ?? '')),
+    };
+    if (command.type === 'rewind_checkpoint') {
+      const sessionId = String(command.sessionId ?? '');
+      await terminalManager.stop(sessionId);
+      return { ok: true, result: await workspace.rewindCheckpoint(sessionId, String(command.checkpointId ?? '')) };
     }
     if (command.type === 'git_status') return { ok: true, git: workspace.gitStatus(String(command.sessionId ?? '')) };
     if (command.type === 'git_diff') return {

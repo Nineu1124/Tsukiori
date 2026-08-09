@@ -1,0 +1,51 @@
+{
+  "task": "B1",
+  "slice": "claude-native-stream-json-foundation",
+  "testedVersion": "2.1.226",
+  "platform": "windows-native-x64",
+  "compatibility": "supported",
+  "authentication": {
+    "nativeStatusProjection": [
+      "loggedIn",
+      "authMethod",
+      "apiProvider"
+    ],
+    "observedMethod": "oauth_token",
+    "observedProvider": "firstParty",
+    "credentialsPersisted": false,
+    "identityPersisted": false
+  },
+  "capabilities": {
+    "detect": "supported",
+    "versionLock": "supported",
+    "sessionStart": "supported",
+    "sessionResume": "supported",
+    "textThinkingToolResult": "supported",
+    "interrupt": "supported",
+    "providerIsolation": "supported",
+    "unknownEventRetention": "degraded",
+    "permissionBroker": "degraded",
+    "hooks": "degraded",
+    "skillsMcp": "degraded",
+    "subagents": "degraded",
+    "fork": "degraded",
+    "checkpoint": "degraded"
+  },
+  "permissionBrokerEvidence": {
+    "protocol": "stdio-control-request-response",
+    "fixtureContract": true,
+    "desktopAttentionCenterContract": true,
+    "realCliSideEffectFreeE2e": false
+  },
+  "checkpointEvidence": {
+    "gitTranscriptRecoveryContract": true,
+    "desktopRuntimeAnchorContract": true,
+    "resumeSessionAtFixtureContract": true,
+    "realCliMessageRewindE2e": false,
+    "midTransactionCrashRecovery": false
+  },
+  "containsCredentials": false,
+  "containsIdentity": false,
+  "containsPrompt": false,
+  "containsUserSource": false
+}

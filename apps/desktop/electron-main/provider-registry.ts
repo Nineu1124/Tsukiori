@@ -3,6 +3,7 @@ import { WindowsCredentialBroker, type SecretReference } from '@tsukiori/credent
 
 export type ProviderKind =
   | 'chatgpt'
+  | 'claude-native'
   | 'openai'
   | 'anthropic'
   | 'deepseek'
@@ -13,7 +14,7 @@ export type ProviderConfig = {
   id: string;
   name: string;
   kind: ProviderKind;
-  apiFormat: 'openai' | 'anthropic' | 'chatgpt';
+  apiFormat: 'openai' | 'anthropic' | 'chatgpt' | 'claude-native';
   baseUrl: string;
   models: string[];
   secretRef?: SecretReference;
@@ -37,6 +38,7 @@ export type ProviderInput = {
 
 const defaults: Record<ProviderKind, Pick<ProviderConfig, 'apiFormat' | 'baseUrl' | 'models'>> = {
   chatgpt: { apiFormat: 'chatgpt', baseUrl: 'https://chatgpt.com/backend-api', models: ['auto'] },
+  'claude-native': { apiFormat: 'claude-native', baseUrl: '', models: ['sonnet', 'opus'] },
   openai: { apiFormat: 'openai', baseUrl: 'https://api.openai.com', models: ['gpt-5.4', 'gpt-5.4-mini'] },
   anthropic: { apiFormat: 'anthropic', baseUrl: 'https://api.anthropic.com', models: ['claude-sonnet-4-6', 'claude-opus-4-6'] },
   deepseek: { apiFormat: 'anthropic', baseUrl: 'https://api.deepseek.com/anthropic', models: ['deepseek-v4-pro', 'deepseek-v4-flash'] },
@@ -47,6 +49,7 @@ const defaults: Record<ProviderKind, Pick<ProviderConfig, 'apiFormat' | 'baseUrl
 export function builtInProviders(now = Date.now()): ProviderConfig[] {
   return [
     createBuiltIn('provider:chatgpt', 'ChatGPT 登录', 'chatgpt', now),
+    createBuiltIn('provider:claude-native', 'Claude 本机登录', 'claude-native', now),
     createBuiltIn('provider:openai', 'OpenAI API', 'openai', now),
     createBuiltIn('provider:anthropic', 'Anthropic API', 'anthropic', now),
     createBuiltIn('provider:deepseek', 'DeepSeek', 'deepseek', now),
@@ -95,7 +98,7 @@ export class ProviderRegistry {
     const at = Date.now();
     let secretRef = existing?.secretRef;
     const apiKey = input.apiKey?.trim();
-    if (kind !== 'chatgpt' && apiKey) {
+    if (kind !== 'chatgpt' && kind !== 'claude-native' && apiKey) {
       secretRef = this.#credentials.store({
         secret: apiKey,
         ...(secretRef ? { reference: secretRef } : {}),
@@ -117,7 +120,7 @@ export class ProviderRegistry {
   }
 
   delete(id: string): void {
-    if (id === 'provider:chatgpt') throw new Error('ChatGPT 登录项不能删除');
+    if (id === 'provider:chatgpt' || id === 'provider:claude-native') throw new Error('Runtime 登录项不能删除');
     const provider = this.get(id);
     if (provider.secretRef) this.#credentials.delete(provider.secretRef);
     if (id.startsWith('provider:') && ['provider:openai', 'provider:anthropic', 'provider:deepseek'].includes(id)) {
@@ -131,7 +134,9 @@ export class ProviderRegistry {
 
   async test(id: string): Promise<{ ok: boolean; latencyMs: number; category: string }> {
     const provider = this.get(id);
-    if (provider.kind === 'chatgpt') return { ok: true, latencyMs: 0, category: 'runtime_auth' };
+    if (provider.kind === 'chatgpt' || provider.kind === 'claude-native') {
+      return { ok: true, latencyMs: 0, category: 'runtime_auth' };
+    }
     if (!provider.secretRef) throw new Error('请先保存 API Key');
     const started = Date.now();
     let result: { ok: boolean; latencyMs: number; category: string };
@@ -164,9 +169,16 @@ export class ProviderRegistry {
     return result;
   }
 
+  recordTest(id: string, result: { ok: boolean; latencyMs: number; category: string }): void {
+    const provider = this.get(id);
+    provider.lastTest = { ...result, testedAt: Date.now() };
+    provider.updatedAt = Date.now();
+    this.#flush();
+  }
+
   async listModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {
     const provider = this.get(id);
-    if (provider.kind === 'chatgpt' || provider.kind === 'anthropic' || provider.kind === 'anthropic-compatible') {
+    if (provider.kind === 'chatgpt' || provider.kind === 'claude-native' || provider.kind === 'anthropic' || provider.kind === 'anthropic-compatible') {
       return { models: [...provider.models], source: 'configured' };
     }
     if (!provider.secretRef) throw new Error('请先保存 API Key');
@@ -199,6 +211,7 @@ export class ProviderRegistry {
   withEnvironment<T>(id: string, consumer: (environment: Record<string, string>) => T, selectedModel?: string): T {
     const provider = this.get(id);
     const environment: Record<string, string> = {};
+    if (provider.kind === 'claude-native') return consumer(environment);
     if (provider.apiFormat === 'anthropic') {
       environment.ANTHROPIC_BASE_URL = provider.baseUrl;
       environment.ANTHROPIC_MODEL = selectedModel ?? provider.models[0] ?? '';
@@ -274,6 +287,7 @@ function cleanName(value: string): string {
 
 function normalizeBaseUrl(value: string, kind: ProviderKind): string {
   if (kind === 'chatgpt') return defaults.chatgpt.baseUrl;
+  if (kind === 'claude-native') return '';
   let url: URL;
   try { url = new URL(value); } catch { throw new Error('Base URL 无效'); }
   if (url.username || url.password || url.hash || url.search) throw new Error('Base URL 不能包含认证、查询或片段');
@@ -291,6 +305,7 @@ function normalizeModels(values: readonly string[]): string[] {
 }
 
 function credentialBinding(id: string, kind: ProviderKind) {
+  if (kind === 'claude-native') throw new Error('Claude 本机登录不使用宿主凭据');
   return {
     runtimeType: 'provider', runtimeProfileId: id,
     environmentVariable: kind === 'openai' || kind === 'openai-compatible'

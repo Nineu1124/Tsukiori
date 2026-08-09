@@ -22,6 +22,7 @@
     "test:v1-ready": "pnpm run build && node --test tests/gates/v1-ready.test.mjs",
     "test:codex": "node --test spikes/codex/*.test.mjs",
     "test:codex-adapter": "pnpm run build && node --test tests/codex-adapter/*.test.mjs",
+    "test:claude-adapter": "pnpm run build && node --test tests/claude-adapter/*.test.mjs",
     "spike:codex": "node spikes/codex/harness.mjs",
     "probe:codex-adapter": "pnpm run build && node scripts/probe-codex-adapter.mjs",
     "probe:interactive-codex": "pnpm run build && node scripts/probe-interactive-codex.mjs",

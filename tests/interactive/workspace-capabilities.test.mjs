@@ -20,12 +20,16 @@ test('MCP CRUD persists only sanitized configuration and enforces transport boun
     assert.throws(() => capabilities.saveMcp({ name: 'unsafe', scope: 'user', transport: 'http', url: 'file:///secret' }), /URL/);
     const project = join(root, 'project'); mkdirSync(project, { recursive: true });
     const projectServer = capabilities.saveMcp({ name: 'Project MCP', scope: 'project', projectId: 'project:1', transport: 'stdio', command: 'node.exe', args: [] });
+    const otherLocal = capabilities.saveMcp({ name: 'Other Local MCP', scope: 'local', projectId: 'project:2', transport: 'stdio', command: 'node.exe', args: [] });
+    assert.equal(capabilities.listMcp('project:1').some((item) => item.name === 'Other Local MCP'), false);
+    assert.throws(() => capabilities.saveMcp({ name: 'Unbound Local', scope: 'local', transport: 'stdio', command: 'node.exe', args: [] }), /绑定 Project/);
     capabilities.syncProjectMcp(project, 'project:1');
     assert.match(readFileSync(join(project, '.mcp.json'), 'utf8'), /Project MCP/);
     capabilities.deleteMcp(projectServer.id);
     capabilities.syncProjectMcp(project, 'project:1');
     assert.doesNotMatch(readFileSync(join(project, '.mcp.json'), 'utf8'), /Project MCP/);
     capabilities.deleteMcp(server.id);
+    capabilities.deleteMcp(otherLocal.id);
     assert.equal(capabilities.listMcp().length, 0);
   } finally { rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 }); }
 });

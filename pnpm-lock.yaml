@@ -32,6 +32,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@tsukiori/adapter-claude':
+        specifier: workspace:*
+        version: link:../../packages/adapter-claude
       '@tsukiori/adapter-fake':
         specifier: workspace:*
         version: link:../../packages/adapter-fake
@@ -51,6 +54,8 @@ importers:
       electron-builder:
         specifier: 26.15.7
         version: 26.15.7(electron-builder-squirrel-windows@26.15.7)
+
+  packages/adapter-claude: {}
 
   packages/adapter-codex:
     dependencies:

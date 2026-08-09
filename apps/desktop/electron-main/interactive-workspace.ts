@@ -8,22 +8,25 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { WindowsCredentialBroker } from '@tsukiori/credential-broker';
 import {
+  ClaudeCodeClient,
+  discoverClaudeLaunch,
+  probeClaudeAuth as probeClaudeNativeAuth,
+  type ClaudeAuthStatus,
+  type ClaudeLaunch,
+} from '@tsukiori/adapter-claude';
+import {
   CodexAppServerClient,
   discoverCodexLaunch,
   type CodexApproval,
   type CodexLaunch,
 } from './codex-app-server-client.js';
-import {
-  ClaudeCodeClient,
-  discoverClaudeLaunch,
-  type ClaudeLaunch,
-} from './claude-code-client.js';
 import {
   ProviderRegistry,
   type ProviderConfig,
@@ -36,6 +39,18 @@ import {
   type McpServerInput,
   type ScheduledTask,
 } from './workspace-capabilities.js';
+import {
+  CheckpointService,
+  type CheckpointPreview,
+  type CheckpointRewindResult,
+  type ConversationCheckpoint,
+} from './checkpoint-service.js';
+import {
+  CcHahaImporter,
+  type CcHahaImportCandidate,
+  type CcHahaImportScan,
+  type ImportedConversationEvent,
+} from './cc-haha-importer.js';
 
 type RuntimeType = 'codex' | 'claude';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -60,6 +75,13 @@ type SessionState = {
   worktreePath: string;
   branch: string;
   threadId?: string;
+  forkedFromSessionId?: string;
+  forkSourceRuntimeSessionId?: string;
+  forkSourceRuntimeMessageId?: string;
+  importSource?: 'cc-haha';
+  importSourceSessionId?: string;
+  importTranscriptHash?: string;
+  importedReadOnly?: boolean;
   turnCount: number;
   status: 'starting' | 'ready' | 'running' | 'waiting_permission' | 'error' | 'stopped';
   lastError?: string;
@@ -130,18 +152,35 @@ export type WorkspaceEvent = {
   payload: Record<string, unknown>;
 };
 
-type ApprovalResolver = {
+type CodexApprovalResolver = {
+  kind: 'codex';
   sessionId: string;
   approval: CodexApproval;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 };
 
+type ClaudeApprovalResolver = {
+  kind: 'claude';
+  sessionId: string;
+  turnId: string;
+  requestId: string;
+  connectionEpoch: string;
+  title: string;
+  description: string;
+  category: string;
+  risk: 'medium' | 'high';
+  scope: string;
+};
+
+type ApprovalResolver = CodexApprovalResolver | ClaudeApprovalResolver;
+
 export type InteractiveWorkspaceOptions = {
   userDataPath: string;
   emit: (event: WorkspaceEvent) => void;
   discoverCodex?: () => CodexLaunch;
   discoverClaude?: () => ClaudeLaunch;
+  probeClaudeAuth?: (launch: ClaudeLaunch) => ClaudeAuthStatus;
   createClient?: (options: ConstructorParameters<typeof CodexAppServerClient>[0]) => CodexAppServerClient;
   createClaudeClient?: (launch: ClaudeLaunch) => ClaudeCodeClient;
   credentials?: WindowsCredentialBroker;
@@ -164,8 +203,11 @@ export class InteractiveWorkspace {
   readonly #emitExternal: (event: WorkspaceEvent) => void;
   readonly #discoverCodex: () => CodexLaunch;
   readonly #discoverClaude: () => ClaudeLaunch;
+  readonly #probeClaudeAuth: (launch: ClaudeLaunch) => ClaudeAuthStatus;
   readonly #createClient: InteractiveWorkspaceOptions['createClient'];
   readonly #createClaudeClient: InteractiveWorkspaceOptions['createClaudeClient'];
+  readonly #checkpoints: CheckpointService;
+  readonly #ccHahaImporter: CcHahaImporter;
   readonly #providers: ProviderRegistry;
   readonly #capabilities: WorkspaceCapabilities;
   #state: PersistedState = {
@@ -187,9 +229,12 @@ export class InteractiveWorkspace {
     this.#statePath = join(options.userDataPath, 'workspace-state-v3.json');
     this.#worktreeRoot = join(options.userDataPath, 'worktrees');
     this.#transcriptRoot = join(options.userDataPath, 'transcripts');
+    this.#checkpoints = new CheckpointService(options.userDataPath);
+    this.#ccHahaImporter = new CcHahaImporter(options.userDataPath);
     this.#emitExternal = options.emit;
     this.#discoverCodex = options.discoverCodex ?? discoverCodexLaunch;
     this.#discoverClaude = options.discoverClaude ?? discoverClaudeLaunch;
+    this.#probeClaudeAuth = options.probeClaudeAuth ?? probeClaudeNativeAuth;
     this.#createClient = options.createClient;
     this.#createClaudeClient = options.createClaudeClient;
     mkdirSync(options.userDataPath, { recursive: true });
@@ -220,13 +265,16 @@ export class InteractiveWorkspace {
       mcpServers: this.#capabilities.listMcp(),
       scheduledTasks: this.#capabilities.listScheduledTasks(),
       settings: this.#state.settings,
-      permissions: [...this.#approvals.entries()].map(([id, pending]) => ({
+      permissions: [...this.#approvals.entries()].map(([id, pending]) => pending.kind === 'codex' ? ({
         id, sessionId: pending.sessionId, connectionEpoch: 'interactive-codex',
         title: approvalTitle(pending.approval.method),
         description: approvalDescription(pending.approval.method),
         category: approvalCategory(pending.approval.method, pending.approval.params),
-        risk: 'high', enforcementLevel: 'interceptable',
-        scope: approvalScope(pending.approval.params),
+        risk: 'high', enforcementLevel: 'interceptable', scope: approvalScope(pending.approval.params),
+      }) : ({
+        id, sessionId: pending.sessionId, connectionEpoch: pending.connectionEpoch,
+        title: pending.title, description: pending.description, category: pending.category,
+        risk: pending.risk, enforcementLevel: 'interceptable', scope: pending.scope,
       })),
       attention: [], tools: [], workflow: null, v1Git: null, diagnostics: null,
       recentEvents: [...this.#events.values()].flat().sort((a, b) => a.createdAt - b.createdAt).slice(-300),
@@ -261,14 +309,20 @@ export class InteractiveWorkspace {
     }
     try {
       this.#claudeLaunch = this.#discoverClaude();
+      let auth: ClaudeAuthStatus = { authenticated: false, source: 'unknown', method: 'unknown', provider: 'unknown' };
+      try { auth = this.#probeClaudeAuth(this.#claudeLaunch); } catch { /* Discovery remains usable with API Providers. */ }
       this.#claudeClient = this.#createClaudeClient
         ? this.#createClaudeClient(this.#claudeLaunch)
         : new ClaudeCodeClient(this.#claudeLaunch);
+      const compatibility = this.#claudeLaunch.compatibility ?? 'supported';
+      const available = compatibility === 'supported';
       states.push({
-        id: 'runtime:claude', type: 'claude', name: 'Claude Code', available: true,
+        id: 'runtime:claude', type: 'claude', name: 'Claude Code', available,
         version: this.#claudeLaunch.version, source: this.#claudeLaunch.source,
-        authenticated: false, authSource: 'Provider API', supportLevel: 'degraded',
-        capabilities: ['stream-json', 'Session Resume', 'Tools', 'Plan/Accept Edits'],
+        authenticated: auth.authenticated, authSource: auth.authenticated ? auth.source : 'Provider API / 未登录',
+        supportLevel: available ? 'degraded' : 'unknown',
+        ...(!available ? { error: `Claude Code ${this.#claudeLaunch.version} 尚未通过兼容性锁定（${compatibility}）` } : {}),
+        capabilities: [...new Set([...(this.#claudeLaunch.capabilities ?? ['stream-json', 'session-resume', 'tools']), 'stdio-permission-broker'])],
       });
     } catch (error) {
       this.#claudeLaunch = null;
@@ -333,8 +387,21 @@ export class InteractiveWorkspace {
     this.#providers.delete(id);
   }
 
-  testProvider(id: string): Promise<{ ok: boolean; latencyMs: number; category: string }> {
-    return this.#providers.test(id);
+  async testProvider(id: string): Promise<{ ok: boolean; latencyMs: number; category: string }> {
+    const provider = this.#providers.get(id);
+    if (provider.kind !== 'claude-native') return this.#providers.test(id);
+    const started = Date.now();
+    const auth = this.#claudeLaunch
+      ? this.#probeClaudeAuth(this.#claudeLaunch)
+      : { authenticated: false };
+    const result = {
+      ok: auth.authenticated === true,
+      latencyMs: Date.now() - started,
+      category: auth.authenticated === true ? 'runtime_auth' : 'authentication_required',
+    };
+    this.#providers.recordTest(id, result);
+    this.refreshRuntimes();
+    return result;
   }
 
   listProviderModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {
@@ -393,11 +460,18 @@ export class InteractiveWorkspace {
       .filter((session) => !session.archivedAt && (!sessionId || session.id === sessionId))
       .filter((session) => ['running', 'waiting_permission', 'starting'].includes(session.status))
       .map((session) => ({ id: 'task:' + session.id, sessionId: session.id, title: session.name, status: session.status, startedAt: session.updatedAt }));
+    const runtimeSubagents = projectSubagentActivity(events);
+    const teamSubagents = this.#state.teams.flatMap((team) => team.memberSessionIds.map((memberSessionId) => ({
+      id: `team:${team.id}:${memberSessionId}`, source: 'team', teamId: team.id,
+      sessionId: memberSessionId,
+      role: this.#state.sessions.find((session) => session.id === memberSessionId)?.name ?? 'Agent',
+      status: team.status, startedAt: team.createdAt, updatedAt: team.updatedAt,
+    })));
     return {
       sessionId: sessionId ?? null,
       events: events.map((event) => ({ id: event.id, type: event.type, sessionId: event.sessionId, createdAt: event.createdAt, payload: event.payload })),
       backgroundTasks,
-      subagents: this.#state.teams.flatMap((team) => team.memberSessionIds.map((memberSessionId) => ({ teamId: team.id, sessionId: memberSessionId, role: this.#state.sessions.find((session) => session.id === memberSessionId)?.name ?? 'Agent', status: team.status }))),
+      subagents: [...runtimeSubagents, ...teamSubagents],
     };
   }
 
@@ -465,7 +539,8 @@ export class InteractiveWorkspace {
       activeSessions: this.#state.sessions.filter((session) => ['running', 'waiting_permission'].includes(session.status)).length,
       failedSessions: this.#state.sessions.filter((session) => session.status === 'error').length,
       providers: this.#providers.list().map((provider) => ({
-        id: provider.id, kind: provider.kind, configured: provider.kind === 'chatgpt' || provider.hasSecret,
+        id: provider.id, kind: provider.kind,
+        configured: provider.kind === 'chatgpt' || provider.kind === 'claude-native' || provider.hasSecret,
         connected: provider.lastTest?.ok === true, category: provider.lastTest?.category ?? 'not_tested',
       })),
       runtimes: this.#runtimes.map(({ id, type, name, available, version, source, supportLevel, error }) => ({
@@ -501,6 +576,122 @@ export class InteractiveWorkspace {
     this.#save();
     this.#emit({ type: 'project.added', payload: { projectId: id, name: project.name } });
     return project;
+  }
+
+  scanCcHahaImport(sourcePath: string): Omit<CcHahaImportScan, 'sessions'> & {
+    sessions: Array<Omit<CcHahaImportCandidate, 'sourceFile'>>;
+  } {
+    const scan = this.#ccHahaImporter.scan(sourcePath);
+    return publicCcHahaScan(scan);
+  }
+
+  importCcHaha(sourcePath: string, sourceFingerprint: string, candidateIds?: string[]): {
+    importedCount: number;
+    skippedCount: number;
+    sessions: SessionState[];
+  } {
+    if (!this.#state.settings.persistConversation) {
+      throw new Error('导入需要先启用“保存本地会话记录”，否则无法保证历史可恢复');
+    }
+    if (!/^sha256:[a-f0-9]{64}$/.test(sourceFingerprint)) throw new Error('cc-haha Dry Run 指纹无效');
+    const requested = new Set((candidateIds ?? []).map((id) => String(id)));
+    if (requested.size > 50 || [...requested].some((id) => !/^[a-f0-9]{24}$/.test(id))) {
+      throw new Error('单批最多导入 50 个有效 cc-haha Session');
+    }
+    const scan = this.#ccHahaImporter.scan(sourcePath);
+    if (scan.sourceFingerprint !== sourceFingerprint) throw new Error('cc-haha 源目录在 Dry Run 后发生变化，请重新扫描');
+    const eligible = scan.sessions.filter((candidate) => (
+      candidate.importable && !candidate.alreadyImported && (requested.size === 0 || requested.has(candidate.candidateId))
+    ));
+    if (eligible.length > 50) throw new Error('单批最多导入 50 个 cc-haha Session');
+    const missing = [...requested].filter((id) => !scan.sessions.some((candidate) => candidate.candidateId === id));
+    if (missing.length) throw new Error('所选 cc-haha Session 已不存在，请重新扫描');
+    if (!eligible.length) return {
+      importedCount: 0,
+      skippedCount: scan.sessions.filter((candidate) => candidate.alreadyImported).length,
+      sessions: [],
+    };
+
+    const converted = eligible.map((candidate) => ({ candidate, conversion: this.#ccHahaImporter.convert(candidate) }));
+    const originalProjectIds = new Set(this.#state.projects.map((project) => project.id));
+    const createdProjects = new Set<string>();
+    const createdSessions: SessionState[] = [];
+    try {
+      for (const { candidate, conversion } of converted) {
+        if (!candidate.projectRoot) throw new Error('导入候选缺少已验证 Git 根目录');
+        const project = this.addProject(candidate.projectRoot);
+        if (!originalProjectIds.has(project.id)) createdProjects.add(project.id);
+        const token = randomUUID();
+        const branch = 'tsukiori/import-' + token.slice(0, 8);
+        const worktreePath = join(this.#worktreeRoot, project.id.replace(':', '-'), token.slice(0, 12));
+        mkdirSync(dirname(worktreePath), { recursive: true });
+        this.#git(project.gitRoot, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD']);
+        const session: SessionState = {
+          id: 'session:' + token,
+          projectId: project.id,
+          name: uniqueImportedName(candidate.title, this.#state.sessions),
+          runtimeType: 'claude',
+          providerId: 'provider:claude-native',
+          model: safeModel(candidate.model || 'sonnet'),
+          environment: 'windows-native',
+          permissionMode: 'manual',
+          worktreePath,
+          branch,
+          threadId: candidate.sourceSessionId,
+          importSource: 'cc-haha',
+          importSourceSessionId: candidate.sourceSessionId,
+          importTranscriptHash: candidate.transcriptHash,
+          importedReadOnly: true,
+          turnCount: conversion.turnCount,
+          status: 'ready',
+          createdAt: candidate.createdAt,
+          updatedAt: candidate.updatedAt,
+        };
+        this.#state.sessions.push(session);
+        createdSessions.push(session);
+        this.#save();
+        this.#emit({ sessionId: session.id, type: 'session.created', payload: {
+          name: session.name, projectId: project.id, worktreePath, branch,
+          runtimeType: session.runtimeType, providerId: session.providerId, model: session.model,
+          importedFrom: 'cc-haha', importedReadOnly: true,
+        } });
+        for (const event of conversion.events) this.#emitImportedEvent(session.id, event);
+        this.#emit({ sessionId: session.id, type: 'session.imported', payload: {
+          importedFrom: 'cc-haha', importedReadOnly: true, truncated: conversion.truncated,
+          sourceSessionId: candidate.sourceSessionId,
+        } });
+      }
+      this.#ccHahaImporter.recordImport(sourceFingerprint, converted.map(({ candidate }, index) => ({
+        transcriptHash: candidate.transcriptHash,
+        sourceSessionId: candidate.sourceSessionId,
+        targetSessionId: createdSessions[index]!.id,
+        projectId: createdSessions[index]!.projectId,
+      })));
+      this.#save();
+      return {
+        importedCount: createdSessions.length,
+        skippedCount: scan.sessions.filter((candidate) => candidate.alreadyImported).length,
+        sessions: createdSessions,
+      };
+    } catch (error) {
+      const createdIds = new Set(createdSessions.map((session) => session.id));
+      this.#state.sessions = this.#state.sessions.filter((session) => !createdIds.has(session.id));
+      this.#eventLog = this.#eventLog.filter((event) => !event.sessionId || !createdIds.has(event.sessionId));
+      for (const session of [...createdSessions].reverse()) {
+        this.#events.delete(session.id);
+        rmSync(this.#transcriptPath(session.id), { force: true });
+        try {
+          if (existsSync(session.worktreePath)) this.#git(this.#project(session.projectId).gitRoot, ['worktree', 'remove', '--force', session.worktreePath]);
+        } catch { /* Best-effort cleanup remains scoped to the generated Worktree. */ }
+        try { this.#git(this.#project(session.projectId).gitRoot, ['branch', '-D', session.branch]); }
+        catch { /* A failed worktree add may not have created the branch. */ }
+      }
+      this.#state.projects = this.#state.projects.filter((project) => (
+        !createdProjects.has(project.id) || this.#state.sessions.some((session) => session.projectId === project.id)
+      ));
+      this.#save();
+      throw error;
+    }
   }
 
   removeProject(projectId: string): void {
@@ -566,8 +757,82 @@ export class InteractiveWorkspace {
     return session;
   }
 
+  searchSessions(projectId: string, query: string): Array<{ sessionId: string; matchType: 'metadata' | 'transcript'; snippet: string }> {
+    this.#project(projectId);
+    const needle = query.trim().toLocaleLowerCase();
+    if (!needle) return [];
+    if (needle.length > 200 || /[\0]/.test(needle)) throw new Error('Session 搜索词无效');
+    const results: Array<{ sessionId: string; matchType: 'metadata' | 'transcript'; snippet: string }> = [];
+    for (const session of this.#state.sessions.filter((item) => item.projectId === projectId && !item.archivedAt)) {
+      const metadata = `${session.name}\n${session.branch}\n${session.runtimeType}\n${session.model}`;
+      if (metadata.toLocaleLowerCase().includes(needle)) {
+        results.push({ sessionId: session.id, matchType: 'metadata', snippet: truncate(session.name, 180) });
+        continue;
+      }
+      const matchingEvent = [...(this.#events.get(session.id) ?? [])].reverse().find((event) => (
+        searchableEventText(event).toLocaleLowerCase().includes(needle)
+      ));
+      if (matchingEvent) results.push({
+        sessionId: session.id,
+        matchType: 'transcript',
+        snippet: searchSnippet(searchableEventText(matchingEvent), needle, 180),
+      });
+      if (results.length >= 50) break;
+    }
+    return results;
+  }
+
+  async forkSession(sessionId: string): Promise<SessionState> {
+    const source = this.#session(sessionId);
+    if (source.runtimeType !== 'claude' || !source.threadId || source.turnCount < 1) {
+      throw new Error('当前仅支持 Fork 已运行过的 Claude Session');
+    }
+    if (source.status === 'running' || source.status === 'waiting_permission' || source.status === 'starting') {
+      throw new Error('运行中的 Session 不能 Fork');
+    }
+    if (this.#git(source.worktreePath, ['status', '--porcelain=v1', '--untracked-files=all']).trim()) {
+      throw new Error('Fork 前请先提交或清理当前 Worktree 变更，避免会话历史与代码状态分叉');
+    }
+    const project = this.#project(source.projectId);
+    const token = randomUUID();
+    const branch = 'tsukiori/session-' + token.slice(0, 8);
+    const worktreePath = join(this.#worktreeRoot, project.id.replace(':', '-'), token.slice(0, 12));
+    const baseCommit = this.#git(source.worktreePath, ['rev-parse', 'HEAD']).trim();
+    mkdirSync(dirname(worktreePath), { recursive: true });
+    this.#git(project.gitRoot, ['worktree', 'add', '-b', branch, worktreePath, baseCommit]);
+    const session: SessionState = {
+      id: 'session:' + token, projectId: source.projectId,
+      name: uniqueForkName(source.name, this.#state.sessions),
+      runtimeType: 'claude', providerId: source.providerId, model: source.model,
+      environment: 'windows-native', permissionMode: source.permissionMode,
+      worktreePath, branch, threadId: randomUUID(),
+      forkedFromSessionId: source.id, forkSourceRuntimeSessionId: source.threadId,
+      turnCount: 0, status: 'ready', createdAt: Date.now(), updatedAt: Date.now(),
+    };
+    this.#state.sessions.push(session);
+    this.#save();
+    this.#emit({ sessionId: session.id, type: 'session.created', payload: {
+      name: session.name, projectId: session.projectId, worktreePath, branch,
+      runtimeType: session.runtimeType, providerId: session.providerId, model: session.model,
+    } });
+    for (const event of this.#events.get(source.id) ?? []) {
+      if (!transcriptEvent(event.type)) continue;
+      this.#emit({ sessionId: session.id, type: event.type, payload: { ...event.payload, forkedFromEventId: event.id } });
+    }
+    this.#emit({ sessionId: session.id, type: 'session.forked', payload: {
+      sourceSessionId: source.id, sourceBranch: source.branch, baseCommit,
+    } });
+    return session;
+  }
+
   sessionWorktree(sessionId: string): string {
     return this.#session(sessionId).worktreePath;
+  }
+
+  writableSessionWorktree(sessionId: string): string {
+    const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
+    return session.worktreePath;
   }
 
   listFiles(sessionId: string, query = ''): Array<{ path: string; size: number; modifiedAt: number }> {
@@ -611,6 +876,7 @@ export class InteractiveWorkspace {
 
   attachFiles(sessionId: string, sources: readonly string[]): Array<{ path: string; bytes: number; kind: string }> {
     const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
     if (sources.length < 1 || sources.length > 10) throw new Error('一次最多添加 10 个附件');
     const destination = join(session.worktreePath, '.tsukiori', 'attachments');
     mkdirSync(destination, { recursive: true });
@@ -651,7 +917,99 @@ export class InteractiveWorkspace {
       toolCount: Object.keys(object(object(server).tools)).length,
       resourceCount: Array.isArray(object(server).resources) ? (object(server).resources as unknown[]).length : 0,
     }));
-    return { supportLevel: 'supported', skills, servers, refreshedAt: Date.now() };
+    return {
+      supportLevel: 'supported', skills, servers,
+      mcpInventoryComplete: typeof object(mcpRaw).nextCursor !== 'string',
+      refreshedAt: Date.now(),
+    };
+  }
+
+  async extensionHealth(sessionId: string): Promise<Record<string, unknown>> {
+    const session = this.#session(sessionId);
+    const project = this.#project(session.projectId);
+    const configuredMcp = this.#capabilities.listMcp(project.id);
+    const configuredSkills = this.#capabilities.listSkills(session.worktreePath, project.id);
+    let native: Record<string, unknown> = {};
+    let runtimeError = '';
+    if (session.runtimeType === 'codex') {
+      try { native = await this.codexNativeCapabilities(sessionId); }
+      catch (error) { runtimeError = truncate(error instanceof Error ? error.message : String(error), 500); }
+    }
+    const nativeServers = Array.isArray(native.servers) ? native.servers.map(object) : [];
+    const nativeSkills = Array.isArray(native.skills) ? native.skills.map(object) : [];
+    const mcpComplete = native.mcpInventoryComplete === true;
+    const serverByName = new Map(nativeServers.map((item) => [normalizedCapabilityName(item.name), item]));
+    const skillByName = new Map(nativeSkills.map((item) => [normalizedCapabilityName(item.name), item]));
+    const mcp: Record<string, unknown>[] = configuredMcp.map((record) => {
+      const observed = serverByName.get(normalizedCapabilityName(record.name));
+      if (observed) serverByName.delete(normalizedCapabilityName(record.name));
+      const presence = session.runtimeType !== 'codex' || runtimeError
+        ? 'unknown'
+        : observed ? 'observed' : mcpComplete ? 'not_observed' : 'unknown';
+      const runtimeAuthStatus = observed ? safeSettingText(observed.authStatus, 'unknown', 80) : 'unknown';
+      return {
+        id: record.id, name: record.name, configured: true, configuredScope: record.scope,
+        transport: record.transport, enabled: record.enabled,
+        runtimePresence: presence,
+        runtimeScope: observed ? 'runtime_effective_scope_unknown' : 'not_reported',
+        runtimeAuthStatus,
+        toolCount: observed ? Number(observed.toolCount) || 0 : 0,
+        resourceCount: observed ? Number(observed.resourceCount) || 0 : 0,
+        health: !record.enabled ? 'disabled'
+          : presence === 'observed' ? runtimeAuthStatus === 'notLoggedIn' ? 'attention' : 'healthy'
+            : presence === 'not_observed' ? 'unavailable' : 'unknown',
+      };
+    });
+    for (const observed of serverByName.values()) {
+      mcp.push({
+        id: '', name: safeSettingText(observed.name, 'Unnamed MCP', 120), configured: false,
+        configuredScope: 'runtime_only', transport: 'runtime_native', enabled: true,
+        runtimePresence: 'observed', runtimeScope: 'runtime_effective_scope_unknown',
+        runtimeAuthStatus: safeSettingText(observed.authStatus, 'unknown', 80),
+        toolCount: Number(observed.toolCount) || 0, resourceCount: Number(observed.resourceCount) || 0,
+        health: safeSettingText(observed.authStatus, 'unknown', 80) === 'notLoggedIn' ? 'attention' : 'healthy',
+      });
+    }
+    const skills: Record<string, unknown>[] = configuredSkills.map((record) => {
+      const observed = skillByName.get(normalizedCapabilityName(record.name));
+      if (observed) skillByName.delete(normalizedCapabilityName(record.name));
+      const presence = session.runtimeType !== 'codex' || runtimeError ? 'unknown' : observed ? 'observed' : 'not_observed';
+      return {
+        id: record.id, name: record.name, description: record.description,
+        configured: true, configuredScope: record.scope, source: record.source,
+        safety: record.safety, files: record.files,
+        runtimePresence: presence,
+        runtimeScope: observed ? safeSettingText(observed.scope, 'unknown', 40) : 'not_reported',
+        runtimeEnabled: observed ? observed.enabled !== false : undefined,
+        health: presence === 'observed' ? observed?.enabled === false ? 'disabled' : 'healthy'
+          : presence === 'not_observed' ? 'unavailable' : 'unknown',
+      };
+    });
+    for (const observed of skillByName.values()) {
+      skills.push({
+        id: '', name: safeSettingText(observed.name, 'Unnamed skill', 120),
+        description: safeSettingText(observed.description, '', 500), configured: false,
+        configuredScope: 'runtime_only', source: 'runtime_native', safety: 'runtime_managed', files: 0,
+        runtimePresence: 'observed', runtimeScope: safeSettingText(observed.scope, 'unknown', 40),
+        runtimeEnabled: observed.enabled !== false, health: observed.enabled === false ? 'disabled' : 'healthy',
+      });
+    }
+    const claudeInit = session.runtimeType === 'claude'
+      ? [...(this.#events.get(session.id) ?? [])].reverse().find((event) => event.type === 'session.started')
+      : undefined;
+    return {
+      supportLevel: session.runtimeType === 'codex' && !runtimeError ? 'supported' : 'degraded',
+      runtimeType: session.runtimeType, projectId: project.id, sessionId: session.id,
+      mcp, skills,
+      observedMcpServerCount: session.runtimeType === 'codex'
+        ? nativeServers.length
+        : Number(claudeInit?.payload.mcpServerCount) || 0,
+      ...(runtimeError ? { runtimeError } : {}),
+      limitations: session.runtimeType === 'codex'
+        ? ['Codex 只报告 Runtime 已观察到的 MCP/Skills；MCP 原生响应不提供配置 Scope。']
+        : ['Claude stream-json 只报告 MCP 数量，不提供名称、健康或 Skill 清单；本地配置的 Runtime 生效状态保持 unknown。'],
+      refreshedAt: Date.now(),
+    };
   }
 
   async createTeam(projectId: string, goal: string, agents: ReadonlyArray<Record<string, unknown>>): Promise<TeamRunState> {
@@ -698,7 +1056,8 @@ export class InteractiveWorkspace {
     assertProviderCompatibility(runtimeType, provider.kind);
     const runtime = this.#runtimes.find((item) => item.type === runtimeType);
     if (!runtime?.available) throw new Error(runtime?.error ?? `${runtimeType} Runtime 不可用`);
-    if (provider.kind !== 'chatgpt' && !provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
+    if (providerNeedsSecret(provider) && !provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
+    if (provider.kind === 'claude-native' && !runtime.authenticated) throw new Error('Claude Code 本机 Runtime 尚未登录');
     const model = safeModel(selection?.model ?? provider.models[0] ?? 'auto');
     const selectedPermission = permissionMode(selection?.permissionMode ?? defaultPermission(runtimeType));
     const token = randomUUID();
@@ -725,10 +1084,13 @@ export class InteractiveWorkspace {
 
   async updateSessionOptions(sessionId: string, input: { providerId?: string; model?: string; permissionMode?: string }): Promise<SessionState> {
     const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
     if (session.turnCount > 0 || session.status === 'running') throw new Error('Session 首次 Turn 后 Runtime 参数已锁定');
     const provider = this.#providers.get(input.providerId ?? session.providerId);
     assertProviderCompatibility(session.runtimeType, provider.kind);
-    if (provider.kind !== 'chatgpt' && !provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
+    if (providerNeedsSecret(provider) && !provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
+    const runtime = this.#runtimes.find((item) => item.type === session.runtimeType);
+    if (provider.kind === 'claude-native' && !runtime?.authenticated) throw new Error('Claude Code 本机 Runtime 尚未登录');
     session.providerId = provider.id;
     session.model = safeModel(input.model ?? provider.models[0] ?? session.model);
     session.permissionMode = permissionMode(input.permissionMode ?? session.permissionMode);
@@ -741,6 +1103,7 @@ export class InteractiveWorkspace {
     const prompt = text.trim();
     if (!prompt || prompt.length > 64_000) throw new Error('Prompt 必须为 1–64000 个字符');
     const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
     if (session.status === 'running' || session.status === 'waiting_permission') {
       throw new Error('当前 Turn 尚未结束；请等待、处理中断或完成权限确认');
     }
@@ -761,9 +1124,13 @@ export class InteractiveWorkspace {
     if (!claude || !session.threadId) throw new Error('Claude Code Runtime 不可用');
     const provider = this.#providers.get(session.providerId);
     const turnId = this.#providers.withEnvironment(provider.id, (environment) => claude.startTurn({
-      cwd: session.worktreePath, sessionId: session.threadId as string, resume: session.turnCount > 0,
+      cwd: session.worktreePath, sessionId: session.threadId as string,
+      resume: session.turnCount > 0 && !session.forkSourceRuntimeSessionId,
+      ...(session.forkSourceRuntimeSessionId ? { forkFromSessionId: session.forkSourceRuntimeSessionId } : {}),
+      ...(session.forkSourceRuntimeMessageId ? { resumeSessionAt: session.forkSourceRuntimeMessageId } : {}),
       prompt, model: provider.kind === 'deepseek' ? deepSeekClaudeModel(session.model) : session.model,
-      permissionMode: claudePermission(session.permissionMode), environment,
+      permissionMode: claudePermission(session.permissionMode),
+      authMode: provider.kind === 'claude-native' ? 'native' : 'provider', environment,
       onEvent: (type, payload) => this.#runtimeEvent(sessionId, type, payload),
       onExit: (error) => {
         if (!error) return;
@@ -796,7 +1163,20 @@ export class InteractiveWorkspace {
     if (!pending) throw new Error('权限请求已失效');
     this.#approvals.delete(permissionId);
     const allow = decision === 'allow_once';
-    if (pending.approval.method === 'item/permissions/requestApproval') {
+    if (pending.kind === 'claude') {
+      const claude = this.#claudeClient;
+      if (!claude) {
+        this.#approvals.set(permissionId, pending);
+        throw new Error('Claude Code Runtime 已退出，权限请求已失效');
+      }
+      try {
+        claude.respondToPermission(pending.turnId, pending.requestId, allow ? 'allow' : 'deny');
+        if (decision === 'cancel_turn') claude.interrupt(pending.turnId);
+      } catch (error) {
+        this.#approvals.set(permissionId, pending);
+        throw error;
+      }
+    } else if (pending.approval.method === 'item/permissions/requestApproval') {
       const requested = object(pending.approval.params.permissions);
       pending.resolve({ permissions: allow ? (Object.keys(requested).length > 0 ? requested : { fileSystem: null, network: null }) : { fileSystem: null, network: null }, scope: 'turn' });
     } else pending.resolve({ decision: allow ? 'accept' : decision === 'cancel_turn' ? 'cancel' : 'decline' });
@@ -804,6 +1184,97 @@ export class InteractiveWorkspace {
     session.status = 'running';
     this.#save();
     this.#emit({ sessionId: pending.sessionId, type: 'permission.resolved', payload: { permissionId, decision } });
+  }
+
+  listCheckpoints(sessionId: string): ConversationCheckpoint[] {
+    this.#session(sessionId);
+    return this.#checkpoints.list(sessionId);
+  }
+
+  createCheckpoint(sessionId: string, label: string): ConversationCheckpoint {
+    const session = this.#checkpointSession(sessionId);
+    this.#assertSessionWritable(session);
+    const markers = this.#checkpointRuntimeMarkers(session);
+    const checkpoint = this.#checkpoints.create({
+      sessionId,
+      worktreePath: session.worktreePath,
+      transcriptPath: this.#transcriptPath(sessionId),
+      label,
+      runtimeSessionId: markers.runtimeSessionId,
+      ...(markers.runtimeTurnId ? { runtimeTurnId: markers.runtimeTurnId } : {}),
+      ...(markers.runtimeMessageId ? { runtimeMessageId: markers.runtimeMessageId } : {}),
+      turnCount: session.turnCount,
+    });
+    this.#emit({ sessionId, type: 'checkpoint.created', payload: {
+      checkpointId: checkpoint.id,
+      label: checkpoint.label,
+      headCommit: checkpoint.headCommit,
+      conversationEventCount: checkpoint.conversationEventCount,
+    } });
+    return checkpoint;
+  }
+
+  previewCheckpoint(sessionId: string, checkpointId: string): CheckpointPreview {
+    const session = this.#checkpointSession(sessionId);
+    return this.#checkpoints.preview(
+      sessionId,
+      checkpointId,
+      session.worktreePath,
+      this.#transcriptPath(sessionId),
+    );
+  }
+
+  async rewindCheckpoint(sessionId: string, checkpointId: string): Promise<CheckpointRewindResult> {
+    const session = this.#checkpointSession(sessionId);
+    this.#assertSessionWritable(session);
+    const preview = this.#checkpoints.preview(
+      sessionId,
+      checkpointId,
+      session.worktreePath,
+      this.#transcriptPath(sessionId),
+    );
+    const checkpoint = preview.checkpoint;
+    let forkedCodexThreadId: string | undefined;
+    if (session.runtimeType === 'codex') {
+      if (!checkpoint.runtimeSessionId || !checkpoint.runtimeTurnId) {
+        throw new Error('此 Checkpoint 缺少 Codex Thread/Turn 锚点，不能安全回退对话');
+      }
+      const client = await this.#ensureCodexClient(sessionId);
+      forkedCodexThreadId = await client.forkThread(checkpoint.runtimeSessionId, checkpoint.runtimeTurnId);
+    } else if (!checkpoint.runtimeSessionId || !checkpoint.runtimeMessageId) {
+      throw new Error('此 Checkpoint 缺少 Claude Session/Message 锚点，不能安全回退对话');
+    }
+    const result = this.#checkpoints.rewind({
+      sessionId,
+      checkpointId,
+      worktreePath: session.worktreePath,
+      transcriptPath: this.#transcriptPath(sessionId),
+      label: checkpoint.label,
+      ...this.#checkpointRuntimeMarkers(session),
+      turnCount: session.turnCount,
+    });
+    if (session.runtimeType === 'codex') {
+      session.threadId = forkedCodexThreadId as string;
+    } else {
+      session.threadId = randomUUID();
+      session.forkSourceRuntimeSessionId = checkpoint.runtimeSessionId as string;
+      session.forkSourceRuntimeMessageId = checkpoint.runtimeMessageId as string;
+    }
+    session.turnCount = checkpoint.turnCount;
+    session.status = 'ready';
+    session.updatedAt = Date.now();
+    delete session.lastError;
+    this.#reloadSessionTranscript(sessionId);
+    this.#save();
+    this.#emit({ sessionId, type: 'checkpoint.rewound', payload: {
+      checkpointId: checkpoint.id,
+      recoveryCheckpointId: result.recoveryCheckpoint.id,
+      restoredPathCount: result.restoredPathCount,
+      restoredConversationEventCount: result.restoredConversationEventCount,
+      headMoved: false,
+    } });
+    this.#emit({ sessionId, type: 'git.changed', payload: { action: 'checkpoint_rewind' } });
+    return result;
   }
 
   gitStatus(sessionId: string): Record<string, unknown> {
@@ -825,6 +1296,7 @@ export class InteractiveWorkspace {
 
   unstage(sessionId: string, paths: readonly string[]): void {
     const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
     const safe = paths.map(safeRelativePath);
     if (safe.length === 0) throw new Error('请选择文件');
     this.#git(session.worktreePath, ['restore', '--staged', '--', ...safe]);
@@ -833,6 +1305,7 @@ export class InteractiveWorkspace {
 
   commit(sessionId: string, subject: string): string {
     const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
     const cleanSubject = subject.trim();
     if (!cleanSubject || cleanSubject.length > 200 || /[\r\n\0]/.test(cleanSubject)) throw new Error('Commit Subject 必须为单行且不超过 200 字符');
     this.#git(session.worktreePath, ['commit', '-m', cleanSubject]);
@@ -843,7 +1316,9 @@ export class InteractiveWorkspace {
 
   async shutdown(): Promise<void> {
     if (this.#schedulerTimer) { clearInterval(this.#schedulerTimer); this.#schedulerTimer = null; }
-    for (const pending of this.#approvals.values()) pending.reject(new Error('Tsukiori 正在退出'));
+    for (const pending of this.#approvals.values()) {
+      if (pending.kind === 'codex') pending.reject(new Error('Tsukiori 正在退出'));
+    }
     this.#approvals.clear();
     await Promise.allSettled([
       ...[...this.#clients.values()].map((client) => client.stop()),
@@ -906,12 +1381,35 @@ export class InteractiveWorkspace {
       this.#runtimeEvent(sessionId, 'turn.started', { turnId });
     } else if (method === 'turn/completed') {
       const turn = object(params.turn);
-      this.#runtimeEvent(sessionId, 'turn.completed', { status: String(turn.status ?? 'completed'), error: truncate(String(object(turn.error).message ?? ''), 2_000) });
+      this.#runtimeEvent(sessionId, 'turn.completed', {
+        turnId: String(turn.id ?? params.turnId ?? ''),
+        status: String(turn.status ?? 'completed'),
+        error: truncate(String(object(turn.error).message ?? ''), 2_000),
+      });
     } else if (method === 'item/started' || method === 'item/completed') {
       const item = object(params.item);
       const itemType = String(item.type ?? 'tool');
+      if (itemType === 'collabAgentToolCall') {
+        const agents = Object.entries(object(item.agentsStates)).slice(0, 32).map(([threadId, value]) => ({
+          threadId: safeSettingText(threadId, 'unknown', 160),
+          status: safeSettingText(object(value).status, 'unknown', 80),
+        }));
+        this.#emit({ sessionId, type: 'subagent.event', payload: {
+          schemaVersion: 1,
+          runtimeEventType: method,
+          runtimeTaskId: safeSettingText(item.id, '', 160),
+          senderThreadId: safeSettingText(item.senderThreadId, '', 160),
+          receiverThreadIds: Array.isArray(item.receiverThreadIds)
+            ? item.receiverThreadIds.slice(0, 32).map((value) => safeSettingText(value, '', 160)).filter(Boolean)
+            : [],
+          tool: safeSettingText(item.tool, 'collabAgentToolCall', 80),
+          status: safeSettingText(item.status, method.endsWith('started') ? 'inProgress' : 'completed', 80),
+          agents,
+        } });
+      }
       if (!['agentMessage', 'userMessage'].includes(itemType)) this.#emit({ sessionId, type: 'tool.event', payload: {
         phase: method.endsWith('started') ? 'started' : 'completed', tool: itemType,
+        toolUseId: String(item.id ?? ''),
         summary: truncate(String(item.command ?? item.path ?? item.name ?? itemType), 2_000),
       } });
     } else if (method === 'error') this.#emit({ sessionId, type: 'runtime.error', payload: { message: truncate(String(params.message ?? 'Codex Runtime error'), 2_000) } });
@@ -920,10 +1418,33 @@ export class InteractiveWorkspace {
 
   #runtimeEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
     const session = this.#session(sessionId);
+    if (session.importedReadOnly) throw new Error('导入历史为只读；请先显式 Fork，再在新 Session 中继续');
+    if (type === 'permission.requested') {
+      const permissionId = this.#claudeApproval(sessionId, payload);
+      payload = { ...payload, permissionId };
+    } else if (type === 'permission.invalidated') {
+      const requestId = String(payload.requestId ?? '');
+      const match = [...this.#approvals.entries()].find(([, pending]) => (
+        pending.kind === 'claude' && pending.sessionId === sessionId && pending.requestId === requestId
+      ));
+      if (match) {
+        this.#approvals.delete(match[0]);
+        payload = { ...payload, permissionId: match[0] };
+        if (session.status === 'waiting_permission') session.status = 'running';
+      }
+    }
     if (type === 'turn.started') {
       session.status = 'running';
       const turnId = String(payload.turnId ?? '');
       if (turnId) this.#activeTurns.set(sessionId, turnId);
+    } else if (type === 'session.started' && session.runtimeType === 'claude') {
+      const runtimeSessionId = typeof payload.runtimeSessionId === 'string' ? payload.runtimeSessionId : '';
+      if (isUuid(runtimeSessionId)) {
+        session.threadId = runtimeSessionId;
+        delete session.forkSourceRuntimeSessionId;
+        delete session.forkSourceRuntimeMessageId;
+        session.updatedAt = Date.now();
+      }
     } else if (type === 'turn.completed') {
       session.status = payload.status === 'failed' ? 'error' : 'ready';
       session.updatedAt = Date.now();
@@ -942,12 +1463,71 @@ export class InteractiveWorkspace {
     this.#save();
   }
 
+  #checkpointSession(sessionId: string): SessionState {
+    const session = this.#session(sessionId);
+    if (!this.#state.settings.persistConversation) {
+      throw new Error('创建或回退 Checkpoint 前必须启用本地对话持久化');
+    }
+    if (['running', 'waiting_permission', 'starting'].includes(session.status)) {
+      throw new Error('运行中的 Session 不能创建或回退 Checkpoint');
+    }
+    if (!session.threadId || session.turnCount < 1) throw new Error('Session 至少完成一个 Turn 后才能创建 Checkpoint');
+    return session;
+  }
+
+  #checkpointRuntimeMarkers(session: SessionState): {
+    runtimeSessionId: string;
+    runtimeTurnId?: string;
+    runtimeMessageId?: string;
+  } {
+    const events = this.#events.get(session.id) ?? [];
+    if (session.runtimeType === 'codex') {
+      const completed = [...events].reverse().find((event) => event.type === 'turn.completed');
+      const runtimeTurnId = typeof completed?.payload.turnId === 'string' ? completed.payload.turnId : '';
+      if (!runtimeTurnId) throw new Error('当前 Codex Transcript 缺少最后完成 Turn ID，不能创建一致性 Checkpoint');
+      return { runtimeSessionId: session.threadId as string, runtimeTurnId };
+    }
+    const message = [...events].reverse().find((event) => event.type === 'assistant.message.started');
+    const runtimeMessageId = typeof message?.payload.messageId === 'string' ? message.payload.messageId : '';
+    if (!runtimeMessageId) throw new Error('当前 Claude Transcript 缺少最后 Assistant Message ID，不能创建一致性 Checkpoint');
+    return { runtimeSessionId: session.threadId as string, runtimeMessageId };
+  }
+
+  #transcriptPath(sessionId: string): string {
+    return join(this.#transcriptRoot, safeTranscriptName(sessionId));
+  }
+
+  #reloadSessionTranscript(sessionId: string): void {
+    const session = this.#session(sessionId);
+    const path = this.#transcriptPath(sessionId);
+    if (!existsSync(path) || statSync(path).size > 8 * 1024 * 1024) {
+      this.#events.set(sessionId, []);
+      return;
+    }
+    const events: WorkspaceEvent[] = [];
+    for (const line of readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean).slice(-1_000)) {
+      try {
+        const raw = JSON.parse(line) as Record<string, unknown>;
+        if (raw.sessionId !== sessionId || typeof raw.type !== 'string' || !transcriptEvent(raw.type)) continue;
+        events.push({
+          id: typeof raw.id === 'string' ? raw.id : randomUUID(),
+          sequence: ++this.#eventSequence,
+          sessionId,
+          type: raw.type,
+          createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : session.createdAt,
+          payload: object(raw.payload),
+        });
+      } catch { /* Invalid rows were already rejected by CheckpointService. */ }
+    }
+    this.#events.set(sessionId, events);
+  }
+
   #approval(sessionId: string, approval: CodexApproval): Promise<unknown> {
     const permissionId = 'permission:' + randomUUID();
     const session = this.#session(sessionId);
     session.status = 'waiting_permission'; this.#save();
     return new Promise((resolveApproval, rejectApproval) => {
-      this.#approvals.set(permissionId, { sessionId, approval, resolve: resolveApproval, reject: rejectApproval });
+      this.#approvals.set(permissionId, { kind: 'codex', sessionId, approval, resolve: resolveApproval, reject: rejectApproval });
       this.#emit({ sessionId, type: 'permission.requested', payload: {
         permissionId, connectionEpoch: 'interactive-codex', title: approvalTitle(approval.method),
         description: approvalDescription(approval.method), category: approvalCategory(approval.method, approval.params),
@@ -956,9 +1536,40 @@ export class InteractiveWorkspace {
     });
   }
 
-  #emit(input: Omit<WorkspaceEvent, 'id' | 'sequence' | 'createdAt'>): void {
+  #claudeApproval(sessionId: string, payload: Record<string, unknown>): string {
+    const session = this.#session(sessionId);
+    if (session.runtimeType !== 'claude') throw new Error('非 Claude Session 不能提交 Claude 权限请求');
+    const turnId = safeRuntimeIdentifier(payload.runtimeTurnId, 'Claude Turn ID');
+    const requestId = safeRuntimeIdentifier(payload.requestId, 'Claude Permission Request ID');
+    const connectionEpoch = safeRuntimeIdentifier(payload.connectionEpoch, 'Claude Connection Epoch');
+    const activeTurn = this.#activeTurns.get(sessionId);
+    if (activeTurn && activeTurn !== turnId) throw new Error('Claude 权限请求不属于当前 Turn');
+    if ([...this.#approvals.values()].some((pending) => (
+      pending.kind === 'claude' && pending.turnId === turnId && pending.requestId === requestId
+    ))) throw new Error('Claude 权限请求重复');
+    const toolName = safeRuntimeText(payload.tool, 'tool', 128);
+    const input = object(payload.input);
+    const permissionId = 'permission:' + randomUUID();
+    const pending: ClaudeApprovalResolver = {
+      kind: 'claude', sessionId, turnId, requestId, connectionEpoch,
+      title: safeRuntimeText(payload.title, `${toolName} 请求权限`, 256),
+      description: safeRuntimeText(payload.description, 'Claude Code 请求执行工具', 1_000),
+      category: claudeApprovalCategory(toolName, input),
+      risk: claudeApprovalRisk(toolName, input),
+      scope: claudeApprovalScope(toolName, input, payload.blockedPath),
+    };
+    this.#approvals.set(permissionId, pending);
+    session.status = 'waiting_permission';
+    this.#save();
+    return permissionId;
+  }
+
+  #emit(input: Omit<WorkspaceEvent, 'id' | 'sequence' | 'createdAt'> & { createdAt?: number }): void {
     this.#eventSequence += 1;
-    const event: WorkspaceEvent = { id: randomUUID(), sequence: this.#eventSequence, createdAt: Date.now(), ...input };
+    const event: WorkspaceEvent = {
+      id: randomUUID(), sequence: this.#eventSequence,
+      createdAt: input.createdAt ?? Date.now(), ...input,
+    };
     this.#eventLog.push(event);
     if (this.#eventLog.length > 1_000) this.#eventLog.splice(0, this.#eventLog.length - 1_000);
     if (event.sessionId) {
@@ -969,6 +1580,10 @@ export class InteractiveWorkspace {
     }
     this.#persistTranscript(event);
     this.#emitExternal(event);
+  }
+
+  #emitImportedEvent(sessionId: string, event: ImportedConversationEvent): void {
+    this.#emit({ sessionId, type: event.type, createdAt: event.createdAt, payload: event.payload });
   }
 
   #project(id: string): ProjectState {
@@ -984,8 +1599,13 @@ export class InteractiveWorkspace {
     return session;
   }
 
+  #assertSessionWritable(session: SessionState): void {
+    if (session.importedReadOnly) throw new Error('导入历史为只读；请先显式 Fork，再修改代码或启动 Runtime');
+  }
+
   #gitMutation(sessionId: string, action: 'add', paths: readonly string[]): void {
     const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
     const safe = paths.map(safeRelativePath);
     if (safe.length === 0) throw new Error('请选择文件');
     this.#git(session.worktreePath, [action, '--', ...safe]);
@@ -1081,6 +1701,13 @@ function migrateSession(value: Record<string, unknown>): SessionState {
     permissionMode: permissionMode(typeof value.permissionMode === 'string' ? value.permissionMode : defaultPermission(runtimeType)),
     worktreePath: String(value.worktreePath), branch: String(value.branch),
     ...(typeof value.threadId === 'string' ? { threadId: value.threadId } : {}),
+    ...(typeof value.forkedFromSessionId === 'string' ? { forkedFromSessionId: value.forkedFromSessionId } : {}),
+    ...(typeof value.forkSourceRuntimeSessionId === 'string' ? { forkSourceRuntimeSessionId: value.forkSourceRuntimeSessionId } : {}),
+    ...(typeof value.forkSourceRuntimeMessageId === 'string' ? { forkSourceRuntimeMessageId: value.forkSourceRuntimeMessageId } : {}),
+    ...(value.importSource === 'cc-haha' ? { importSource: 'cc-haha' as const } : {}),
+    ...(typeof value.importSourceSessionId === 'string' ? { importSourceSessionId: value.importSourceSessionId } : {}),
+    ...(typeof value.importTranscriptHash === 'string' ? { importTranscriptHash: value.importTranscriptHash } : {}),
+    ...(value.importedReadOnly === true ? { importedReadOnly: true } : {}),
     turnCount: typeof value.turnCount === 'number' ? value.turnCount : 0,
     status: value.status === 'running' || value.status === 'waiting_permission' ? 'ready' : String(value.status ?? 'ready') as SessionState['status'],
     ...(typeof value.lastError === 'string' ? { lastError: value.lastError } : {}),
@@ -1094,13 +1721,15 @@ function migrateSession(value: Record<string, unknown>): SessionState {
 function assertProviderCompatibility(runtime: RuntimeType, kind: ProviderKind): void {
   const allowed = runtime === 'codex'
     ? ['chatgpt', 'openai', 'openai-compatible']
-    : ['anthropic', 'deepseek', 'anthropic-compatible'];
+    : ['claude-native', 'anthropic', 'deepseek', 'anthropic-compatible'];
   if (!allowed.includes(kind)) throw new Error(`${runtime === 'codex' ? 'Codex' : 'Claude Code'} 不支持 ${kind} Provider`);
 }
 
 function compatibleDefaultProvider(runtime: RuntimeType, preferred: string): string {
   if (runtime === 'codex') return preferred.startsWith('provider:') ? preferred : 'provider:chatgpt';
-  return ['provider:anthropic', 'provider:deepseek'].includes(preferred) ? preferred : 'provider:anthropic';
+  return ['provider:claude-native', 'provider:anthropic', 'provider:deepseek'].includes(preferred)
+    ? preferred
+    : 'provider:claude-native';
 }
 
 function codexConfigArgs(provider: ProviderConfig): string[] {
@@ -1122,8 +1751,12 @@ function permissionMode(value: string): PermissionMode {
   throw new Error('Permission Mode 无效');
 }
 
-function claudePermission(value: PermissionMode): 'plan' | 'acceptEdits' | 'dontAsk' {
-  return value === 'acceptEdits' || value === 'dontAsk' ? value : 'plan';
+function claudePermission(value: PermissionMode): 'manual' | 'plan' | 'acceptEdits' | 'dontAsk' {
+  return value;
+}
+
+function providerNeedsSecret(provider: ProviderConfig): boolean {
+  return provider.kind !== 'chatgpt' && provider.kind !== 'claude-native';
 }
 
 function safeModel(value: string): string {
@@ -1166,6 +1799,82 @@ function approvalScope(params: Record<string, unknown>): string {
   return truncate([cwd, reason].filter(Boolean).join(' · ') || '当前 Turn', 1_000);
 }
 
+function normalizedCapabilityName(value: unknown): string {
+  return safeSettingText(value, '', 120).normalize('NFKC').toLocaleLowerCase('en-US');
+}
+
+function claudeApprovalCategory(toolName: string, input: Record<string, unknown>): string {
+  const lower = toolName.toLowerCase();
+  if (lower.includes('web') || lower.includes('http') || lower.includes('fetch') || lower.includes('search')) return 'network';
+  if (['bash', 'shell', 'terminal', 'exec'].some((marker) => lower.includes(marker))) {
+    const command = String(input.command ?? '');
+    return /\b(curl|wget|ssh|scp|git\s+(fetch|pull|push|clone)|npm\s+(install|publish))\b/i.test(command) ? 'network' : 'shell';
+  }
+  if (['write', 'edit', 'delete', 'move', 'rename', 'notebook'].some((marker) => lower.includes(marker))) return 'file_write';
+  if (['read', 'glob', 'grep', 'list'].some((marker) => lower.includes(marker))) return 'file_read';
+  return lower.startsWith('mcp') ? 'external_tool' : 'tool';
+}
+
+function claudeApprovalRisk(toolName: string, input: Record<string, unknown>): 'medium' | 'high' {
+  return ['shell', 'network', 'file_write', 'external_tool'].includes(claudeApprovalCategory(toolName, input)) ? 'high' : 'medium';
+}
+
+function claudeApprovalScope(toolName: string, input: Record<string, unknown>, blockedPath: unknown): string {
+  const candidates = [
+    input.command, input.file_path, input.path, input.url, input.query,
+    typeof blockedPath === 'string' ? blockedPath : undefined,
+  ];
+  const scope = candidates.find((value) => typeof value === 'string' && value.trim());
+  const text = typeof scope === 'string' ? scope : `${toolName} · 当前 Turn`;
+  return truncate(text
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi, '[REDACTED]')
+    .replace(/\bBearer\s+\S+|\bsk-[A-Za-z0-9_-]{12,}/gi, '[REDACTED]'), 1_000);
+}
+
+function safeRuntimeIdentifier(value: unknown, label: string): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text || text.length > 256 || /[\r\n\0]/.test(text)) throw new Error(`${label} 无效`);
+  return text;
+}
+
+function safeRuntimeText(value: unknown, fallback: string, max: number): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text || /[\0]/.test(text)) return fallback;
+  return truncate(text, max);
+}
+
+function uniqueForkName(sourceName: string, sessions: readonly SessionState[]): string {
+  const base = sourceName.replace(/ \(Fork(?: \d+)?\)$/u, '').slice(0, 68);
+  const used = new Set(sessions.map((session) => session.name));
+  if (!used.has(`${base} (Fork)`)) return `${base} (Fork)`;
+  for (let index = 2; index < 10_000; index += 1) {
+    const candidate = `${base} (Fork ${index})`;
+    if (!used.has(candidate)) return candidate;
+  }
+  throw new Error('无法生成唯一的 Fork Session 名称');
+}
+
+function uniqueImportedName(sourceName: string, sessions: readonly SessionState[]): string {
+  const base = `${sourceName.replace(/\s+\(Imported(?: \d+)?\)$/i, '').trim() || 'cc-haha Session'} (Imported)`;
+  if (!sessions.some((session) => session.name === base)) return base;
+  let suffix = 2;
+  while (sessions.some((session) => session.name === `${base.slice(0, -1)} ${suffix})`)) suffix += 1;
+  return `${base.slice(0, -1)} ${suffix})`;
+}
+
+function publicCcHahaScan(scan: CcHahaImportScan): Omit<CcHahaImportScan, 'sessions'> & {
+  sessions: Array<Omit<CcHahaImportCandidate, 'sourceFile'>>;
+} {
+  return {
+    ...scan,
+    sessions: scan.sessions.map(({ sourceFile: _sourceFile, ...candidate }) => candidate),
+  };
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 function safeRelativePath(value: string): string {
   const normalized = value.replaceAll('\\', '/');
   if (!normalized || normalized.startsWith('/') || /^[A-Za-z]:/.test(normalized) || normalized.split('/').includes('..') || normalized.includes('\0')) throw new Error('文件路径必须位于 Session Worktree 内');
@@ -1194,7 +1903,80 @@ function attachmentKind(extension: string): string {
 }
 
 function transcriptEvent(type: string): boolean {
-  return ['user.message', 'assistant.delta', 'tool.event', 'turn.completed', 'runtime.error', 'attachment.added'].includes(type);
+  return [
+    'user.message', 'assistant.message.started', 'assistant.thinking.started', 'assistant.thinking.delta',
+    'assistant.thinking.completed', 'assistant.delta', 'assistant.message.completed', 'tool.event',
+    'turn.completed', 'runtime.error', 'attachment.added', 'subagent.event', 'checkpoint.created', 'checkpoint.rewound',
+  ].includes(type);
+}
+
+function projectSubagentActivity(events: readonly WorkspaceEvent[]): Record<string, unknown>[] {
+  const records = new Map<string, Record<string, unknown>>();
+  for (const event of events) {
+    if (event.type !== 'subagent.event') continue;
+    const payload = object(event.payload);
+    const agents = Array.isArray(payload.agents) ? payload.agents.map(object) : [];
+    const receivers = Array.isArray(payload.receiverThreadIds)
+      ? payload.receiverThreadIds.map((value) => activityText(value, 160)).filter(Boolean)
+      : [];
+    const candidates = agents.length > 0
+      ? agents.map((agent) => ({ id: activityText(agent.threadId, 160), status: activityText(agent.status, 80) }))
+      : receivers.length > 0
+        ? receivers.map((id) => ({ id, status: activityText(payload.status, 80) }))
+        : [{
+            id: activityText(payload.runtimeSubagentId ?? payload.runtimeTaskId ?? payload.parentToolUseId ?? event.id, 160),
+            status: activityText(payload.status ?? payload.runtimeEventType, 80),
+          }];
+    for (const candidate of candidates) {
+      const runtimeId = candidate.id || event.id;
+      const key = `${event.sessionId ?? 'unknown'}:${runtimeId}`;
+      const existing = records.get(key);
+      records.set(key, {
+        id: `runtime:${key}`, source: 'runtime', sessionId: event.sessionId ?? null,
+        runtimeId,
+        runtimeTaskId: activityText(payload.runtimeTaskId, 160),
+        parentId: activityText(payload.senderThreadId ?? payload.parentToolUseId, 160),
+        role: activityText(payload.name ?? payload.tool, 120) || 'Runtime Subagent',
+        status: subagentStatus(candidate.status),
+        startedAt: typeof existing?.startedAt === 'number' ? existing.startedAt : event.createdAt,
+        updatedAt: event.createdAt,
+      });
+    }
+  }
+  return [...records.values()].sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
+}
+
+function subagentStatus(value: string): string {
+  const status = value.toLocaleLowerCase('en-US');
+  if (/error|fail|notfound/.test(status)) return 'failed';
+  if (/interrupt|cancel|shutdown|stop/.test(status)) return 'stopped';
+  if (/complete|success|finished|done/.test(status)) return 'completed';
+  if (/pending|start|spawn|progress|running|assistant|user/.test(status)) return 'running';
+  return 'observed';
+}
+
+function activityText(value: unknown, max: number): string {
+  return typeof value === 'string' ? value.replace(/[\r\n\0]/g, ' ').trim().slice(0, max) : '';
+}
+
+function searchableEventText(event: WorkspaceEvent): string {
+  if (event.type === 'user.message' || event.type === 'assistant.delta' || event.type === 'assistant.thinking.delta') {
+    return typeof event.payload.text === 'string' ? event.payload.text : '';
+  }
+  if (event.type === 'tool.event') {
+    return [event.payload.tool, event.payload.summary].filter((value) => typeof value === 'string').join(' ');
+  }
+  if (event.type === 'runtime.error') return typeof event.payload.message === 'string' ? event.payload.message : '';
+  return '';
+}
+
+function searchSnippet(value: string, needle: string, max: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  const index = normalized.toLocaleLowerCase().indexOf(needle);
+  if (index < 0) return truncate(normalized, max);
+  const start = Math.max(0, index - Math.floor((max - needle.length) / 2));
+  const slice = normalized.slice(start, start + max);
+  return `${start > 0 ? '…' : ''}${slice}${start + max < normalized.length ? '…' : ''}`;
 }
 
 function safeTranscriptName(sessionId: string): string {

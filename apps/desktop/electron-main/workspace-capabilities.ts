@@ -102,7 +102,7 @@ export class WorkspaceCapabilities {
 
   listMcp(projectId?: string): McpServerRecord[] {
     return this.#mcp
-      .filter((server) => server.scope !== 'project' || !projectId || server.projectId === projectId)
+      .filter((server) => !projectId || server.scope === 'user' || server.projectId === projectId)
       .map((server) => ({ ...server, args: [...server.args], envKeys: [...server.envKeys] }));
   }
 
@@ -113,7 +113,7 @@ export class WorkspaceCapabilities {
     const transport = input.transport;
     if (!['stdio', 'http', 'sse'].includes(transport)) throw new Error('MCP Transport 无效');
     const projectId = input.projectId ? cleanText(input.projectId, 'Project ID', 160) : undefined;
-    if (scope === 'project' && !projectId) throw new Error('Project Scope 必须绑定 Project');
+    if (scope !== 'user' && !projectId) throw new Error('Project/Local Scope 必须绑定 Project');
     const args = normalizeList(input.args, 64, 512);
     const envKeys = normalizeList(input.envKeys, 64, 160).filter((key) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key));
     const command = input.command ? cleanText(input.command, 'MCP command', 1_000) : undefined;

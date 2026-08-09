@@ -49,6 +49,18 @@ test('Provider Registry rejects incompatible or unsafe endpoint forms', () => {
   assert.throws(() => registry.save({ name: 'No models', kind: 'openai-compatible', baseUrl: 'https://example.com', models: [] }), /Model/);
 });
 
+test('Claude native login is a built-in secretless Provider mode', async () => {
+  const persisted = [];
+  const registry = new ProviderRegistry({ persist: (providers) => persisted.push(structuredClone(providers)) });
+  const provider = registry.list().find((item) => item.id === 'provider:claude-native');
+  assert.equal(provider.kind, 'claude-native');
+  assert.equal(provider.hasSecret, false);
+  assert.deepEqual(provider.models, ['sonnet', 'opus']);
+  assert.deepEqual(await registry.listModels(provider.id), { models: ['sonnet', 'opus'], source: 'configured' });
+  assert.throws(() => registry.delete(provider.id), /不能删除/);
+  assert.doesNotMatch(JSON.stringify(persisted), /api.key|secretref:/i);
+});
+
 test('Anthropic-compatible connection test sends a bounded one-token probe and discards the body', async (t) => {
   const secrets = new Map();
   const credentials = {

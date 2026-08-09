@@ -10,11 +10,18 @@ const api = Object.freeze({
   workspace: Object.freeze({
     snapshot: () => ipcRenderer.invoke('workspace:snapshot'),
     pickProject: () => ipcRenderer.invoke('workspace:command', { type: 'pick_project' }),
+    pickCcHahaSource: () => ipcRenderer.invoke('workspace:command', { type: 'pick_cc_haha_source' }),
+    scanCcHahaImport: (sourcePath) => ipcRenderer.invoke('workspace:command', { type: 'scan_cc_haha_import', sourcePath }),
+    importCcHaha: (sourcePath, sourceFingerprint, candidateIds) => ipcRenderer.invoke(
+      'workspace:command', { type: 'import_cc_haha', sourcePath, sourceFingerprint, candidateIds },
+    ),
     removeProject: (projectId) => ipcRenderer.invoke('workspace:command', { type: 'remove_project', projectId }),
     refreshRuntimes: () => ipcRenderer.invoke('workspace:command', { type: 'refresh_runtimes' }),
     createSession: (projectId, selection) => ipcRenderer.invoke(
       'workspace:command', { type: 'create_session', projectId, ...(selection ?? {}) },
     ),
+    forkSession: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'fork_session', sessionId }),
+    searchSessions: (projectId, query) => ipcRenderer.invoke('workspace:command', { type: 'search_sessions', projectId, query }),
     updateSessionOptions: (sessionId, selection) => ipcRenderer.invoke(
       'workspace:command', { type: 'update_session_options', sessionId, ...(selection ?? {}) },
     ),
@@ -63,6 +70,7 @@ const api = Object.freeze({
     readFile: (sessionId, path) => ipcRenderer.invoke('workspace:command', { type: 'read_file', sessionId, path }),
     pickAttachments: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'pick_attachments', sessionId }),
     codexNative: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'codex_native', sessionId }),
+    extensionHealth: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'extension_health', sessionId }),
     githubStatus: (projectId) => ipcRenderer.invoke('workspace:command', { type: 'github_status', projectId }),
     checkUpdates: () => ipcRenderer.invoke('workspace:command', { type: 'check_updates' }),
     createTeam: (projectId, goal, agents) => ipcRenderer.invoke('workspace:command', { type: 'create_team', projectId, goal, agents }),
@@ -78,6 +86,10 @@ const api = Object.freeze({
     interruptTurn: (sessionId) => ipcRenderer.invoke(
       'workspace:command', { type: 'interrupt_turn', sessionId },
     ),
+    listCheckpoints: (sessionId) => ipcRenderer.invoke('workspace:command', { type: 'list_checkpoints', sessionId }),
+    createCheckpoint: (sessionId, label) => ipcRenderer.invoke('workspace:command', { type: 'create_checkpoint', sessionId, label }),
+    previewCheckpoint: (sessionId, checkpointId) => ipcRenderer.invoke('workspace:command', { type: 'preview_checkpoint', sessionId, checkpointId }),
+    rewindCheckpoint: (sessionId, checkpointId) => ipcRenderer.invoke('workspace:command', { type: 'rewind_checkpoint', sessionId, checkpointId }),
     gitStatus: (sessionId) => ipcRenderer.invoke(
       'workspace:command', { type: 'git_status', sessionId },
     ),
