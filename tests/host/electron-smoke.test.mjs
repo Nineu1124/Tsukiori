@@ -94,6 +94,6 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
   assert.deepEqual(result.integrationCommandResult, { ok: true, command: 'integrate', sequence: 2 });
   assert.deepEqual(result.editorCommandResult, { ok: true, command: 'open_external_editor', sequence: 3 });
   assert.equal(result.smokeCommandCount, 3);
-  assert.equal(result.daemonVersion, '1.0.0-rc.4');
+  assert.equal(result.daemonVersion, '1.0.0-rc.5');
   assert.equal(result.protocolVersion, 1);
 });
