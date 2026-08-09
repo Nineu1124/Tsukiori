@@ -585,14 +585,16 @@ test('session lifecycle, persisted transcript, files, attachments, and native ca
   assert.doesNotMatch(readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8'), /attachment body/);
 });
 
-test('Agent Team dispatches two independent sessions and Worktrees', async (t) => {
+test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recovery, and stop', async (t) => {
   const prompts = [];
+  const clients = [];
+  let interrupts = 0;
   class TeamClient {
-    constructor(options) { this.options = options; }
+    constructor(options) { this.options = options; clients.push(options); }
     async start() { return { authenticated: true, authSource: 'chatgpt' }; }
     async startThread(cwd) { return 'thread:' + cwd; }
-    async startTurn(_threadId, prompt) { prompts.push(prompt); return 'turn:' + prompts.length; }
-    async interrupt() {}
+    async startTurn(_threadId, prompt) { prompts.push({ cwd: this.options.cwd, prompt }); return 'turn:' + prompts.length; }
+    async interrupt() { interrupts += 1; }
     async stop() { this.options.onExit(null); }
   }
   const f = fixture(t, { createClient: (options) => new TeamClient(options) });
@@ -600,11 +602,67 @@ test('Agent Team dispatches two independent sessions and Worktrees', async (t) =
   const team = await f.workspace.createTeam(project.id, 'Implement and review a bounded feature', [
     { role: 'Implementer', runtimeType: 'codex', providerId: 'provider:chatgpt', model: 'auto' },
     { role: 'Reviewer', runtimeType: 'codex', providerId: 'provider:chatgpt', model: 'auto' },
+    { role: 'Tester', runtimeType: 'codex', providerId: 'provider:chatgpt', model: 'auto' },
+    { role: 'Security', runtimeType: 'codex', providerId: 'provider:chatgpt', model: 'auto' },
   ]);
-  assert.equal(team.memberSessionIds.length, 2);
-  assert.equal(new Set(team.memberSessionIds.map((id) => f.workspace.sessionWorktree(id))).size, 2);
-  assert.equal(prompts.length, 2);
+  assert.equal(team.memberSessionIds.length, 4);
+  assert.deepEqual(team.members.map((member) => member.role), ['Implementer', 'Reviewer', 'Tester', 'Security']);
+  assert.equal(new Set(team.memberSessionIds.map((id) => f.workspace.sessionWorktree(id))).size, 4);
+  assert.equal(prompts.length, 4);
   assert.equal(f.workspace.snapshot().teams[0].status, 'running');
+
+  const sessions = f.workspace.snapshot().sessions.filter((session) => team.memberSessionIds.includes(session.id));
+  for (const [index, session] of sessions.entries()) {
+    const options = clients.find((item) => item.cwd === session.worktreePath);
+    options.onNotification('item/agentMessage/delta', { delta: `member-result-${index + 1}` });
+    options.onNotification('turn/completed', { turn: { id: `initial-${index + 1}`, status: 'completed' } });
+  }
+  assert.equal(f.workspace.snapshot().teams[0].status, 'completed');
+
+  const follow = await f.workspace.sendTeamMessage(team.id, 'Run a focused follow-up', [team.memberSessionIds[1]]);
+  assert.deepEqual(follow.sentSessionIds, [team.memberSessionIds[1]]);
+  assert.equal(prompts.length, 5);
+  const reviewer = sessions.find((session) => session.id === team.memberSessionIds[1]);
+  const reviewerOptions = clients.find((item) => item.cwd === reviewer.worktreePath);
+  reviewerOptions.onNotification('item/agentMessage/delta', { delta: 'review-follow-up-result' });
+  reviewerOptions.onNotification('turn/completed', { turn: { id: 'follow-up', status: 'completed' } });
+
+  const synthesis = await f.workspace.synthesizeTeam(team.id, team.memberSessionIds[0]);
+  assert.equal(synthesis.coordinatorSessionId, team.memberSessionIds[0]);
+  assert.match(prompts.at(-1).prompt, /member-result-1/);
+  assert.match(prompts.at(-1).prompt, /review-follow-up-result/);
+  assert.doesNotMatch(JSON.stringify(f.workspace.snapshot().teams[0]), /member-result|follow-up-result/);
+  const coordinator = sessions.find((session) => session.id === team.memberSessionIds[0]);
+  const coordinatorOptions = clients.find((item) => item.cwd === coordinator.worktreePath);
+  coordinatorOptions.onNotification('item/agentMessage/delta', { delta: 'verified-team-summary' });
+  coordinatorOptions.onNotification('turn/completed', { turn: { id: 'synthesis', status: 'completed' } });
+  assert.equal(f.workspace.snapshot().teams[0].synthesisCount, 1);
+  assert.equal(f.workspace.snapshot().teams[0].status, 'completed');
+
+  const failingOptions = clients.find((item) => item.cwd === sessions[2].worktreePath);
+  failingOptions.onExit('fixture member crash');
+  assert.equal(f.workspace.snapshot().teams[0].status, 'partial_failure');
+  await f.workspace.retryTeamMember(team.id, sessions[2].id);
+  assert.match(prompts.at(-1).prompt, /避免重复已经完成的副作用/);
+  const stop = await f.workspace.stopTeam(team.id);
+  assert.deepEqual(stop.requestedSessionIds, [sessions[2].id]);
+  assert.equal(interrupts, 1);
+  const replacementOptions = clients.filter((item) => item.cwd === sessions[2].worktreePath).at(-1);
+  replacementOptions.onNotification('turn/completed', { turn: { id: 'retry', status: 'interrupted' } });
+  assert.equal(f.workspace.snapshot().teams[0].status, 'stopped');
+
+  await f.workspace.sendTeamMessage(team.id, 'Keep this harmless turn active for restart recovery', [sessions[0].id]);
+  assert.equal(f.workspace.snapshot().teams[0].status, 'running');
+  await f.workspace.shutdown();
+  const reopened = new InteractiveWorkspace({
+    userDataPath: f.userData,
+    emit: () => {},
+    discoverCodex: () => ({ executable: process.execPath, prefixArgs: [], version: '0.146.0', source: 'path-executable' }),
+    createClient: (options) => new TeamClient(options),
+  });
+  assert.equal(reopened.snapshot().teams[0].status, 'stopped');
+  assert.deepEqual(reopened.snapshot().teams[0].members.map((member) => member.role), ['Implementer', 'Reviewer', 'Tester', 'Security']);
+  await reopened.shutdown();
 });
 
 test('resizable work panel, terminal shell, and diagnostics persist without prompts or credentials', async (t) => {

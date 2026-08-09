@@ -70,7 +70,7 @@ test('dialogs provide consistent cancel, close, Escape, and backdrop dismissal',
   assert.match(script, /addEventListener\('cancel'/);
   assert.match(script, /event\.target === dialog/);
   assert.match(script, /queueMicrotask\(\(\) => invoker\.focus\(\)\)/);
-  for (const result of ['teamFooterCancel','teamHeaderClose','teamEscape','teamBackdrop','sessionCancel','settingsClose','noDialogLeftOpen']) {
+  for (const result of ['teamStartsWithTwoMembers','teamAddsToFourMembers','teamRemovesMember','teamFooterCancel','teamHeaderClose','teamEscape','teamBackdrop','sessionCancel','settingsClose','noDialogLeftOpen']) {
     assert.match(probe, new RegExp(result));
   }
 });
@@ -132,14 +132,15 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
     'refresh-native-capabilities','native-capability-list','setting-persist-conversation',
     'refresh-checkpoints','checkpoint-label','create-checkpoint','checkpoint-list','checkpoint-status',
     'side-chat-session','side-chat-input','side-chat-form','side-terminal-open','side-terminal-preview','terminal-resizer',
+    'team-agent-grid','team-agent-count','team-agent-add',
   ]) assert.match(html, new RegExp(`id="${id}"`));
   for (const method of [
     'renameSession','pinSession','forkSession','searchSessions','archiveSession','listFiles','readFile','pickAttachments','codexNative',
-    'createTeam','startTerminal','terminalInput','stopTerminal','copyText','pinProject',
+    'createTeam','sendTeamMessage','retryTeamMember','stopTeam','synthesizeTeam','startTerminal','terminalInput','stopTerminal','copyText','pinProject',
     'listCheckpoints','createCheckpoint','previewCheckpoint','rewindCheckpoint','extensionHealth',
   ]) assert.match(preload, new RegExp(method));
   for (const functionName of [
-    'renderMarkdownBody','refreshFiles','loadFilePreview','loadCodexNative','createTeam','ensureTerminal',
+    'renderMarkdownBody','refreshFiles','loadFilePreview','loadCodexNative','createTeam','renderTeams','addTeamAgent','reindexTeamAgents','ensureTerminal',
     'renderCheckpoints','refreshCheckpoints','rewindToCheckpoint','renderSideChat','sendSidePrompt','renderSideTerminal','setupTerminalResize',
     'renderCcHahaImport','pickCcHahaSource','scanCcHahaImport','runCcHahaImport',
   ]) assert.match(script, new RegExp(`function ${functionName}`));
@@ -164,6 +165,8 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
   assert.match(styles, /\.checkpoint-row/);
   assert.match(styles, /\.project-session-list/);
   assert.match(styles, /\.side-chat-messages/);
+  assert.match(styles, /\.team-followup-form/);
+  assert.match(styles, /\.team-member-row/);
   assert.match(styles, /\.terminal-resizer[^}]*cursor:\s*ns-resize/);
 });
 
@@ -179,15 +182,20 @@ test('Computer Use exposes a locked, one-time-approved Windows action surface', 
 
 test('every button receives motion feedback with specialized actions and reduced-motion fallbacks', async () => {
   const [html, script, styles] = await rendererFiles();
+  assert.match(styles, /--motion-fast:\s*120ms/);
+  assert.match(styles, /--motion-panel:\s*180ms/);
+  assert.match(styles, /--motion-overlay:\s*170ms/);
+  assert.match(styles, /--motion-dialog:\s*260ms/);
+  assert.match(styles, /--ease-enter:\s*cubic-bezier\(\.2,\.8,\.2,1\)/);
   assert.match(styles, /button\s*\{[\s\S]*transition:[\s\S]*transform var\(--motion-fast\)/);
   assert.match(styles, /button:not\(:disabled\):hover\s*\{[\s\S]*translateY\(-1px\)/);
-  assert.match(styles, /button:not\(:disabled\):active\s*\{[\s\S]*scale\(\.97\)/);
+  assert.match(styles, /button:not\(:disabled\):active\s*\{[\s\S]*translateY\(0\)/);
   assert.match(styles, /button:disabled:hover[\s\S]*transform:\s*none/);
-  assert.match(styles, /tsukiori-button-sweep/);
-  assert.match(styles, /#interrupt-turn:not\(:disabled\)[\s\S]*tsukiori-interrupt-ready/);
+  assert.doesNotMatch(styles, /tsukiori-button-sweep|tsukiori-interrupt-ready|scale\(1\.0[4-9]\)/);
   assert.match(styles, /#terminal-run:not\(:disabled\):hover/);
   assert.match(styles, /#new-team,#panel-new-team,#confirm-create-team/);
-  assert.match(styles, /\.settings-dialog\[open\][\s\S]*tsukiori-dialog-in/);
+  assert.match(styles, /\.settings-dialog\[open\][\s\S]*tsukiori-dialog-in var\(--motion-dialog\) var\(--ease-enter\)/);
+  assert.match(styles, /@keyframes tsukiori-dialog-in\s*\{\s*0%\s*\{[^}]*translateY\(10px\)[^}]*\}\s*100%\s*\{[^}]*translateY\(0\)/);
   assert.match(styles, /\.reduce-motion button[\s\S]*animation:\s*none !important/);
   assert.match(styles, /@media \(prefers-reduced-motion:\s*reduce\)/);
   for (const id of ['workspace-settings','project-filter','session-favorite','terminal-tab-shell','terminal-new']) {

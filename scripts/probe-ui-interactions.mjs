@@ -77,6 +77,14 @@ try {
     document.querySelector('#new-team').click();
     await wait();
     results.teamOpened = state().team;
+    results.teamStartsWithTwoMembers = document.querySelectorAll('[data-team-agent]').length === 2;
+    document.querySelector('#team-agent-add').click();
+    document.querySelector('#team-agent-add').click();
+    results.teamAddsToFourMembers = document.querySelectorAll('[data-team-agent]').length === 4
+      && document.querySelector('#team-agent-add').disabled;
+    document.querySelectorAll('[data-team-remove]')[3].click();
+    results.teamRemovesMember = document.querySelectorAll('[data-team-agent]').length === 3
+      && !document.querySelector('#team-agent-add').disabled;
     document.querySelector('#team-dialog footer button[data-dialog-dismiss]').click();
     await wait();
     results.teamFooterCancel = !state().team;
@@ -185,7 +193,52 @@ try {
     || Object.entries(interactions).some(([key, passed]) => !['workPanels','settingsGeometry'].includes(key) && passed !== true)) {
     throw new Error('Workspace interaction probe failed: ' + JSON.stringify({ interactions, interactionResponse }));
   }
-  process.stdout.write(JSON.stringify({ schemaVersion: 2, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions }) + '\n');
+  const layoutMatrix = [];
+  for (const viewport of [
+    { width: 1920, height: 1080, deviceScaleFactor: 1 },
+    { width: 1366, height: 768, deviceScaleFactor: 1.25 },
+    { width: 1280, height: 800, deviceScaleFactor: 1.5 },
+    { width: 1100, height: 720, deviceScaleFactor: 1.5 },
+  ]) {
+    await cdp.call('Emulation.setDeviceMetricsOverride', { ...viewport, mobile: false });
+    const matrixResponse = await cdp.call('Runtime.evaluate', {
+      expression: `(async () => {
+        const wait = (ms = 90) => new Promise((resolve) => setTimeout(resolve, ms));
+        await wait();
+        const shell = document.querySelector('.app-shell');
+        const rail = document.querySelector('.session-rail').getBoundingClientRect();
+        const workspace = document.querySelector('.workspace').getBoundingClientRect();
+        const panel = document.querySelector('.attention-panel').getBoundingClientRect();
+        document.querySelector('#open-settings').click();
+        await wait();
+        const dialog = document.querySelector('#settings-dialog').getBoundingClientRect();
+        const save = document.querySelector('#save-settings').getBoundingClientRect();
+        document.querySelector('#close-settings').click();
+        return {
+          viewportWidth: innerWidth,
+          viewportHeight: innerHeight,
+          railWidth: Math.round(rail.width),
+          workspaceWidth: Math.round(workspace.width),
+          panelWidth: Math.round(panel.width),
+          overlayPanel: getComputedStyle(document.querySelector('.attention-panel')).position === 'fixed',
+          noHorizontalOverflow: document.documentElement.scrollWidth <= innerWidth,
+          workspaceVisible: workspace.width >= (innerWidth < 1180 ? 620 : 480),
+          dialogWithinViewport: dialog.left >= 0 && dialog.right <= innerWidth && dialog.top >= 0 && dialog.bottom <= innerHeight,
+          saveWithinDialog: save.left >= dialog.left && save.right <= dialog.right && save.top >= dialog.top && save.bottom <= dialog.bottom,
+          shellVisible: shell.getBoundingClientRect().width === innerWidth,
+        };
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    layoutMatrix.push({ ...viewport, ...matrixResponse.result?.result?.value });
+  }
+  if (layoutMatrix.some((item) => !item.noHorizontalOverflow || !item.workspaceVisible
+    || !item.dialogWithinViewport || !item.saveWithinDialog || !item.shellVisible
+    || item.overlayPanel !== (item.width < 1180))) {
+    throw new Error('Responsive layout matrix failed: ' + JSON.stringify(layoutMatrix));
+  }
+  process.stdout.write(JSON.stringify({ schemaVersion: 3, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
   await cdp.call('Runtime.evaluate', { expression: 'window.close()' }).catch(() => undefined);
   cdp.close();
   await waitForExit(child, 15_000);

@@ -579,6 +579,28 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
         Array.isArray(command.agents) ? command.agents.map(object) : [],
       ),
     };
+    if (command.type === 'team_message') return {
+      ok: true,
+      result: await workspace.sendTeamMessage(
+        String(command.teamId ?? ''), String(command.text ?? ''),
+        Array.isArray(command.sessionIds) ? command.sessionIds.map(String) : undefined,
+      ),
+    };
+    if (command.type === 'team_retry_member') return {
+      ok: true,
+      turn: await workspace.retryTeamMember(String(command.teamId ?? ''), String(command.sessionId ?? '')),
+    };
+    if (command.type === 'team_stop') return {
+      ok: true,
+      result: await workspace.stopTeam(String(command.teamId ?? '')),
+    };
+    if (command.type === 'team_synthesize') return {
+      ok: true,
+      result: await workspace.synthesizeTeam(
+        String(command.teamId ?? ''),
+        typeof command.coordinatorSessionId === 'string' ? command.coordinatorSessionId : undefined,
+      ),
+    };
     if (command.type === 'terminal_start') {
       const sessionId = String(command.sessionId ?? '');
       terminalManager.start(sessionId, workspace.writableSessionWorktree(sessionId), Number(command.columns ?? 120), Number(command.rows ?? 28), workspace.terminalShell());

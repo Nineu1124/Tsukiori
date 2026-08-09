@@ -139,7 +139,7 @@ try {
 
   await activatePanel(cdp, 'chat');
   await evaluate(cdp, `(() => {
-    document.querySelector('#team-list').innerHTML = '<article class="team-card"><strong>Refactor Team</strong><small>Lead · Reviewer · Test Agent</small></article>';
+    document.querySelector('#team-list').innerHTML = '<article class="team-row expanded"><button class="team-row-head" aria-expanded="true"><span><strong>Refactor Team</strong><small>2 Agent · 已完成</small></span><b>⌃</b></button><div class="team-detail"><p class="team-goal">并行完成架构实现、代码审查与回归验证，并由协调者汇总冲突和下一步。</p><div class="team-member-list"><div class="team-member-row"><button class="team-member-open"><i class="status-dot ready"></i><span>架构与实现</span><small>codex · Ready</small></button></div><div class="team-member-row"><button class="team-member-open"><i class="status-dot ready"></i><span>测试与审查</span><small>claude · Ready</small></button></div></div><form class="team-followup-form"><select><option>全部可用成员</option></select><textarea rows="2" placeholder="向全部成员或指定 Agent 发送后续任务…"></textarea><div class="team-actions"><button class="primary">发送后续任务</button><button>汇总结果</button><button class="danger-quiet">停止团队</button></div></form></div></article>';
     document.querySelector('#attention-list').innerHTML = '<article class="permission-card"><h3>允许一次：运行测试</h3><p>pnpm test:ui · 当前 Session Worktree</p><div class="permission-actions"><button>拒绝</button><button>允许一次</button></div></article><article class="attention-item completed">Review Agent 已完成检查</article>';
     document.querySelector('#attention-count').textContent = '2';
     return true;
@@ -303,8 +303,23 @@ async function decorateSettingsPage(cdp, page) {
 async function shoot(cdp, file) {
   await sleep(260);
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });
-  writeFileSync(file, Buffer.from(shot.data, 'base64'));
+  writeGeneratedFile(file, Buffer.from(shot.data, 'base64'));
   console.log('captured', file);
+}
+
+function writeGeneratedFile(file, bytes) {
+  let lastError;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      writeFileSync(file, bytes);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!['UNKNOWN', 'EBUSY', 'EACCES', 'EPERM'].includes(error?.code) || attempt === 7) break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120 * (attempt + 1));
+    }
+  }
+  throw lastError;
 }
 
 async function evaluate(cdp, expression) {

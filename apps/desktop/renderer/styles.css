@@ -16,9 +16,13 @@
   --tsukiori-danger: #ef6b7c;
   --tsukiori-special: #8e7bef;
   --shadow-panel: 0 12px 34px rgba(36,100,138,.10);
-  --motion-fast: 140ms;
-  --motion-panel: 220ms;
-  --ease-tsukiori: cubic-bezier(.22,.8,.24,1);
+  --motion-fast: 120ms;
+  --motion-control: 160ms;
+  --motion-panel: 180ms;
+  --motion-overlay: 170ms;
+  --motion-dialog: 260ms;
+  --ease-tsukiori: ease;
+  --ease-enter: cubic-bezier(.2,.8,.2,1);
   --titlebar-height: 40px;
   --rail-width: 300px;
   --work-panel-width: 360px;
@@ -119,10 +123,9 @@ button {
 }
 button:not(:disabled):hover {
   transform: translateY(-1px);
-  filter: saturate(1.06);
 }
 button:not(:disabled):active {
-  transform: translateY(0) scale(.97);
+  transform: translateY(0);
   transition-duration: 80ms;
 }
 button:disabled,
@@ -133,26 +136,6 @@ button:disabled:active {
   box-shadow: none;
 }
 
-:where(.primary,.new-chat,.send-button,#terminal-run,#new-team,#panel-new-team,#confirm-create-team) {
-  isolation: isolate;
-  overflow: hidden;
-}
-:where(.primary,.new-chat,.send-button,#terminal-run,#new-team,#panel-new-team,#confirm-create-team)::after {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  top: -45%;
-  bottom: -45%;
-  left: -55%;
-  width: 32%;
-  pointer-events: none;
-  opacity: 0;
-  transform: skewX(-20deg);
-  background: linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);
-}
-:where(.primary,.new-chat,.send-button,#terminal-run,#new-team,#panel-new-team,#confirm-create-team):not(:disabled):hover::after {
-  animation: tsukiori-button-sweep 520ms var(--ease-tsukiori) 1;
-}
 .primary:not(:disabled):hover,
 .new-chat:not(:disabled):hover,
 .send-button:not(:disabled):hover {
@@ -164,22 +147,18 @@ button:disabled:active {
 .session-header button:not(:disabled):hover,
 .attention-panel > header button:not(:disabled):hover,
 .rail-section-header button:not(:disabled):hover {
-  transform: translateY(-1px) scale(1.06);
+  transform: translateY(-1px);
   box-shadow: 0 5px 13px rgba(37,143,232,.12);
 }
 .send-button:not(:disabled):hover {
-  transform: translateY(-1px) translateX(1px) scale(1.04);
+  transform: translateY(-1px);
 }
 #interrupt-turn:not(:disabled) {
   color: white;
   background: var(--tsukiori-danger);
-  animation: tsukiori-interrupt-ready 1.8s ease-in-out infinite;
 }
 #interrupt-turn:not(:disabled):hover {
   box-shadow: 0 0 0 4px rgba(239,107,124,.14),0 6px 16px rgba(239,107,124,.22);
-}
-.danger:not(:disabled):hover {
-  animation: tsukiori-danger-edge 420ms ease-out 1;
 }
 #terminal-run:not(:disabled):hover {
   background: #35b986;
@@ -192,7 +171,7 @@ button:disabled:active {
   box-shadow: 0 8px 20px rgba(142,123,239,.22);
 }
 .work-panel-home > button:not(:disabled):hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   border-color: rgba(37,143,232,.48);
   box-shadow: 0 10px 24px rgba(36,100,138,.11),inset 0 0 0 1px rgba(75,185,239,.08);
 }
@@ -209,7 +188,7 @@ button:disabled:active {
   transform: translateX(2px);
 }
 .settings-shell nav button.active {
-  animation: tsukiori-selected-in 220ms var(--ease-tsukiori) 1;
+  animation: tsukiori-selected-in var(--motion-control) ease 1;
 }
 .permission-actions button:not(:disabled):hover {
   border-color: rgba(37,143,232,.45);
@@ -222,33 +201,19 @@ button:disabled:active {
 }
 .session-dialog[open],
 .settings-dialog[open] {
-  animation: tsukiori-dialog-in var(--motion-panel) var(--ease-tsukiori) 1;
+  animation: tsukiori-dialog-in var(--motion-dialog) var(--ease-enter) 1;
 }
 .session-dialog[open]::backdrop,
 .settings-dialog[open]::backdrop {
-  animation: tsukiori-backdrop-in var(--motion-panel) ease-out 1;
-}
-
-@keyframes tsukiori-button-sweep {
-  0% { left: -55%; opacity: 0; }
-  18% { opacity: .78; }
-  100% { left: 125%; opacity: 0; }
-}
-@keyframes tsukiori-interrupt-ready {
-  0%,100% { box-shadow: 0 0 0 0 rgba(239,107,124,0); }
-  50% { box-shadow: 0 0 0 4px rgba(239,107,124,.12); }
-}
-@keyframes tsukiori-danger-edge {
-  0% { box-shadow: 0 0 0 0 rgba(239,107,124,.32); }
-  100% { box-shadow: 0 0 0 5px rgba(239,107,124,0); }
+  animation: tsukiori-backdrop-in var(--motion-overlay) ease 1;
 }
 @keyframes tsukiori-selected-in {
   from { opacity: .72; transform: translateX(-4px); }
   to { opacity: 1; transform: translateX(0); }
 }
 @keyframes tsukiori-dialog-in {
-  from { opacity: 0; transform: translateY(12px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes tsukiori-backdrop-in {
   from { background: rgba(31,61,89,0); backdrop-filter: blur(0); }
@@ -274,7 +239,7 @@ button:disabled:active {
     width: min(var(--work-panel-width),calc(100vw - 90px));
     visibility: visible;
     box-shadow: -18px 0 45px rgba(28,74,110,.16);
-    transition: transform var(--motion-panel) var(--ease-tsukiori),visibility var(--motion-panel);
+    transition: transform var(--motion-overlay) ease,visibility var(--motion-overlay);
   }
   .app-shell.right-collapsed .attention-panel {
     visibility: hidden;
@@ -626,12 +591,10 @@ body.density-compact .message-body,body.density-compact .composer textarea { fon
 .native-capability.support-unsupported [data-field="supportLevel"] { color: #bf4657; background: #ffe9ec; }
 .native-capability.support-unknown [data-field="supportLevel"] { color: #7a6ab8; background: #f1eeff; }
 
-/* --- 8. Motion: slight overshoot on dialog entry -------------------------- */
-/* Same animation name the motion gate asserts; only the curve changes. */
+/* --- 8. Motion: Codex entry timing with Blue Archive geometry ------------- */
 @keyframes tsukiori-dialog-in {
-  0% { opacity: 0; transform: translateY(14px) scale(.982); }
-  62% { opacity: 1; transform: translateY(-3px) scale(1.004); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 /* --- 9. Remaining rounded surfaces ---------------------------------------- */
@@ -1425,3 +1388,41 @@ body.reduce-motion .panel-illustration { animation: none !important; }
 .work-panel-home > button[data-panel-tab="computer"] i { --ba-icon: url("assets/icons/crosshair.svg"); }
 
 body.reduce-motion .attention-panel [data-panel-view]:not([hidden]) { animation: none; }
+
+/* Agent Team collaboration console */
+.team-builder-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0 2px; color: #688399; font-size: 10px; }
+.team-builder-toolbar button { padding: 6px 10px; border: 1px solid rgba(37,143,232,.24); border-radius: 5px; color: var(--tsukiori-primary); background: #f7fcff; }
+.team-agent { position: relative; }
+.team-agent > header { display: flex; align-items: center; justify-content: space-between; padding: 0 0 6px; border-bottom: 1px solid rgba(37,143,232,.14); }
+.team-agent > header button { padding: 3px 7px; border: 0; color: #8295a5; background: transparent; font-size: 9px; }
+.team-agent > header button:hover:not(:disabled) { color: #e56674; background: rgba(229,102,116,.08); }
+.team-agent > label { display: grid; gap: 4px; color: #688399; font-size: 9px; }
+.team-row { padding: 0; overflow: hidden; transition: border-color 160ms var(--ease-tsukiori),box-shadow 160ms var(--ease-tsukiori),transform 160ms var(--ease-tsukiori); }
+.team-row:hover { transform: translateY(-1px); border-color: rgba(37,143,232,.42); box-shadow: 0 6px 16px rgba(40,88,126,.08); }
+.team-row.expanded { border-left-color: var(--tsukiori-primary); box-shadow: 0 8px 22px rgba(37,143,232,.10); }
+.team-row-head { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; border: 0; color: inherit; background: rgba(255,255,255,.90); text-align: left; }
+.team-row-head > span { min-width: 0; }
+.team-row-head strong,.team-row-head small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-row-head b { color: var(--tsukiori-primary); font-size: 10px; }
+.team-detail { display: grid; gap: 8px; padding: 9px 10px 11px; border-top: 1px solid rgba(37,143,232,.13); background: linear-gradient(160deg,rgba(247,252,255,.96),rgba(255,255,255,.96)); animation: team-detail-enter 180ms var(--ease-tsukiori); }
+@keyframes team-detail-enter { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+.team-goal { max-height: 48px; margin: 0; overflow: auto; color: #617b8f; font-size: 9px; line-height: 1.45; }
+.team-member-list { display: grid; gap: 5px; }
+.team-member-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 5px; }
+.team-member-open { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 6px; min-width: 0; padding: 6px 7px; border: 1px solid rgba(37,143,232,.14); border-radius: 5px; color: #29445a; background: #fff; text-align: left; }
+.team-member-open span,.team-member-open small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-member-open small { color: #7890a2; font-size: 8px; }
+.team-member-retry { padding: 6px 8px; border: 1px solid rgba(229,102,116,.24); border-radius: 5px; color: #c64b5a; background: #fff8f9; font-size: 8px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #93a7b5; box-shadow: 0 0 0 3px rgba(147,167,181,.12); }
+.status-dot.running,.status-dot.starting { background: #2aa7e8; box-shadow: 0 0 0 3px rgba(42,167,232,.14); animation: status-pulse 1.4s ease-in-out infinite; }
+.status-dot.ready { background: #45bd8a; box-shadow: 0 0 0 3px rgba(69,189,138,.14); }
+.status-dot.error { background: #e56674; box-shadow: 0 0 0 3px rgba(229,102,116,.14); }
+.status-dot.waiting_permission { background: #e5b94f; box-shadow: 0 0 0 3px rgba(229,185,79,.14); }
+@keyframes status-pulse { 50% { transform: scale(1.28); opacity: .72; } }
+.team-followup-form { display: grid; gap: 6px; }
+.team-followup-form select,.team-followup-form textarea { width: 100%; min-width: 0; padding: 7px; border: 1px solid rgba(37,143,232,.22); border-radius: 5px; background: #fff; font-size: 9px; }
+.team-actions { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap: 5px; }
+.team-actions button { min-width: 0; padding: 6px 7px; border: 1px solid rgba(37,143,232,.20); border-radius: 5px; background: #fff; font-size: 8px; }
+.team-actions .primary { color: #fff; background: var(--tsukiori-primary); }
+.team-actions .danger-quiet { color: #c64b5a; border-color: rgba(229,102,116,.20); }
+body.reduce-motion .team-detail,body.reduce-motion .status-dot { animation: none; }

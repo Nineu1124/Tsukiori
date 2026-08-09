@@ -148,9 +148,10 @@
         <header><div><p class="kicker">MULTI-AGENT TEAM</p><h2>创建并行 Agent Team</h2></div><button data-dialog-dismiss type="button" aria-label="关闭创建团队弹窗">×</button></header>
         <p>每个成员使用独立 Worktree。创建后同时派发同一目标，成员不会共享未提交文件。</p>
         <label class="team-goal-label">团队目标<textarea id="team-goal" maxlength="8000" rows="4" placeholder="描述要并行完成的目标、交付物和边界"></textarea></label>
-        <div class="team-agent-grid">
-          <section class="team-agent" data-team-agent="0"><strong>Agent A</strong><input data-team-role maxlength="80" value="架构与实现" /><select data-team-runtime></select><select data-team-provider></select><select data-team-model></select></section>
-          <section class="team-agent" data-team-agent="1"><strong>Agent B</strong><input data-team-role maxlength="80" value="测试与审查" /><select data-team-runtime></select><select data-team-provider></select><select data-team-model></select></section>
+        <div class="team-builder-toolbar"><span id="team-agent-count">2 / 4 成员</span><button id="team-agent-add" type="button">＋ 添加成员</button></div>
+        <div id="team-agent-grid" class="team-agent-grid">
+          <section class="team-agent" data-team-agent="0"><header><strong data-team-agent-title>Agent A</strong><button data-team-remove type="button" aria-label="移除 Agent A">移除</button></header><label>职责<input data-team-role maxlength="80" value="架构与实现" /></label><label>Runtime<select data-team-runtime></select></label><label>Provider<select data-team-provider></select></label><label>Model<select data-team-model></select></label></section>
+          <section class="team-agent" data-team-agent="1"><header><strong data-team-agent-title>Agent B</strong><button data-team-remove type="button" aria-label="移除 Agent B">移除</button></header><label>职责<input data-team-role maxlength="80" value="测试与审查" /></label><label>Runtime<select data-team-runtime></select></label><label>Provider<select data-team-provider></select></label><label>Model<select data-team-model></select></label></section>
         </div>
         <p id="team-create-status" class="operation-status"></p>
         <footer><button data-dialog-dismiss type="button">取消</button><button id="confirm-create-team" value="default" class="primary" type="submit">创建并派发</button></footer>
