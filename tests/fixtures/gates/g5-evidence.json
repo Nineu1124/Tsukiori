@@ -41,7 +41,7 @@
     "integrity": ["sha256", "ed25519-release-manifest", "https-origin", "channel", "database-schema"]
   },
   "unresolvedSevereIssues": { "security": 0, "dataLoss": 0, "wrongProcessTermination": 0 },
-  "acceptance": { "sections": "37.1-37.11", "items": 97, "allChecked": true, "allMappedToEvidence": true },
+  "acceptance": { "sections": "37.1-37.11", "items": 99, "allChecked": true, "allMappedToEvidence": true },
   "backlogExcluded": ["B1", "B2", "B3"],
   "containsCredentials": false,
   "containsPrivateSigningMaterial": false,

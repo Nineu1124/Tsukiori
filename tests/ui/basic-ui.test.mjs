@@ -50,9 +50,16 @@ test('settings center exposes all specification categories and functional contro
     assert.match(html, new RegExp(`data-settings-page="${page}"`));
     assert.match(html, new RegExp(`data-settings-view="${page}"`));
   }
-  for (const id of ['save-settings','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','new-mcp','save-mcp','delete-provider','refresh-mcp','import-skill','refresh-skills','load-memory','save-memory','refresh-agent-activity','new-scheduled-task','save-scheduled-task','run-doctor','export-diagnostic-settings','export-settings','pick-cc-haha-source','scan-cc-haha-import','run-cc-haha-import']) {
+  for (const id of ['save-settings','setting-language','setting-theme','setting-start-minimized','setting-confirm-high-risk','setting-default-runtime','setting-default-provider','setting-default-model','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','new-mcp','save-mcp','delete-provider','refresh-mcp','import-skill','refresh-skills','load-memory','save-memory','refresh-agent-activity','new-scheduled-task','save-scheduled-task','run-doctor','export-diagnostic-settings','export-settings','pick-cc-haha-source','scan-cc-haha-import','run-cc-haha-import']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
+  assert.match(html, /id="setting-language" disabled/);
+  assert.match(html, /id="setting-theme" disabled/);
+  assert.match(html, /id="setting-confirm-high-risk"[^>]*checked disabled/);
+  assert.match(html, /当前版本仅提供简体中文/);
+  assert.match(html, /安全策略强制启用/);
+  assert.match(script, /defaultModel:byId\('setting-default-model'\)\.value/);
+  assert.match(script, /fillModels\(byId\('setting-default-model'\)/);
   for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','listMcp','saveMcp','deleteMcp','listSkills','skillDetail','pickSkillSource','installSkill','uninstallSkill','listMemory','readMemory','saveMemory','activity','stopBackgroundTask','listScheduledTasks','saveScheduledTask','setScheduledTaskEnabled','deleteScheduledTask','runScheduledTask','diagnosticSummary','exportDiagnostic','exportSettings','pickCcHahaSource','scanCcHahaImport','importCcHaha']) {
     assert.match(script, new RegExp(`workspace\.${method}`));
   }

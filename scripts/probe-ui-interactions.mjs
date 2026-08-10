@@ -142,9 +142,17 @@ try {
     results.settingsGeometry = [dialogRect,shellRect,mainRect,footerRect,saveRect].map((rect) => Math.round(rect.top) + ':' + Math.round(rect.bottom)).join('|');
     results.settingsSaveFullyVisible = saveRect.top >= dialogRect.top && saveRect.bottom <= dialogRect.bottom;
     results.settingsSaveHitTarget = document.elementFromPoint(saveRect.left + saveRect.width / 2, saveRect.top + saveRect.height / 2) === save;
+    document.querySelector('#setting-start-minimized').checked = true;
+    results.languageLocked = document.querySelector('#setting-language').disabled && document.querySelector('#setting-language').value === 'zh-CN';
+    results.themeLocked = document.querySelector('#setting-theme').disabled && document.querySelector('#setting-theme').value === 'light';
+    results.highRiskConfirmationForced = document.querySelector('#setting-confirm-high-risk').disabled && document.querySelector('#setting-confirm-high-risk').checked;
+    results.defaultModelPopulated = document.querySelector('#setting-default-model').options.length > 0;
     save.click();
     await wait(220);
     results.settingsSaveClicked = document.querySelector('#settings-save-status').textContent.includes('已保存');
+    const savedSettings = (await window.tsukiori.workspace.snapshot()).settings;
+    results.startMinimizedPersisted = savedSettings.startMinimized === true;
+    results.defaultModelPersisted = savedSettings.defaultModel === document.querySelector('#setting-default-model').value;
     dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
     await wait();
     results.settingsEscAfterSave = !dialog.open;
@@ -246,7 +254,7 @@ try {
     || item.overlayPanel !== (item.width < 1180))) {
     throw new Error('Responsive layout matrix failed: ' + JSON.stringify(layoutMatrix));
   }
-  process.stdout.write(JSON.stringify({ schemaVersion: 4, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
+  process.stdout.write(JSON.stringify({ schemaVersion: 5, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
   await cdp.call('Runtime.evaluate', { expression: 'window.close()' }).catch(() => undefined);
   cdp.close();
   await waitForExit(child, 15_000);

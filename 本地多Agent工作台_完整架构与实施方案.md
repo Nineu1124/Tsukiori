@@ -3635,6 +3635,8 @@ src/helpers/
   - [x] Codex Motion 以本机打包样式只读测得的 120ms 控件、180ms 面板、170ms Overlay 和 260ms 进入曲线落地；删除额外扫光、弹跳和持续脉冲，保留蔚蓝档案视觉几何
   - [x] 1920×1080@100%、1366×768@125%、1280×800@150% 和 1100×720@150% 响应式矩阵通过，工作区、右侧 Overlay、设置弹窗和底部按钮无裁切或横向溢出
   - [x] 新工作台审阅面板接入真实 Integration Worktree：Merge/Rebase 隔离验证、冲突/验证失败恢复、显式 Promotion、目标竞争拒绝、恢复引用与丢弃清理均可观察，验证阶段不修改项目主工作区
+  - [x] 最小化启动接入真实 BrowserWindow 生命周期，正常产品进程使用单实例锁；真实 Electron 探针验证首实例 minimized、第二实例退出并恢复原窗口，退出后无孤儿 Named Pipe Host
+  - [x] 默认 Model 可随 Provider 选择并用于新 Session；当前未实现的英文界面与系统主题明确锁定，高风险确认由安全策略强制启用且不能由旧状态或 Renderer 参数关闭
 
 ### G5 阶段 5 Gate
 
@@ -4125,13 +4127,15 @@ Runtime Native Protocol
 
 ## 37.10 设置、Provider、多 Runtime 与视觉一致性
 
-- [x] [T5.7] 设置入口和十一个一级分类可访问，通用、外观与 Agent 设置可保存并在重启后恢复
+- [x] [T5.7, T5.8] 设置入口和十九个一级分类可访问；已支持的通用、外观与 Agent 设置可保存并在重启后恢复，未支持的语言/主题选项明确锁定
 - [x] [T5.7] 用户可新增、编辑、测试、启用和删除 OpenAI、Anthropic、DeepSeek 与两类兼容 Provider
 - [x] [T5.2, T5.7] API Key 仅存在 Windows Credential Manager，状态文件、数据库、日志、导出与 Renderer 均无明文
 - [x] [T4.1, T5.7] Codex app-server 可按 Session 使用 ChatGPT 或兼容的 API Provider 与 Model
 - [x] [T5.7] Claude Code 可被发现，并可按 Session 使用 Anthropic/DeepSeek/Anthropic-compatible Provider 与 Model
 - [x] [T0.4, T5.7] Generic ACP、OpenCode 和不可用 Runtime 的支持级别真实显示，不兼容组合不会静默回退
 - [x] [T5.7] 输入区 Runtime、Provider、Model、Environment 与 Permission 选择器均可操作并固定到 Session
+- [x] [T5.8] 默认 Runtime、Provider、Model 与最小化启动均连接真实产品行为；单实例探针验证第二次启动恢复现有窗口
+- [x] [T5.2, T5.8] 高风险确认由宿主安全策略强制启用，旧状态文件和 Renderer 参数都不能关闭
 - [x] [T5.7] 用户消息、Agent 消息和 READ/MODIFY/EXECUTE Tool Card 分类通过事件回归测试
 - [x] [T5.7] 1600×1000 主工作台和设置中心截图与 UI/UX V1.0 的布局、颜色、密度、几何装饰和交互入口一致
 - [x] [T5.1, T5.7] 设置/Provider/Runtime 回归不会泄漏凭据或遗留 Runtime、Daemon、Named Pipe Host 子进程

@@ -106,6 +106,8 @@ const workspaceSnapshot = smokeMode ? {
 let quitting = false;
 let smokeCommandCount = 0;
 let interactiveWorkspace: InteractiveWorkspace | null = null;
+let mainWindow: BrowserWindow | null = null;
+const ownsSingleInstance = smokeMode || Boolean(captureDesktopPath) || app.requestSingleInstanceLock();
 const terminalManager = new TerminalManager((event) => {
   interactiveWorkspace?.publishLocalEvent(event.sessionId, event.type, event.payload);
 });
@@ -123,7 +125,7 @@ function createWindow(): BrowserWindow {
     height,
     minWidth: 1040,
     minHeight: 720,
-    show: !smokeMode,
+    show: false,
     backgroundColor: '#f5fbff',
     autoHideMenuBar: true,
     icon: resolve(currentDirectory, '..', 'build', 'icon.png'),
@@ -136,7 +138,25 @@ function createWindow(): BrowserWindow {
       devTools: false,
     },
   });
+  mainWindow = window;
   window.center();
+
+  window.once('ready-to-show', () => {
+    if (smokeMode) return;
+    if (captureDesktopPath) {
+      window.showInactive();
+      return;
+    }
+    if (object(interactiveWorkspace?.snapshot().settings).startMinimized === true) {
+      window.showInactive();
+      window.minimize();
+      return;
+    }
+    window.show();
+  });
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null;
+  });
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => {
@@ -286,6 +306,12 @@ ipcMain.handle('host:versions', () => ({
   desktop: app.getVersion(),
   daemon: DAEMON_VERSION,
   protocol: HOST_PROTOCOL_VERSION,
+}));
+ipcMain.handle('host:window-state', () => ({
+  exists: Boolean(mainWindow && !mainWindow.isDestroyed()),
+  visible: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()),
+  minimized: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isMinimized()),
+  maximized: Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isMaximized()),
 }));
 
 ipcMain.handle('workspace:snapshot', () => smokeMode ? workspaceSnapshot : interactiveWorkspace?.snapshot());
@@ -751,19 +777,32 @@ app.on('before-quit', (event) => {
   ]).finally(() => app.quit());
 });
 
-app.whenReady()
+app.on('second-instance', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
+
+app.on('window-all-closed', () => {
+  if (!quitting) app.quit();
+});
+
+if (!ownsSingleInstance) app.quit();
+
+if (ownsSingleInstance) app.whenReady()
   .then(async () => {
     smokeProgress('app ready');
     await supervisor.start();
     smokeProgress('daemon started');
-    const window = createWindow();
-    smokeProgress('window created');
     if (!smokeMode) {
       interactiveWorkspace = new InteractiveWorkspace({
         userDataPath: app.getPath('userData'),
         emit: () => undefined,
       });
     }
+    const window = createWindow();
+    smokeProgress('window created');
     if (captureDesktopPath) {
       window.webContents.once('did-finish-load', () => {
         setTimeout(() => {

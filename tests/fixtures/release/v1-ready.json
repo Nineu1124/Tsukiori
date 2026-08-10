@@ -3,7 +3,7 @@
   "decision": "local_v1_ready",
   "releaseCandidate": "1.0.0-rc.1",
   "platform": "windows-x64",
-  "completion": { "tasks": 30, "gates": 6, "acceptanceItems": 97, "readyChecks": 5, "allChecked": true },
+  "completion": { "tasks": 30, "gates": 6, "acceptanceItems": 99, "readyChecks": 5, "allChecked": true },
   "g5ContinuousIntegration": {
     "workflow": "windows-ci",
     "trigger": "g5-completion-push",
@@ -24,6 +24,8 @@
     "docs/spikes/T5.6-interactive-product.md",
     "docs/spikes/T5.7-settings-provider-runtime-ui.md",
     "docs/spikes/T5.8-three-product-complete-workbench.md",
+    "docs/spikes/T5.8-interactive-integration-promotion.md",
+    "docs/spikes/T5.8-effective-settings-window-lifecycle.md",
     "docs/gates/G5-stage-5.md"
   ],
   "publication": { "channel": "local", "authenticodeRequired": false, "smartScreenWarningRequired": true, "verifiedPublisherRemainsFailClosed": true },

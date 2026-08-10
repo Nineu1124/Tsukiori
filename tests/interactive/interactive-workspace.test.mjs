@@ -557,9 +557,16 @@ test('Codex custom OpenAI-compatible Provider is bound to app-server without per
     models: ['custom-codex-model'], apiKey: 'custom-provider-fixture-secret',
   });
   const project = f.workspace.addProject(f.repository);
-  const session = await f.workspace.createSession(project.id, {
-    runtimeType: 'codex', providerId: provider.id, model: 'custom-codex-model', permissionMode: 'manual',
+  const settings = f.workspace.updateSettings({
+    defaultRuntime: 'codex', defaultProviderId: provider.id, defaultModel: 'custom-codex-model',
+    language: 'en-US', theme: 'system', confirmHighRisk: false,
   });
+  assert.equal(settings.language, 'zh-CN');
+  assert.equal(settings.theme, 'light');
+  assert.equal(settings.confirmHighRisk, true);
+  const session = await f.workspace.createSession(project.id);
+  assert.equal(session.providerId, provider.id);
+  assert.equal(session.model, 'custom-codex-model');
   await f.workspace.sendPrompt(session.id, 'memory-only custom provider prompt');
   await new Promise((resolve) => setTimeout(resolve, 20));
   const permission = f.workspace.snapshot().permissions[0];

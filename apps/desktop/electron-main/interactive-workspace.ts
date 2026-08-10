@@ -120,8 +120,8 @@ type TeamRunState = {
 };
 
 type WorkspaceSettings = {
-  language: 'zh-CN' | 'en-US';
-  theme: 'light' | 'system';
+  language: 'zh-CN';
+  theme: 'light';
   density: 'comfortable' | 'compact';
   reduceMotion: boolean;
   autoUpdate: boolean;
@@ -369,8 +369,8 @@ export class InteractiveWorkspace {
   updateSettings(input: Partial<WorkspaceSettings>): WorkspaceSettings {
     const current = this.#state.settings;
     const next: WorkspaceSettings = {
-      language: input.language === 'en-US' ? 'en-US' : input.language === 'zh-CN' ? 'zh-CN' : current.language,
-      theme: input.theme === 'system' ? 'system' : input.theme === 'light' ? 'light' : current.theme,
+      language: 'zh-CN',
+      theme: 'light',
       density: input.density === 'compact' ? 'compact' : input.density === 'comfortable' ? 'comfortable' : current.density,
       reduceMotion: typeof input.reduceMotion === 'boolean' ? input.reduceMotion : current.reduceMotion,
       autoUpdate: typeof input.autoUpdate === 'boolean' ? input.autoUpdate : current.autoUpdate,
@@ -381,7 +381,7 @@ export class InteractiveWorkspace {
       defaultModel: safeSettingText(input.defaultModel, current.defaultModel, 128),
       defaultPermissionMode: permissionMode(input.defaultPermissionMode ?? current.defaultPermissionMode),
       persistConversation: typeof input.persistConversation === 'boolean' ? input.persistConversation : current.persistConversation,
-      confirmHighRisk: typeof input.confirmHighRisk === 'boolean' ? input.confirmHighRisk : current.confirmHighRisk,
+      confirmHighRisk: true,
       workPanelWidth: Number.isFinite(input.workPanelWidth)
         ? Math.max(260, Math.min(720, Math.round(input.workPanelWidth as number)))
         : current.workPanelWidth,
@@ -1202,7 +1202,8 @@ export class InteractiveWorkspace {
     if (!runtime?.available) throw new Error(runtime?.error ?? `${runtimeType} Runtime 不可用`);
     if (providerNeedsSecret(provider) && !provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
     if (provider.kind === 'claude-native' && !runtime.authenticated) throw new Error('Claude Code 本机 Runtime 尚未登录');
-    const model = safeModel(selection?.model ?? provider.models[0] ?? 'auto');
+    const preferredModel = selection?.model ?? this.#state.settings.defaultModel;
+    const model = safeModel(provider.models.includes(preferredModel) ? preferredModel : provider.models[0] ?? 'auto');
     const selectedPermission = permissionMode(selection?.permissionMode ?? defaultPermission(runtimeType));
     const token = randomUUID();
     const branch = 'tsukiori/session-' + token.slice(0, 8);
@@ -1900,6 +1901,9 @@ export class InteractiveWorkspace {
       const projects = Array.isArray(value.projects) ? value.projects.map((raw) => migrateProject(object(raw))) : [];
       const sessions = Array.isArray(value.sessions) ? value.sessions.map((raw) => migrateSession(object(raw))) : [];
       const settings = Number(value.schemaVersion) >= 2 ? { ...defaultSettings, ...object(value.settings) } as WorkspaceSettings : { ...defaultSettings };
+      settings.language = 'zh-CN';
+      settings.theme = 'light';
+      settings.confirmHighRisk = true;
       const providers = Number(value.schemaVersion) >= 2 && Array.isArray(value.providers) ? value.providers as ProviderConfig[] : [];
       const teams = Number(value.schemaVersion) >= 3 && Array.isArray(value.teams)
         ? value.teams.map((raw) => migrateTeam(object(raw), sessions)) : [];

@@ -28,7 +28,7 @@
     "T5.4": ["docs/spikes/T5.4-release-migration.md"],
     "T5.6": ["docs/spikes/T5.6-interactive-product.md"],
     "T5.7": ["docs/spikes/T5.7-settings-provider-runtime-ui.md", "tests/fixtures/release/t5.7-result.json"],
-    "T5.8": ["docs/spikes/T5.8-three-product-complete-workbench.md", "tests/fixtures/release/t5.8-result.json"],
+    "T5.8": ["docs/spikes/T5.8-three-product-complete-workbench.md", "docs/spikes/T5.8-interactive-integration-promotion.md", "docs/spikes/T5.8-effective-settings-window-lifecycle.md", "tests/fixtures/release/t5.8-result.json"],
     "G2": ["docs/gates/G2-stage-2.md"],
     "G4": ["docs/gates/G4-stage-4.md"]
   }

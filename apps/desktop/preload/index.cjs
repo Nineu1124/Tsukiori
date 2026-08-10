@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const api = Object.freeze({
   versions: () => ipcRenderer.invoke('host:versions'),
+  windowState: () => ipcRenderer.invoke('host:window-state'),
   daemon: Object.freeze({
     status: () => ipcRenderer.invoke('daemon:status'),
   }),
