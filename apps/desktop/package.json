@@ -1,6 +1,6 @@
 {
   "name": "@tsukiori/desktop",
-  "version": "1.0.0-rc.6",
+  "version": "1.0.0-rc.7",
   "private": true,
   "description": "Local-first multi-agent desktop workspace",
   "author": "Nineu1124",
@@ -10,8 +10,8 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "electron .",
-    "package:win": "pnpm --filter @tsukiori/daemon build && pnpm run build && node scripts/stage-release.mjs && electron-builder --config electron-builder.config.cjs --win nsis --x64",
-    "package:win:release": "pnpm --filter @tsukiori/daemon build && pnpm run build && node scripts/stage-release.mjs && set TSUKIORI_REQUIRE_CODE_SIGNING=1&& electron-builder --config electron-builder.config.cjs --win nsis --x64",
+    "package:win": "pnpm -w run build && node scripts/stage-release.mjs && electron-builder --config electron-builder.config.cjs --win nsis --x64",
+    "package:win:release": "pnpm -w run build && node scripts/stage-release.mjs && set TSUKIORI_REQUIRE_CODE_SIGNING=1&& electron-builder --config electron-builder.config.cjs --win nsis --x64",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {

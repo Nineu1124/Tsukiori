@@ -2,7 +2,7 @@ import { IPC_PROTOCOL_VERSION } from './ipc.js';
 
 export * from './ipc.js';
 export const HOST_PROTOCOL_VERSION = 1 as const;
-export const DAEMON_VERSION = '1.0.0-rc.6' as const;
+export const DAEMON_VERSION = '1.0.0-rc.7' as const;
 
 export type DaemonReadyMessage = {
   type: 'daemon.ready';

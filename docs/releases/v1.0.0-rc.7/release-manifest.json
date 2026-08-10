@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "desktop": {
+    "version": "1.0.0-rc.7",
+    "hostProtocolVersion": 1,
+    "ipcProtocolVersion": 1,
+    "daemonProtocol": {
+      "minimum": 1,
+      "maximum": 1
+    },
+    "maximumDatabaseSchema": 6
+  },
+  "daemon": {
+    "version": "1.0.0-rc.7",
+    "hostProtocolVersion": 1,
+    "ipcProtocolVersion": 1
+  },
+  "artifact": {
+    "fileName": "Tsukiori-1.0.0-rc.7-x64-setup.exe",
+    "byteLength": 230778800,
+    "sha256": "bda80e77db8b6590baa624ce45a09f9eb9feb3fb0b75d0baf18c09126f77007d",
+    "authenticodeRequired": false
+  },
+  "source": {
+    "channel": "candidate",
+    "downloadUrl": "https://github.com/Nineu1124/Tsukiori/releases/download/v1.0.0-rc.7/Tsukiori-1.0.0-rc.7-x64-setup.exe"
+  },
+  "createdAt": "2026-08-10T00:43:35.476Z",
+  "signature": {
+    "algorithm": "Ed25519",
+    "keyId": "tsukiori-release-2026",
+    "value": "dA5pr+qzWwUSZpvJID/tWyOfYtIJdO6QOeOL+NqUOO6eZoA/HcF/IPrAa3bG0KJolGa/erWKV+X3ElhLWMwoAQ=="
+  }
+}

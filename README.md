@@ -2,7 +2,7 @@
 
 Tsukiori 是一个本地优先的多 Agent 工作台。项目文件、会话数据和运行记录保存在本机；模型请求由用户选择的 Runtime 直接发送到对应 Provider。
 
-当前状态：Local V1 Windows 候选版。`v1.0.0-rc.6` 在 Codex 式工作台上补齐 2–4 成员 Agent Team：独立 Worktree、成员状态、继续派发、故障重试、中断与协调者汇总，并按实测 Codex Motion 和多档 DPI 完成交互复验；安装包仍是个人未签名发行版。
+当前状态：Local V1 Windows 候选版。`v1.0.0-rc.7` 新增真实 Integration Worktree Merge/Rebase、冲突恢复和显式 Promotion，并补实单实例、最小化启动与默认 Model 设置；安装包仍是个人未签名发行版。
 
 完整架构与实施清单见 [本地多Agent工作台_完整架构与实施方案.md](./本地多Agent工作台_完整架构与实施方案.md)。
 
