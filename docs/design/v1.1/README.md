@@ -6,9 +6,9 @@
 
 - 1 张 ImageGen 完整产品视觉总板。
 - 5 张可直接随应用打包的原创位图资产。
-- 12 张主工作区、工作面板和弹窗设计稿。
+- 13 张主工作区、工作面板和弹窗设计稿。
 - 19 张设置页面设计稿。
-- 共 37 张 PNG 图片，所有页面稿基于 1600 × 1000 的真实 Electron 渲染。
+- 共 38 张 PNG 图片，所有页面稿基于 1600 × 1000 的真实 Electron 渲染。
 
 ![Tsukiori 完整 UI 总板](./tsukiori-complete-ui-board.png)
 
@@ -73,6 +73,7 @@ ImageGen 最终提示词记录在 [PROMPTS.md](./PROMPTS.md)。
 - `10-work-panel-computer-use.png`
 - `11-dialog-new-session.png`
 - `12-dialog-agent-team.png`
+- `13-work-panel-integration.png`
 
 设置截图位于 `screens/settings/`，覆盖：通用、外观、账号、Provider、终端、MCP、Agents、技能、记忆、定时任务、Token 用量、Trace、诊断、项目、设备、GitHub、快捷键、账单和关于。
 

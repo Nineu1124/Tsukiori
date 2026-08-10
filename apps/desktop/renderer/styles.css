@@ -944,6 +944,30 @@ body.density-compact .message-body,body.density-compact .composer textarea { fon
 .checkpoint-row small { margin-top: 3px; color: #71899c; font-size: 8px; line-height: 1.35; }
 .checkpoint-event { color: #1e7ebc; border-color: rgba(37,143,232,.22); }
 
+.integration-panel { margin-top: 14px; padding-top: 8px; border-top: 1px solid rgba(37,143,232,.22); }
+.integration-target { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 3px 8px; align-items: center; margin-top: 8px; padding: 8px 10px; border: 1px solid rgba(37,143,232,.24); border-left: 3px solid var(--tsukiori-primary); background: rgba(242,250,255,.88); }
+.integration-target span { color: #71899c; font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
+.integration-target strong { overflow: hidden; color: #173653; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.integration-target small { grid-column: 2; color: #6e879b; font-size: 8px; }
+.integration-create { display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 7px; margin: 8px 0; }
+.integration-create select,.integration-create button,.integration-actions button { min-width: 0; padding: 7px 8px; border: 1px solid rgba(37,143,232,.28); border-radius: 5px; background: white; color: #24445e; font-size: 9px; }
+.integration-create button.primary,.integration-actions button.primary { border-color: var(--tsukiori-primary); background: var(--tsukiori-primary); color: white; }
+.integration-actions button.danger { border-color: rgba(207,75,82,.32); color: #a83a42; }
+.integration-list { display: grid; gap: 7px; max-height: 340px; overflow: auto; }
+.integration-row { position: relative; display: grid; gap: 5px; padding: 9px; overflow: hidden; border: 1px solid rgba(37,143,232,.20); border-radius: 6px; background: rgba(255,255,255,.86); }
+.integration-row::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: #7ca5c4; }
+.integration-row.status-verified::before,.integration-row.status-promoted::before { background: #39a985; }
+.integration-row.status-conflicted::before,.integration-row.status-verification_failed::before,.integration-row.status-interrupted::before { background: #e6a837; }
+.integration-row.status-discarded { opacity: .62; }
+.integration-row-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.integration-row-head strong { overflow: hidden; color: #173653; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.integration-row-head b { flex: 0 0 auto; color: #287bae; font-size: 8px; font-weight: 700; }
+.integration-row > small,.integration-row > code { overflow-wrap: anywhere; color: #728b9f; font-size: 8px; line-height: 1.4; }
+.integration-row > code { padding: 4px 6px; background: rgba(225,244,255,.65); color: #27698f; }
+.integration-conflicts { margin: 0; color: #a96b17; font-size: 8px; line-height: 1.45; }
+.integration-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.integration-actions button { flex: 1 1 112px; transition: background-color var(--motion-fast) var(--ease-tsukiori),border-color var(--motion-fast) var(--ease-tsukiori),color var(--motion-fast) var(--ease-tsukiori); }
+
 /* ============================================================================
    L5. Generated art assets (apps/desktop/renderer/assets/)
    Raster decorations use url() + a 2dppx media query rather than image-set()

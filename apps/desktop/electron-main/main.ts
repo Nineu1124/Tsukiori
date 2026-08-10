@@ -673,6 +673,48 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
         typeof command.path === 'string' ? command.path : undefined,
       ),
     };
+    if (command.type === 'integration_target') return {
+      ok: true,
+      target: workspace.integrationTarget(String(command.sessionId ?? '')),
+    };
+    if (command.type === 'list_integrations') return {
+      ok: true,
+      integrations: workspace.listIntegrations(String(command.sessionId ?? '')),
+    };
+    if (command.type === 'prepare_integration') return {
+      ok: true,
+      integration: workspace.prepareIntegration(
+        String(command.sessionId ?? ''),
+        command.strategy === 'rebase' ? 'rebase' : 'merge',
+        typeof command.targetRef === 'string' ? command.targetRef : undefined,
+      ),
+    };
+    if (command.type === 'continue_interactive_integration') return {
+      ok: true,
+      integration: workspace.continueIntegration(
+        String(command.sessionId ?? ''), String(command.integrationId ?? ''),
+      ),
+    };
+    if (command.type === 'promote_integration') return {
+      ok: true,
+      integration: workspace.promoteIntegration(
+        String(command.sessionId ?? ''), String(command.integrationId ?? ''),
+      ),
+    };
+    if (command.type === 'discard_integration') return {
+      ok: true,
+      integration: workspace.discardIntegration(
+        String(command.sessionId ?? ''), String(command.integrationId ?? ''),
+      ),
+    };
+    if (command.type === 'open_integration') {
+      const path = workspace.integrationPath(
+        String(command.sessionId ?? ''), String(command.integrationId ?? ''),
+      );
+      const result = await shell.openPath(path);
+      if (result) throw new Error(result);
+      return { ok: true };
+    }
     if (command.type === 'stage' || command.type === 'unstage') {
       const paths = Array.isArray(command.paths) ? command.paths.map(String) : [];
       if (command.type === 'stage') workspace.stage(String(command.sessionId ?? ''), paths);

@@ -51,6 +51,11 @@ import {
   type CcHahaImportScan,
   type ImportedConversationEvent,
 } from './cc-haha-importer.js';
+import {
+  InteractiveIntegrationManager,
+  type InteractiveIntegration,
+  type InteractiveIntegrationStrategy,
+} from './integration-workspace.js';
 
 type RuntimeType = 'codex' | 'claude';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -223,6 +228,7 @@ export class InteractiveWorkspace {
   readonly #ccHahaImporter: CcHahaImporter;
   readonly #providers: ProviderRegistry;
   readonly #capabilities: WorkspaceCapabilities;
+  readonly #integrations: InteractiveIntegrationManager;
   #state: PersistedState = {
     schemaVersion: 3, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [], teams: [],
   };
@@ -253,6 +259,7 @@ export class InteractiveWorkspace {
     mkdirSync(options.userDataPath, { recursive: true });
     mkdirSync(this.#worktreeRoot, { recursive: true });
     mkdirSync(this.#transcriptRoot, { recursive: true });
+    this.#integrations = new InteractiveIntegrationManager(options.userDataPath);
     this.#load(options.userDataPath);
     this.#providers = new ProviderRegistry({
       providers: this.#state.providers,
@@ -273,6 +280,7 @@ export class InteractiveWorkspace {
       projects: this.#state.projects,
       sessions: this.#state.sessions,
       teams: this.#state.teams,
+      integrations: this.#integrations.list(),
       runtimes: this.#runtimes,
       providers: this.#providers.list(),
       mcpServers: this.#capabilities.listMcp(),
@@ -1460,6 +1468,90 @@ export class InteractiveWorkspace {
     const sha = this.#git(session.worktreePath, ['rev-parse', 'HEAD']).trim();
     this.#emit({ sessionId, type: 'git.committed', payload: { sha, subject: cleanSubject } });
     return sha;
+  }
+
+  integrationTarget(sessionId: string): { targetRef: string; targetCommit: string; clean: boolean } {
+    const session = this.#session(sessionId);
+    const project = this.#project(session.projectId);
+    return this.#integrations.target(project.gitRoot);
+  }
+
+  listIntegrations(sessionId: string): InteractiveIntegration[] {
+    this.#session(sessionId);
+    return this.#integrations.list(sessionId);
+  }
+
+  prepareIntegration(
+    sessionId: string,
+    strategy: InteractiveIntegrationStrategy,
+    targetRef?: string,
+  ): InteractiveIntegration {
+    const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
+    const project = this.#project(session.projectId);
+    const integration = this.#integrations.prepare({
+      sessionId,
+      projectId: project.id,
+      sessionWorktree: session.worktreePath,
+      projectGitRoot: project.gitRoot,
+      ...(targetRef ? { targetRef } : {}),
+      strategy,
+    });
+    this.#emit({ sessionId, type: 'integration.prepared', payload: {
+      integrationId: integration.id,
+      status: integration.status,
+      strategy: integration.strategy,
+      targetRef: integration.targetRef,
+      conflictCount: integration.conflictPaths.length,
+    } });
+    return integration;
+  }
+
+  continueIntegration(sessionId: string, integrationId: string): InteractiveIntegration {
+    const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
+    const project = this.#project(session.projectId);
+    const record = this.#integrations.list(sessionId).find((item) => item.id === integrationId);
+    if (!record || record.projectId !== project.id) throw new Error('Integration 与当前 Session 不匹配');
+    const integration = this.#integrations.continue(integrationId, project.gitRoot);
+    this.#emit({ sessionId, type: 'integration.continued', payload: {
+      integrationId, status: integration.status, conflictCount: integration.conflictPaths.length,
+    } });
+    return integration;
+  }
+
+  promoteIntegration(sessionId: string, integrationId: string): InteractiveIntegration {
+    const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
+    const project = this.#project(session.projectId);
+    const record = this.#integrations.list(sessionId).find((item) => item.id === integrationId);
+    if (!record || record.projectId !== project.id) throw new Error('Integration 与当前 Session 不匹配');
+    const integration = this.#integrations.promote(integrationId, project.gitRoot);
+    this.#emit({ sessionId, type: 'integration.promoted', payload: {
+      integrationId,
+      targetRef: integration.targetRef,
+      resultCommit: integration.resultCommit,
+      recoveryRef: integration.recoveryRef,
+    } });
+    return integration;
+  }
+
+  discardIntegration(sessionId: string, integrationId: string): InteractiveIntegration {
+    const session = this.#session(sessionId);
+    this.#assertSessionWritable(session);
+    const project = this.#project(session.projectId);
+    const record = this.#integrations.list(sessionId).find((item) => item.id === integrationId);
+    if (!record || record.projectId !== project.id) throw new Error('Integration 与当前 Session 不匹配');
+    const integration = this.#integrations.discard(integrationId, project.gitRoot);
+    this.#emit({ sessionId, type: 'integration.discarded', payload: { integrationId } });
+    return integration;
+  }
+
+  integrationPath(sessionId: string, integrationId: string): string {
+    const session = this.#session(sessionId);
+    const record = this.#integrations.list(sessionId).find((item) => item.id === integrationId);
+    if (!record || record.projectId !== session.projectId) throw new Error('Integration 与当前 Session 不匹配');
+    return this.#integrations.openPath(integrationId);
   }
 
   async shutdown(): Promise<void> {

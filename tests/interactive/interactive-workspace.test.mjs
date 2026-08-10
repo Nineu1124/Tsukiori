@@ -123,6 +123,33 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
   assert.doesNotMatch(JSON.stringify(activity), /must-not-enter-activity/);
 });
 
+test('interactive workspace exposes verified Integration and explicit Promotion to the project branch', async (t) => {
+  const f = fixture(t);
+  const project = f.workspace.addProject(f.repository);
+  const session = await f.workspace.createSession(project.id);
+  writeFileSync(join(session.worktreePath, 'integrated.txt'), 'verified in isolation\n');
+  git(session.worktreePath, ['add', '--', 'integrated.txt']);
+  git(session.worktreePath, ['commit', '-m', 'feat: integration fixture']);
+  const target = f.workspace.integrationTarget(session.id);
+  const mainBefore = git(f.repository, ['rev-parse', 'HEAD']);
+  assert.equal(target.targetCommit, mainBefore);
+  assert.equal(target.clean, true);
+  assert.deepEqual(f.workspace.listIntegrations(session.id), []);
+
+  const prepared = f.workspace.prepareIntegration(session.id, 'merge', target.targetRef);
+  assert.equal(prepared.status, 'verified');
+  assert.equal(git(f.repository, ['rev-parse', 'HEAD']), mainBefore);
+  assert.equal(existsSync(join(f.repository, 'integrated.txt')), false);
+  assert.equal(f.workspace.snapshot().integrations[0].id, prepared.id);
+
+  const promoted = f.workspace.promoteIntegration(session.id, prepared.id);
+  assert.equal(promoted.status, 'promoted');
+  assert.equal(readFileSync(join(f.repository, 'integrated.txt'), 'utf8').replaceAll('\r\n', '\n'), 'verified in isolation\n');
+  assert.equal(git(f.repository, ['rev-parse', promoted.recoveryRef]), mainBefore);
+  assert.equal(f.emitted.some((event) => event.type === 'integration.prepared'), true);
+  assert.equal(f.emitted.some((event) => event.type === 'integration.promoted'), true);
+});
+
 test('cc-haha import creates idempotent read-only Claude history and requires an explicit Fork', async (t) => {
   const f = fixture(t);
   const sourceRoot = join(f.userData, 'cc-haha-source');

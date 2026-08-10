@@ -161,6 +161,14 @@ try {
       await wait(40);
       const view = document.querySelector('[data-panel-view="' + name + '"]');
       if (!view.hidden && document.querySelector('#work-panel-title').textContent) opened.push(name);
+      if (name === 'review') {
+        const panel = document.querySelector('.integration-panel');
+        const button = document.querySelector('#prepare-integration');
+        results.integrationPanelVisible = Boolean(panel && !panel.closest('[data-panel-view]').hidden);
+        results.integrationPrepareDisabledWithoutSession = button?.disabled === true;
+        results.integrationSafetyCopy = panel?.textContent.includes('不会直接修改项目主工作区')
+          && panel?.textContent.includes('显式 Promotion');
+      }
       document.querySelector('#work-panel-back').click();
     }
     results.workPanels = opened.join(',');
@@ -238,7 +246,7 @@ try {
     || item.overlayPanel !== (item.width < 1180))) {
     throw new Error('Responsive layout matrix failed: ' + JSON.stringify(layoutMatrix));
   }
-  process.stdout.write(JSON.stringify({ schemaVersion: 3, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
+  process.stdout.write(JSON.stringify({ schemaVersion: 4, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
   await cdp.call('Runtime.evaluate', { expression: 'window.close()' }).catch(() => undefined);
   cdp.close();
   await waitForExit(child, 15_000);

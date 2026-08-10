@@ -161,9 +161,17 @@ try {
     document.querySelector('#git-files').innerHTML = '<label class="git-file"><input type="checkbox" checked><span>apps/desktop/renderer/styles.css</span><b class="git-file-status">M</b></label><label class="git-file"><input type="checkbox" checked><span>docs/design/v1.1/README.md</span><b class="git-file-status">A</b></label>';
     document.querySelector('#git-diff').textContent = 'diff --git a/styles.css b/styles.css\\n+ .empty-workspace {\\n+   background-image: url(onboarding-hero.png);\\n+ }';
     document.querySelector('#checkpoint-list').innerHTML = '<article class="checkpoint-row"><div><strong>Before UI pass</strong><small>2 files · clean index · recoverable</small></div><button>回退</button></article><article class="checkpoint-row recovery"><div><strong>Recovery point</strong><small>自动创建 · 2 分钟前</small></div><button>查看</button></article>';
+    document.querySelector('#integration-target-ref').textContent = 'main';
+    document.querySelector('#integration-target-state').textContent = '8aa4b68d · 主工作区干净';
+    document.querySelector('#integration-list').innerHTML = '<article class="integration-row status-verified"><div class="integration-row-head"><strong>MERGE → main</strong><b>隔离验证通过</b></div><small>source 79e0a4ad · target 8aa4b68d · result 3b41d9e2</small><code>Promotion 前将创建恢复引用</code><div class="integration-actions"><button class="primary">Promotion 到项目</button><button class="danger">丢弃</button></div></article>';
+    document.querySelector('#git-status').textContent = '';
+    document.querySelector('#checkpoint-status').textContent = '';
+    document.querySelector('#integration-status').textContent = '';
     return true;
   })()`);
   await shoot(cdp, join(outDir, '08-work-panel-changes.png'));
+  await evaluate(cdp, `(() => { const panel=document.querySelector('#attention-center'); panel.scrollTop=panel.scrollHeight; return true; })()`);
+  await shoot(cdp, join(outDir, '13-work-panel-integration.png'));
 
   await activatePanel(cdp, 'browser');
   await evaluate(cdp, `(() => {
@@ -217,7 +225,7 @@ try {
 
   await evaluate(cdp, `(() => { document.querySelector('#settings-dialog').close(); return true; })()`);
   await cdp.close();
-  console.log(`captured ${12 + settingsPages.length} complete design screens`);
+  console.log(`captured ${13 + settingsPages.length} complete design screens`);
 } finally {
   child.kill();
   try { rmSync(userData, { recursive: true, force: true }); } catch {}

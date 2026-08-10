@@ -30,6 +30,8 @@ test('Renderer is sandboxed and receives only the fixed Preload API', async () =
   for (const command of [
     'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
     'integrate', 'continue_integration', 'open_external_editor',
+    'integration_target', 'list_integrations', 'prepare_integration',
+    'continue_interactive_integration', 'promote_integration', 'discard_integration', 'open_integration',
   ]) {
     assert.match(preload, new RegExp("type: '" + command + "'"));
   }

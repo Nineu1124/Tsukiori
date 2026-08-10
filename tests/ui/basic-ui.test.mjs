@@ -73,6 +73,9 @@ test('dialogs provide consistent cancel, close, Escape, and backdrop dismissal',
   for (const result of ['teamStartsWithTwoMembers','teamAddsToFourMembers','teamRemovesMember','teamFooterCancel','teamHeaderClose','teamEscape','teamBackdrop','sessionCancel','settingsClose','noDialogLeftOpen']) {
     assert.match(probe, new RegExp(result));
   }
+  for (const result of ['integrationPanelVisible','integrationPrepareDisabledWithoutSession','integrationSafetyCopy']) {
+    assert.match(probe, new RegExp(result));
+  }
 });
 
 test('Provider and Runtime selection includes API providers and two executable runtimes', async () => {
@@ -111,7 +114,7 @@ test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/E
 
 test('Renderer uses a fixed preload surface and does not gain Node or HTML injection primitives', async () => {
   const [, script,, preload] = await rendererFiles();
-  for (const method of ['snapshot','pickProject','createSession','sendPrompt','interruptTurn','gitStatus','gitDiff','stage','unstage','commit','pollEvents','openWorktree','openUrl']) {
+  for (const method of ['snapshot','pickProject','createSession','sendPrompt','interruptTurn','gitStatus','gitDiff','stage','unstage','commit','integrationTarget','listIntegrations','prepareIntegration','continueInteractiveIntegration','promoteIntegration','discardIntegration','pollEvents','openWorktree','openUrl']) {
     assert.match(preload, new RegExp(method));
   }
   assert.doesNotMatch(script + preload, /innerHTML|insertAdjacentHTML|eval\(|child_process|node:fs|spawn\(|exec\(/);
@@ -133,16 +136,19 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
     'refresh-checkpoints','checkpoint-label','create-checkpoint','checkpoint-list','checkpoint-status',
     'side-chat-session','side-chat-input','side-chat-form','side-terminal-open','side-terminal-preview','terminal-resizer',
     'team-agent-grid','team-agent-count','team-agent-add',
+    'refresh-integrations','integration-target-ref','integration-strategy','prepare-integration','integration-list','integration-status',
   ]) assert.match(html, new RegExp(`id="${id}"`));
   for (const method of [
     'renameSession','pinSession','forkSession','searchSessions','archiveSession','listFiles','readFile','pickAttachments','codexNative',
     'createTeam','sendTeamMessage','retryTeamMember','stopTeam','synthesizeTeam','startTerminal','terminalInput','stopTerminal','copyText','pinProject',
     'listCheckpoints','createCheckpoint','previewCheckpoint','rewindCheckpoint','extensionHealth',
+    'integrationTarget','listIntegrations','prepareIntegration','continueInteractiveIntegration','promoteIntegration','discardIntegration','openIntegration',
   ]) assert.match(preload, new RegExp(method));
   for (const functionName of [
     'renderMarkdownBody','refreshFiles','loadFilePreview','loadCodexNative','createTeam','renderTeams','addTeamAgent','reindexTeamAgents','ensureTerminal',
     'renderCheckpoints','refreshCheckpoints','rewindToCheckpoint','renderSideChat','sendSidePrompt','renderSideTerminal','setupTerminalResize',
     'renderCcHahaImport','pickCcHahaSource','scanCcHahaImport','runCcHahaImport',
+    'renderIntegrations','refreshIntegrations','prepareIntegration','continueInteractiveIntegration','promoteIntegration','discardIntegration',
   ]) assert.match(script, new RegExp(`function ${functionName}`));
   assert.match(styles, /\.terminal-command/);
   assert.match(styles, /#browser-preview/);
@@ -167,6 +173,10 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
   assert.match(styles, /\.side-chat-messages/);
   assert.match(styles, /\.team-followup-form/);
   assert.match(styles, /\.team-member-row/);
+  assert.match(styles, /\.integration-row/);
+  assert.match(html, /主工作区。验证通过后仍需显式 Promotion/);
+  assert.match(script, /refs\/tsukiori\/recovery/);
+  assert.match(script, /主工作区必须干净且 HEAD 未变化/);
   assert.match(styles, /\.terminal-resizer[^}]*cursor:\s*ns-resize/);
 });
 

@@ -38,14 +38,14 @@ test('V1.1 generated artwork is project-local, high resolution, and bundled by r
   assert.match(styles, /body\.reduce-motion \.empty-workspace/);
 });
 
-test('complete design delivery contains the ImageGen board and all 31 rendered application screens', async () => {
+test('complete design delivery contains the ImageGen board and all 32 rendered application screens', async () => {
   const board = await pngSize(join(designRoot, 'tsukiori-complete-ui-board.png'));
   assert.ok(board.width >= 1500);
   assert.ok(board.height >= 900);
 
   const mainScreens = (await readdir(join(designRoot, 'screens'))).filter((name) => name.endsWith('.png'));
   const settingsScreens = (await readdir(join(designRoot, 'screens', 'settings'))).filter((name) => name.endsWith('.png'));
-  assert.equal(mainScreens.length, 12);
+  assert.equal(mainScreens.length, 13);
   assert.equal(settingsScreens.length, 19);
 
   for (const name of mainScreens) {

@@ -3634,6 +3634,7 @@ src/helpers/
   - [x] Agent Team 支持 2–4 个动态成员、独立职责/Worktree、全员或定向后续任务、真实成员状态、故障重试、全队中断、协调者结果汇总和重启后的瞬态状态收口
   - [x] Codex Motion 以本机打包样式只读测得的 120ms 控件、180ms 面板、170ms Overlay 和 260ms 进入曲线落地；删除额外扫光、弹跳和持续脉冲，保留蔚蓝档案视觉几何
   - [x] 1920×1080@100%、1366×768@125%、1280×800@150% 和 1100×720@150% 响应式矩阵通过，工作区、右侧 Overlay、设置弹窗和底部按钮无裁切或横向溢出
+  - [x] 新工作台审阅面板接入真实 Integration Worktree：Merge/Rebase 隔离验证、冲突/验证失败恢复、显式 Promotion、目标竞争拒绝、恢复引用与丢弃清理均可观察，验证阶段不修改项目主工作区
 
 ### G5 阶段 5 Gate
 
@@ -4092,10 +4093,10 @@ Runtime Native Protocol
 - [x] [T4.4] 支持 Stage/Unstage
 - [x] [T4.4] 支持带恢复快照的 Revert
 - [x] [T3.4, T4.4] 支持 Commit
-- [x] [T4.4] 支持 Integration Worktree Merge
+- [x] [T4.4, T5.8] 支持新工作台可见的 Integration Worktree Merge/Rebase、冲突恢复与显式 Promotion
 - [x] [T4.4] 提供冲突提示
 - [x] [T4.4] 支持打开外部编辑器
-- [x] [T4.4] 不默认直接修改用户主工作区完成 Merge
+- [x] [T4.4, T5.8] 隔离验证不修改用户主工作区；Promotion 前复验分支、HEAD 和工作区，并创建恢复引用
 
 ## 37.8 本地数据与安全
 

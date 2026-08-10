@@ -101,6 +101,27 @@ const api = Object.freeze({
     gitDiff: (sessionId, path) => ipcRenderer.invoke(
       'workspace:command', { type: 'git_diff', sessionId, path },
     ),
+    integrationTarget: (sessionId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'integration_target', sessionId },
+    ),
+    listIntegrations: (sessionId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'list_integrations', sessionId },
+    ),
+    prepareIntegration: (sessionId, strategy, targetRef) => ipcRenderer.invoke(
+      'workspace:command', { type: 'prepare_integration', sessionId, strategy, targetRef },
+    ),
+    continueInteractiveIntegration: (sessionId, integrationId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'continue_interactive_integration', sessionId, integrationId },
+    ),
+    promoteIntegration: (sessionId, integrationId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'promote_integration', sessionId, integrationId },
+    ),
+    discardIntegration: (sessionId, integrationId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'discard_integration', sessionId, integrationId },
+    ),
+    openIntegration: (sessionId, integrationId) => ipcRenderer.invoke(
+      'workspace:command', { type: 'open_integration', sessionId, integrationId },
+    ),
     stage: (sessionIdOrPaths, maybePaths) => ipcRenderer.invoke('workspace:command', {
       type: 'stage',
       ...(Array.isArray(sessionIdOrPaths)
