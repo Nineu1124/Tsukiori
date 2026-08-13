@@ -192,7 +192,7 @@ function renderDiagnosticBundle(value) {
 
 const state = {
   projects: [], sessions: [], teams: [], integrations: [], runtimes: [], providers: [], mcpServers: [], skills: [], memoryFiles: [], scheduledTasks: [], recentEvents: [], permissions: [], attention: [], checkpoints: [], extensionHealth: null,
-  settings: {}, usage: {}, activeProjectId: null, activeSessionId: null, assistantDraft: null, thinkingDraft: null, toolCards: new Map(),
+  settings: {}, usage: {}, activeProjectId: null, activeSessionId: null, assistantDraft: null, thinkingDrafts: new Map(), toolCards: new Map(),
   eventCursor: 0, versions: {}, selectedProviderId: null, attachments: [], terminalSessionId: null,
   filePreviewContent: '', nativeCapabilities: null, computerUse: null, computerApproval: null, turnStartedAt: 0, lastPrompt: '',
   sessionSearchResults: new Map(), sessionSearchTimer: null, ccHahaImportScan: null,
@@ -271,16 +271,18 @@ function renderRuntimeQuickSwitch() { const session = activeSession(); const run
 
 function renderConversation(sessionId) {
   const target = byId('conversation'); clear(target); target.append(welcomeNode());
-  state.assistantDraft=null;state.thinkingDraft=null;state.toolCards=new Map();
+  state.assistantDraft=null;state.thinkingDrafts=new Map();state.toolCards=new Map();
   for (const event of state.recentEvents.filter((item) => item.sessionId === sessionId)) appendEvent(target,event,false);
   target.scrollTop = target.scrollHeight;
 }
 
 function welcomeNode() { const node = document.createElement('article'); node.className='welcome-message'; const mark=document.createElement('span');mark.textContent='✣';const box=document.createElement('div');const strong=document.createElement('strong');strong.textContent='会话已准备';const p=document.createElement('p');p.textContent='消息、Tool 与权限事件会按时间显示。';box.append(strong,p);node.append(mark,box);return node; }
 function messageNode(kind,label,text) { const node=document.createElement('article');node.className='chat-message '+kind;const meta=document.createElement('div');meta.className='message-meta';meta.textContent=label;const body=document.createElement('div');body.className='message-body';body.dataset.raw=String(text??'');renderMarkdownBody(body,body.dataset.raw);node.append(meta,body);return node; }
-function thinkingNode(){const node=document.createElement('details');node.className='thinking-block';node.open=true;const summary=document.createElement('summary');const label=document.createElement('span');label.textContent='Thinking';const status=document.createElement('b');status.textContent='进行中';summary.append(label,status);const body=document.createElement('pre');body.className='thinking-body';body.dataset.raw='';node.append(summary,body);return node;}
-function appendThinking(target,text){if(!state.thinkingDraft||!target.contains(state.thinkingDraft)){state.thinkingDraft=thinkingNode();target.append(state.thinkingDraft);}const body=state.thinkingDraft.querySelector('.thinking-body');body.dataset.raw=((body.dataset.raw??'')+String(text??'')).slice(-200000);body.textContent=body.dataset.raw;}
-function completeThinking(){if(!state.thinkingDraft)return;const status=state.thinkingDraft.querySelector('summary b');if(status)status.textContent='完成';state.thinkingDraft.open=false;state.thinkingDraft=null;}
+function thinkingKey(payload={}){return String(payload.blockId??payload.index??'default').slice(0,160);}
+function thinkingNode(payload={}){const node=document.createElement('details');node.className='thinking-block';node.open=true;node.dataset.thinkingBlock=thinkingKey(payload);const summary=document.createElement('summary');const label=document.createElement('span');label.textContent='Thinking · '+thinkingKey(payload);const status=document.createElement('b');status.textContent='进行中';summary.append(label,status);const body=document.createElement('pre');body.className='thinking-body';body.dataset.raw='';body.dataset.truncated='false';node.append(summary,body);return node;}
+function utf8Tail(value,maxBytes){const encoder=new TextEncoder(),characters=[...String(value)],kept=[];let bytes=0;for(let index=characters.length-1;index>=0;index-=1){const size=encoder.encode(characters[index]).byteLength;if(bytes+size>maxBytes)break;kept.push(characters[index]);bytes+=size;}return kept.reverse().join('');}
+function appendThinking(target,payload={}){const key=thinkingKey(payload);let node=state.thinkingDrafts.get(key);if(!node||!target.contains(node)){node=thinkingNode(payload);state.thinkingDrafts.set(key,node);target.append(node);}const body=node.querySelector('.thinking-body'),combined=(body.dataset.raw??'')+String(payload.text??''),limitBytes=65536,overflow=new TextEncoder().encode(combined).byteLength>limitBytes;body.dataset.raw=overflow?utf8Tail(combined,limitBytes):combined;body.dataset.truncated=String(overflow||payload.truncated===true);body.textContent=(body.dataset.truncated==='true'?'…[较早内容已截断]\n':'')+body.dataset.raw;}
+function completeThinking(payload){const keys=payload?[thinkingKey(payload)]:[...state.thinkingDrafts.keys()];for(const key of keys){const node=state.thinkingDrafts.get(key);if(!node)continue;const status=node.querySelector('summary b'),bytes=Number(payload?.totalBytes);if(status)status.textContent=(payload?.status==='incomplete'?'未完整结束':'完成')+(Number.isFinite(bytes)?' · '+bytes+' B':'')+(payload?.truncated?' · 已截断':'');node.open=false;state.thinkingDrafts.delete(key);}}
 function upsertToolEvent(target,payload){const id=String(payload.toolUseId??'');let node=id?state.toolCards.get(id):null;if(!node||!target.contains(node)){node=messageNode('tool','','');if(id)state.toolCards.set(id,node);target.append(node);}const tool=String(payload.tool??node.dataset.tool??'TOOL');const summary=String(payload.summary??'');const phase=String(payload.phase??'progress');const kind=classifyToolEvent(tool,summary);node.dataset.tool=tool;node.dataset.toolKind=kind;node.dataset.phase=phase;const meta=node.querySelector('.message-meta');clear(meta);const label=document.createElement('span');label.textContent=kind.toUpperCase()+' · '+tool;const status=document.createElement('b');status.className='tool-phase';status.textContent=toolPhaseLabel(phase);meta.append(label,status);const body=node.querySelector('.message-body');if(summary||!body.dataset.raw){body.dataset.raw=summary||tool;renderMarkdownBody(body,body.dataset.raw);}}
 function toolPhaseLabel(phase){if(phase==='started')return'运行中';if(phase==='completed')return'完成';if(phase==='failed')return'失败';return'进行中';}
 
@@ -303,9 +305,9 @@ function stripAnsi(value){return value.replace(/[\u001b\u009b][[\]()#;?]*(?:(?:(
 function appendEvent(target,event,scroll=true) {
   if (event.type === 'user.message') { target.append(messageNode('user','你',event.payload.text)); state.assistantDraft=null;completeThinking(); }
   else if (event.type === 'assistant.message.started') { state.assistantDraft=null;completeThinking(); }
-  else if (event.type === 'assistant.thinking.started') { completeThinking();state.thinkingDraft=thinkingNode();target.append(state.thinkingDraft); }
-  else if (event.type === 'assistant.thinking.delta') { appendThinking(target,event.payload.text); }
-  else if (event.type === 'assistant.thinking.completed') { completeThinking(); }
+  else if (event.type === 'assistant.thinking.started') { const key=thinkingKey(event.payload);if(!state.thinkingDrafts.has(key)){const node=thinkingNode(event.payload);state.thinkingDrafts.set(key,node);target.append(node);} }
+  else if (event.type === 'assistant.thinking.delta') { appendThinking(target,event.payload); }
+  else if (event.type === 'assistant.thinking.completed') { completeThinking(event.payload); }
   else if (event.type === 'assistant.delta') {
     if (!state.assistantDraft || !target.contains(state.assistantDraft)) { state.assistantDraft=messageNode('assistant',activeSession()?.runtimeType==='claude'?'Claude Code':'Codex',''); target.append(state.assistantDraft); }
     const body=state.assistantDraft.querySelector('.message-body');body.dataset.raw=(body.dataset.raw??'')+String(event.payload.text??'');renderMarkdownBody(body,body.dataset.raw);

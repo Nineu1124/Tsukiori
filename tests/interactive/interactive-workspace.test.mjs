@@ -40,6 +40,13 @@ function fixture(t, options = {}) {
       clientOptions.onNotification('turn/started', { turn: { id: 'turn-real' } });
       clientOptions.onNotification('item/started', { item: { type: 'userMessage', text: 'must not become a tool' } });
       clientOptions.onNotification('item/completed', { item: { type: 'userMessage', text: 'must not become a tool' } });
+      clientOptions.onNotification('item/reasoning/summaryPartAdded', { itemId: 'reasoning-safe', summaryIndex: 0, threadId: 'thread-real', turnId: 'turn-real' });
+      clientOptions.onNotification('item/reasoning/summaryPartAdded', { itemId: 'reasoning-safe', summaryIndex: 1, threadId: 'thread-real', turnId: 'turn-real' });
+      clientOptions.onNotification('item/reasoning/summaryTextDelta', { itemId: 'reasoning-safe', summaryIndex: 0, delta: 'block-zero-a', threadId: 'thread-real', turnId: 'turn-real' });
+      clientOptions.onNotification('item/reasoning/summaryTextDelta', { itemId: 'reasoning-safe', summaryIndex: 1, delta: 'block-one', threadId: 'thread-real', turnId: 'turn-real' });
+      clientOptions.onNotification('item/reasoning/summaryTextDelta', { itemId: 'reasoning-safe', summaryIndex: 0, delta: '-b', threadId: 'thread-real', turnId: 'turn-real' });
+      clientOptions.onNotification('item/completed', { item: { type: 'reasoning', id: 'reasoning-safe', summary: [], content: [] } });
+      clientOptions.onNotification('future/runtimeEvent', { secret: 'must-not-enter-native-event', nested: { prompt: 'must-not-enter-native-event' } });
       clientOptions.onNotification('item/started', { item: {
         type: 'collabAgentToolCall', id: 'collab-real', tool: 'spawnAgent', status: 'inProgress',
         senderThreadId: 'thread-real', receiverThreadIds: ['thread-child'],
@@ -118,6 +125,26 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
   const transcript = readFileSync(join(f.userData, 'transcripts', (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl'), 'utf8');
   assert.match(transcript, /prompt must remain memory-only/);
   assert.equal(f.emitted.some((event) => event.type === 'tool.event' && event.payload.tool === 'userMessage'), false);
+  assert.equal(f.emitted.some((event) => event.type === 'tool.event' && event.payload.tool === 'reasoning'), false);
+  const thinking = f.emitted.filter((event) => event.type.startsWith('assistant.thinking.'));
+  assert.deepEqual(thinking.map((event) => [event.type, event.payload.blockId]), [
+    ['assistant.thinking.started', 'codex:reasoning-safe:summary:0'],
+    ['assistant.thinking.started', 'codex:reasoning-safe:summary:1'],
+    ['assistant.thinking.delta', 'codex:reasoning-safe:summary:0'],
+    ['assistant.thinking.delta', 'codex:reasoning-safe:summary:1'],
+    ['assistant.thinking.delta', 'codex:reasoning-safe:summary:0'],
+    ['assistant.thinking.completed', 'codex:reasoning-safe:summary:0'],
+    ['assistant.thinking.completed', 'codex:reasoning-safe:summary:1'],
+  ]);
+  assert.deepEqual(thinking.filter((event) => event.type === 'assistant.thinking.completed').map((event) => ({
+    blockId: event.payload.blockId, chunkCount: event.payload.chunkCount, contentPersisted: event.payload.contentPersisted,
+  })), [
+    { blockId: 'codex:reasoning-safe:summary:0', chunkCount: 2, contentPersisted: false },
+    { blockId: 'codex:reasoning-safe:summary:1', chunkCount: 1, contentPersisted: false },
+  ]);
+  const native = f.emitted.find((event) => event.type === 'native.event' && event.payload.nativeType === 'future/runtimeEvent');
+  assert.equal(native.payload.redacted, true);
+  assert.doesNotMatch(JSON.stringify(native), /must-not-enter-native-event/);
   const activity = f.workspace.activity(session.id);
   assert.deepEqual(activity.subagents.map((agent) => [agent.source, agent.runtimeId, agent.status]), [['runtime', 'thread-child', 'completed']]);
   assert.doesNotMatch(JSON.stringify(activity), /must-not-enter-activity/);

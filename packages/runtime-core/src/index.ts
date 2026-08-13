@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { JsonValue, SessionEventRecord } from '@tsukiori/domain';
 export * from './runtime-environment.js';
 export * from './recovery-projection.js';
+export * from './thinking-block.js';
 import { runtimeRecoveryProjection } from './recovery-projection.js';
 
 export type EventScope = 'daemon' | 'runtime' | 'project' | 'session' | 'turn';

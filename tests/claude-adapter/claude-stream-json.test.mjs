@@ -23,6 +23,7 @@ test('stream-json mapper projects rich Claude blocks without duplicating streame
   ];
   assert.equal(events.filter((event) => event.type === 'assistant.delta').length, 1);
   assert.equal(events.filter((event) => event.type === 'assistant.thinking.delta').length, 1);
+  assert.equal(events.find((event) => event.type === 'assistant.thinking.delta').payload.index, 0);
   assert.equal(events.filter((event) => event.type === 'assistant.thinking.completed').length, 1);
   assert.deepEqual(events.filter((event) => event.type === 'tool.event').map((event) => event.payload.phase), ['started', 'completed']);
   assert.deepEqual(events.filter((event) => event.type === 'tool.event').map((event) => event.payload.tool), ['Read', 'Read']);

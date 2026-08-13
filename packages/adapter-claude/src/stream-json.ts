@@ -18,6 +18,7 @@ export class ClaudeStreamJsonMapper {
   #streamedText = false;
   #streamedThinking = false;
   #sawResult = false;
+  #fallbackThinkingIndex = 0;
 
   constructor(options: { maxLineBytes?: number; maxPayloadBytes?: number } = {}) {
     this.#maxLineBytes = options.maxLineBytes ?? 256 * 1024;
@@ -122,7 +123,10 @@ export class ClaudeStreamJsonMapper {
       }
       if (deltaType === 'thinking_delta' && typeof delta.thinking === 'string') {
         this.#streamedThinking = true;
-        return [{ type: 'assistant.thinking.delta', payload: { text: boundedText(delta.thinking, 32_000) } }];
+        return [{
+          type: 'assistant.thinking.delta',
+          payload: { index: finite(event.index), text: boundedText(delta.thinking, 32_000) },
+        }];
       }
       if (deltaType === 'input_json_delta') {
         return [{
@@ -164,7 +168,12 @@ export class ClaudeStreamJsonMapper {
       if (type === 'text' && typeof block.text === 'string' && !this.#streamedText) {
         events.push({ type: 'assistant.delta', payload: { text: boundedText(block.text, 32_000) } });
       } else if (type === 'thinking' && typeof block.thinking === 'string' && !this.#streamedThinking) {
-        events.push({ type: 'assistant.thinking.delta', payload: { text: boundedText(block.thinking, 32_000) } });
+        const index = `assistant:${this.#fallbackThinkingIndex++}`;
+        events.push(
+          { type: 'assistant.thinking.started', payload: { index } },
+          { type: 'assistant.thinking.delta', payload: { index, text: boundedText(block.thinking, 32_000) } },
+          { type: 'assistant.thinking.completed', payload: { index } },
+        );
       } else if (type === 'tool_use' || type === 'server_tool_use') {
         const toolUseId = text(block.id) || `assistant:${this.#startedTools.size + 1}`;
         if (!this.#startedTools.has(toolUseId)) {

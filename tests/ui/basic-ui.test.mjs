@@ -108,6 +108,12 @@ test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/E
   assert.match(script, /return 'modify'/);
   assert.match(script, /return 'read'/);
   assert.match(script, /function thinkingNode/);
+  assert.match(script, /thinkingDrafts:new Map|thinkingDrafts:\s*new Map/);
+  assert.match(script, /function thinkingKey/);
+  assert.match(script, /dataset\.thinkingBlock/);
+  assert.match(script, /function utf8Tail/);
+  assert.match(script, /new TextEncoder\(\)/);
+  assert.match(script, /较早内容已截断/);
   assert.match(script, /function upsertToolEvent/);
   assert.match(script, /state\.toolCards\.get\(id\)/);
   assert.match(script, /assistant\.thinking\.delta/);

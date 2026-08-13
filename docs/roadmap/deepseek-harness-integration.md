@@ -70,13 +70,13 @@
 
 ### DSH-04 Thinking 块完成元数据
 
-- [ ] 为每个 Thinking 块建立有界、按索引隔离的完成元数据
+- [x] 为每个 Thinking 块建立有界、按索引隔离的完成元数据
 - 前置依赖：DSH-01
 - 交付物：Thinking 投影合同、有界聚合实现、回放/UI 测试、实施报告
 - Checkpoints：
-  - [ ] 并行或交错 Thinking 块不会串内容，started/delta/completed 顺序可重放
-  - [ ] 内容缓冲有明确上限和截断标记，不重复持久化完整推理正文
-  - [ ] 未知 Runtime 事件继续保留为脱敏 native.event，不伪装成支持
+  - [x] 并行或交错 Thinking 块不会串内容，started/delta/completed 顺序可重放
+  - [x] 内容缓冲有明确上限和截断标记，不重复持久化完整推理正文
+  - [x] 未知 Runtime 事件继续保留为脱敏 native.event，不伪装成支持
 
 ### DSH-08 Compaction 事件
 
