@@ -60,6 +60,7 @@ import {
   type InteractiveIntegration,
   type InteractiveIntegrationStrategy,
 } from './integration-workspace.js';
+import { SubagentProjectionStore } from './subagent-projection-store.js';
 
 type RuntimeType = 'codex' | 'claude';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -235,6 +236,7 @@ export class InteractiveWorkspace {
   readonly #providerAudits: Pick<ProviderVerificationAuditStore, 'record' | 'list'>;
   readonly #capabilities: WorkspaceCapabilities;
   readonly #integrations: InteractiveIntegrationManager;
+  readonly #subagents: SubagentProjectionStore;
   #state: PersistedState = {
     schemaVersion: 3, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [], teams: [],
   };
@@ -266,6 +268,7 @@ export class InteractiveWorkspace {
     mkdirSync(this.#worktreeRoot, { recursive: true });
     mkdirSync(this.#transcriptRoot, { recursive: true });
     this.#integrations = new InteractiveIntegrationManager(options.userDataPath);
+    this.#subagents = new SubagentProjectionStore(options.userDataPath);
     this.#load(options.userDataPath);
     this.#providerAudits = options.providerAuditStore ?? new ProviderVerificationAuditStore(options.userDataPath);
     this.#providers = new ProviderRegistry({
@@ -277,6 +280,11 @@ export class InteractiveWorkspace {
     this.#capabilities = new WorkspaceCapabilities(options.userDataPath);
     this.#state.providers = this.#providers.raw();
     this.#loadTranscripts();
+    this.#subagents.reconcile(this.#eventLog.flatMap((event) => {
+      if (event.type !== 'subagent.event' || !event.sessionId) return [];
+      const session = this.#state.sessions.find((item) => item.id === event.sessionId);
+      return session ? [subagentProjectionEvent(event, session.runtimeType)] : [];
+    }));
     this.refreshRuntimes();
     this.#save();
     this.#schedulerTimer = setInterval(() => { void this.#runScheduledTasks(); }, 15_000);
@@ -305,7 +313,10 @@ export class InteractiveWorkspace {
         title: pending.title, description: pending.description, category: pending.category,
         risk: pending.risk, enforcementLevel: 'interceptable', scope: pending.scope,
       })),
-      attention: [], tools: [], workflow: null, v1Git: null, diagnostics: null,
+      attention: this.#subagents.attention(new Set(this.#state.sessions
+        .filter((session) => !session.archivedAt)
+        .map((session) => session.id))),
+      tools: [], workflow: null, v1Git: null, diagnostics: null,
       recentEvents: [...this.#events.values()].flat().sort((a, b) => a.createdAt - b.createdAt).slice(-300),
       eventCursor: this.#eventSequence,
       usage: this.#usage(),
@@ -524,7 +535,7 @@ export class InteractiveWorkspace {
       .filter((session) => !session.archivedAt && (!sessionId || session.id === sessionId))
       .filter((session) => ['running', 'waiting_permission', 'starting'].includes(session.status))
       .map((session) => ({ id: 'task:' + session.id, sessionId: session.id, title: session.name, status: session.status, startedAt: session.updatedAt }));
-    const runtimeSubagents = projectSubagentActivity(events);
+    const runtimeSubagents = this.#subagents.list(sessionId);
     const teamSubagents = this.#state.teams.flatMap((team) => team.memberSessionIds.map((memberSessionId) => ({
       id: `team:${team.id}:${memberSessionId}`, source: 'team', teamId: team.id,
       sessionId: memberSessionId,
@@ -1855,6 +1866,10 @@ export class InteractiveWorkspace {
       if (events.length > 500) events.splice(0, events.length - 500);
       this.#events.set(event.sessionId, events);
     }
+    if (event.type === 'subagent.event' && event.sessionId) {
+      const session = this.#state.sessions.find((item) => item.id === event.sessionId);
+      if (session) this.#subagents.apply(subagentProjectionEvent(event, session.runtimeType));
+    }
     this.#persistTranscript(event);
     this.#emitExternal(event);
   }
@@ -2277,53 +2292,15 @@ function transcriptEvent(type: string): boolean {
   ].includes(type);
 }
 
-function projectSubagentActivity(events: readonly WorkspaceEvent[]): Record<string, unknown>[] {
-  const records = new Map<string, Record<string, unknown>>();
-  for (const event of events) {
-    if (event.type !== 'subagent.event') continue;
-    const payload = object(event.payload);
-    const agents = Array.isArray(payload.agents) ? payload.agents.map(object) : [];
-    const receivers = Array.isArray(payload.receiverThreadIds)
-      ? payload.receiverThreadIds.map((value) => activityText(value, 160)).filter(Boolean)
-      : [];
-    const candidates = agents.length > 0
-      ? agents.map((agent) => ({ id: activityText(agent.threadId, 160), status: activityText(agent.status, 80) }))
-      : receivers.length > 0
-        ? receivers.map((id) => ({ id, status: activityText(payload.status, 80) }))
-        : [{
-            id: activityText(payload.runtimeSubagentId ?? payload.runtimeTaskId ?? payload.parentToolUseId ?? event.id, 160),
-            status: activityText(payload.status ?? payload.runtimeEventType, 80),
-          }];
-    for (const candidate of candidates) {
-      const runtimeId = candidate.id || event.id;
-      const key = `${event.sessionId ?? 'unknown'}:${runtimeId}`;
-      const existing = records.get(key);
-      records.set(key, {
-        id: `runtime:${key}`, source: 'runtime', sessionId: event.sessionId ?? null,
-        runtimeId,
-        runtimeTaskId: activityText(payload.runtimeTaskId, 160),
-        parentId: activityText(payload.senderThreadId ?? payload.parentToolUseId, 160),
-        role: activityText(payload.name ?? payload.tool, 120) || 'Runtime Subagent',
-        status: subagentStatus(candidate.status),
-        startedAt: typeof existing?.startedAt === 'number' ? existing.startedAt : event.createdAt,
-        updatedAt: event.createdAt,
-      });
-    }
-  }
-  return [...records.values()].sort((left, right) => Number(right.updatedAt) - Number(left.updatedAt));
-}
-
-function subagentStatus(value: string): string {
-  const status = value.toLocaleLowerCase('en-US');
-  if (/error|fail|notfound/.test(status)) return 'failed';
-  if (/interrupt|cancel|shutdown|stop/.test(status)) return 'stopped';
-  if (/complete|success|finished|done/.test(status)) return 'completed';
-  if (/pending|start|spawn|progress|running|assistant|user/.test(status)) return 'running';
-  return 'observed';
-}
-
-function activityText(value: unknown, max: number): string {
-  return typeof value === 'string' ? value.replace(/[\r\n\0]/g, ' ').trim().slice(0, max) : '';
+function subagentProjectionEvent(event: WorkspaceEvent, runtimeType: RuntimeType) {
+  return {
+    eventId: event.id,
+    sequence: event.sequence,
+    sessionId: event.sessionId as string,
+    runtimeType,
+    createdAt: event.createdAt,
+    payload: event.payload,
+  };
 }
 
 function searchableEventText(event: WorkspaceEvent): string {

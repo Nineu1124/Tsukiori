@@ -60,13 +60,13 @@
 
 ### DSH-01 SubAgent 生命周期持久化
 
-- [ ] 将已验证 SubAgent 生命周期投影持久化，并只把异常状态送入 Attention Center
+- [x] 将已验证 SubAgent 生命周期投影持久化，并只把异常状态送入 Attention Center
 - 前置依赖：DSH-02
 - 交付物：生命周期投影、查询接口、UI/恢复测试、实施报告
 - Checkpoints：
-  - [ ] started、progress、completed、failed、waiting 状态可跨重启恢复且保持来源隔离
-  - [ ] completed 不制造 Attention；failed、waiting 和 action-needed 才产生可处理项
-  - [ ] Runtime 原始 Prompt、消息和 Transcript 路径不进入持久化投影
+  - [x] started、progress、completed、failed、waiting 状态可跨重启恢复且保持来源隔离
+  - [x] completed 不制造 Attention；failed、waiting 和 action-needed 才产生可处理项
+  - [x] Runtime 原始 Prompt、消息和 Transcript 路径不进入持久化投影
 
 ### DSH-04 Thinking 块完成元数据
 

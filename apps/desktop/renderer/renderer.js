@@ -68,10 +68,39 @@ function recoveryAttentionView(item) {
   return { operationId, operationType, reason: String(item.payload.reason ?? 'unknown').slice(0,120), actions };
 }
 
+function subagentAttentionView(item) {
+  const kinds = new Set(['subagent_failed','subagent_waiting','subagent_action_needed']);
+  if (!kinds.has(String(item?.kind)) || !item.payload) return null;
+  const runtimeId = String(item.payload.runtimeId ?? '');
+  const runtimeType = String(item.payload.runtimeType ?? '');
+  const sessionId = String(item.sessionId ?? '');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/.test(runtimeId)
+    || !/^[a-z][a-z0-9._-]{0,31}$/.test(runtimeType)
+    || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/.test(sessionId)) return null;
+  return {
+    runtimeId, runtimeType, sessionId,
+    parentId: String(item.payload.parentId ?? '').slice(0,160),
+    role: String(item.payload.role ?? 'Runtime Subagent').slice(0,80),
+    status: String(item.payload.lifecycleStatus ?? 'waiting'),
+    reason: String(item.payload.reason ?? 'waiting'),
+  };
+}
+
 function renderAttentionItem(item, container) {
   const card = document.createElement('article'); card.className = 'attention-item ' + String(item.kind ?? 'unknown');
   const title = document.createElement('h3'); title.textContent = String(item.title ?? '待处理事项'); card.append(title);
   const recovery = recoveryAttentionView(item);
+  const subagent = subagentAttentionView(item);
+  if (subagent) {
+    const details = document.createElement('dl');
+    for (const [label,value] of [['Runtime',subagent.runtimeType],['SubAgent',subagent.runtimeId],['状态',subagent.status],['原因',subagent.reason]]) {
+      const row=document.createElement('div'),term=document.createElement('dt'),description=document.createElement('dd');
+      term.textContent=label;description.textContent=value;row.append(term,description);details.append(row);
+    }
+    const open=document.createElement('button');open.type='button';open.className='attention-open-session';open.textContent='查看 Session';
+    open.addEventListener('click',()=>{const session=state.sessions.find((candidate)=>candidate.id===subagent.sessionId);if(!session)return;state.activeProjectId=session.projectId;state.activeSessionId=session.id;activateWorkPanel('chat');renderAll();});
+    card.append(details,open);container.append(card);return;
+  }
   if (!recovery) { container.append(card); return; }
   const details = document.createElement('dl');
   for (const [field, label, value] of [
@@ -162,7 +191,7 @@ function renderDiagnosticBundle(value) {
 }
 
 const state = {
-  projects: [], sessions: [], teams: [], integrations: [], runtimes: [], providers: [], mcpServers: [], skills: [], memoryFiles: [], scheduledTasks: [], recentEvents: [], permissions: [], checkpoints: [], extensionHealth: null,
+  projects: [], sessions: [], teams: [], integrations: [], runtimes: [], providers: [], mcpServers: [], skills: [], memoryFiles: [], scheduledTasks: [], recentEvents: [], permissions: [], attention: [], checkpoints: [], extensionHealth: null,
   settings: {}, usage: {}, activeProjectId: null, activeSessionId: null, assistantDraft: null, thinkingDraft: null, toolCards: new Map(),
   eventCursor: 0, versions: {}, selectedProviderId: null, attachments: [], terminalSessionId: null,
   filePreviewContent: '', nativeCapabilities: null, computerUse: null, computerApproval: null, turnStartedAt: 0, lastPrompt: '',
@@ -178,7 +207,7 @@ function isCompatible(runtime, provider) { return runtime === 'codex' ? ['chatgp
 
 async function reloadSnapshot() {
   const snapshot = await window.tsukiori.workspace.snapshot();
-  for (const key of ['projects','sessions','teams','integrations','runtimes','providers','mcpServers','scheduledTasks','recentEvents','permissions','settings','usage']) state[key] = snapshot[key] ?? state[key];
+  for (const key of ['projects','sessions','teams','integrations','runtimes','providers','mcpServers','scheduledTasks','recentEvents','permissions','attention','settings','usage']) state[key] = snapshot[key] ?? state[key];
   state.eventCursor = Math.max(state.eventCursor, snapshot.eventCursor ?? 0);
   if (!state.projects.some((item) => item.id === state.activeProjectId)) state.activeProjectId = state.projects[0]?.id ?? null;
   if (state.activeSessionId && !state.sessions.some((item) => item.id === state.activeSessionId && !item.archivedAt)) state.activeSessionId = null;
@@ -212,7 +241,7 @@ function renderNavigation() {
     group.append(sessionList);projects.append(group);
   }
   if (!projects.children.length) projects.append(emptyText(query?'没有匹配的项目或作业':'尚未添加项目'));
-  byId('rail-attention-dot').hidden = state.permissions.length === 0;
+  byId('rail-attention-dot').hidden = state.permissions.length + state.attention.length === 0;
 }
 
 function renderMain() {
@@ -221,7 +250,7 @@ function renderMain() {
   if (!project) { renderRuntimeOverview(); return; }
   setText('project-name', project.name); setText('project-path', project.gitRoot); document.querySelector('.project-branch').textContent = project.branch;
   const projectSessions = state.sessions.filter((item) => item.projectId === project.id && !item.archivedAt);
-  setText('metric-worktrees', projectSessions.length); setText('metric-running', projectSessions.filter((item) => item.status === 'running').length); setText('metric-attention', state.permissions.length);
+  setText('metric-worktrees', projectSessions.length); setText('metric-running', projectSessions.filter((item) => item.status === 'running').length); setText('metric-attention', state.permissions.length + state.attention.length);
   const dashboard = byId('dashboard-sessions'); clear(dashboard);
   for (const item of projectSessions.slice(0,5)) { const row = document.createElement('button'); row.className = 'rail-item'; row.type = 'button'; row.append(Object.assign(document.createElement('i'),{textContent:item.runtimeType === 'claude' ? 'C' : 'X'}),Object.assign(document.createElement('span'),{textContent:item.name}),Object.assign(document.createElement('small'),{textContent:item.status})); row.addEventListener('click',()=>{state.activeSessionId=item.id;renderAll();}); dashboard.append(row); }
   const runtimeDashboard = byId('dashboard-runtimes'); clear(runtimeDashboard); for (const runtime of state.runtimes) runtimeDashboard.append(runtimeRow(runtime));
@@ -299,7 +328,7 @@ function classifyToolEvent(tool,summary) {
 
 function syncTerminalPreview(){const preview=byId('side-terminal-preview'),output=byId('terminal-output');if(preview&&output)preview.textContent=output.textContent.slice(-12000)||'终端尚未启动';}
 function appendTerminalEvent(event) { const output=byId('terminal-output'); if(event.type==='terminal.output'){output.textContent+=stripAnsi(String(event.payload.data??''));if(output.textContent.length>500000)output.textContent=output.textContent.slice(-500000);output.scrollTop=output.scrollHeight;syncTerminalPreview();return;}if(event.type==='terminal.started'){output.textContent=`PowerShell · ${event.payload.cwd}\n`;syncTerminalPreview();return;}if(event.type==='terminal.exited'){output.textContent+=`\n[terminal exited ${event.payload.exitCode}]`;syncTerminalPreview();return;}if (!['turn.started','turn.completed','tool.event','runtime.error','permission.requested'].includes(event.type)) return; const kind=event.type==='tool.event'?classifyToolEvent(String(event.payload.tool??''),String(event.payload.summary??'')):event.type; output.textContent += '\n['+new Date(event.createdAt).toLocaleTimeString()+'] '+kind+' '+String(event.payload.summary??event.payload.message??event.payload.status??''); output.scrollTop=output.scrollHeight; syncTerminalPreview(); }
-function acceptEvent(event) { state.recentEvents.push(event); if (state.recentEvents.length>300) state.recentEvents.splice(0,state.recentEvents.length-300); appendTerminalEvent(event); if(event.type==='turn.started')setTurnActivity('running','模型正在思考并执行任务…');if(event.type==='assistant.delta')setTurnActivity('running','正在接收回复…');if (event.sessionId===state.activeSessionId&&!event.type.startsWith('terminal.')) appendEvent(byId('conversation'),event);if(event.sessionId===state.sideChatSessionId)renderSideChat(); if(event.type==='permission.requested'||event.type==='permission.resolved') void reloadSnapshot(); if (event.type==='turn.started'||event.type==='turn.completed'||event.type==='runtime.error'||event.type.startsWith('team.')||event.type.startsWith('integration.')||event.type==='checkpoint.created'||event.type==='checkpoint.rewound') void reloadSnapshot();if(event.type==='checkpoint.created'||event.type==='checkpoint.rewound')void refreshCheckpoints();if(event.type.startsWith('integration.'))void refreshIntegrations(); }
+function acceptEvent(event) { state.recentEvents.push(event); if (state.recentEvents.length>300) state.recentEvents.splice(0,state.recentEvents.length-300); appendTerminalEvent(event); if(event.type==='turn.started')setTurnActivity('running','模型正在思考并执行任务…');if(event.type==='assistant.delta')setTurnActivity('running','正在接收回复…');if (event.sessionId===state.activeSessionId&&!event.type.startsWith('terminal.')) appendEvent(byId('conversation'),event);if(event.sessionId===state.sideChatSessionId)renderSideChat(); if(event.type==='permission.requested'||event.type==='permission.resolved'||event.type==='subagent.event') void reloadSnapshot(); if (event.type==='turn.started'||event.type==='turn.completed'||event.type==='runtime.error'||event.type.startsWith('team.')||event.type.startsWith('integration.')||event.type==='checkpoint.created'||event.type==='checkpoint.rewound') void reloadSnapshot();if(event.type==='checkpoint.created'||event.type==='checkpoint.rewound')void refreshCheckpoints();if(event.type.startsWith('integration.'))void refreshIntegrations(); }
 
 function setTurnActivity(mode,label){const root=byId('turn-activity');if(!root)return;if(mode==='idle'||mode==='complete'){root.hidden=true;root.classList.remove('error');state.turnStartedAt=0;return;}root.hidden=false;root.classList.toggle('error',mode==='error');setText('turn-activity-label',label);byId('retry-turn').hidden=mode!=='error';if(mode==='running'&&!state.turnStartedAt)state.turnStartedAt=Date.now();if(mode==='error')state.turnStartedAt=0;}
 function refreshTurnElapsed(){if(!state.turnStartedAt)return;setText('turn-elapsed',Math.max(0,Math.floor((Date.now()-state.turnStartedAt)/1000))+' 秒');}
@@ -335,7 +364,7 @@ async function updateActiveOptions() {
 async function pickProject() { try { const result=operationError(await window.tsukiori.workspace.pickProject()); if(result.canceled)return; state.activeProjectId=result.project.id; state.activeSessionId=null; await reloadSnapshot(); }catch(error){setText('onboarding-status',error.message);} }
 async function sendPrompt(event) { event.preventDefault(); const session=activeSession(); const input=byId('prompt-input'); if(!session||!input.value.trim())return;if(session.importedReadOnly){setText('turn-status','导入历史为只读；请先显式 Fork');return;} const original=input.value;state.lastPrompt=original;const refs=state.attachments.map((item)=>item.path);const text=refs.length?original+'\n\n本次任务附件（均已复制到当前 Worktree）：\n'+refs.map((path)=>'- '+path).join('\n'):original; input.value=''; setText('turn-status','正在发送…');setTurnActivity('running','正在启动 '+(session.runtimeType==='claude'?'Claude Code':'Codex')+'…'); try{operationError(await window.tsukiori.workspace.sendPrompt(session.id,text));state.attachments=[];renderAttachments();}catch(error){input.value=original;setText('turn-status',error.message);setTurnActivity('error',error.message);} }
 
-function renderPermissions() { const root=byId('attention-list'); clear(root); for(const permission of state.permissions)renderPermission(permission,root); if(!root.children.length)root.append(emptyText('暂无待处理事项'));setText('attention-count',state.permissions.length); }
+function renderPermissions() { const root=byId('attention-list'); clear(root); for(const permission of state.permissions)renderPermission(permission,root);for(const item of state.attention)renderAttentionItem(item,root);if(!root.children.length)root.append(emptyText('暂无待处理事项'));setText('attention-count',state.permissions.length+state.attention.length); }
 
 function teamMembers(team){return (team.members?.length?team.members:team.memberSessionIds.map((sessionId,order)=>({sessionId,role:state.sessions.find((item)=>item.id===sessionId)?.name??`Agent ${order+1}`,order}))).map((member)=>({...member,session:state.sessions.find((item)=>item.id===member.sessionId)}));}
 function teamStatusLabel(status){return ({dispatching:'创建中',running:'并行执行中',synthesizing:'正在汇总',stopping:'正在停止',stopped:'已停止',completed:'已完成',partial_failure:'部分失败'})[status]??status;}
@@ -636,7 +665,7 @@ try {
   const [daemon,versions,snapshot]=await Promise.all([window.tsukiori.daemon.status(),window.tsukiori.versions(),window.tsukiori.workspace.snapshot()]);
   setText('status','Daemon '+daemon.daemonVersion);byId('daemon-dot').classList.add('healthy');state.versions=versions;
   if(snapshot?.mode==='interactive'){
-    document.body.classList.add('interactive-mode');for(const key of ['projects','sessions','teams','integrations','runtimes','providers','recentEvents','permissions','settings','usage'])state[key]=snapshot[key]??state[key];state.eventCursor=snapshot.eventCursor??0;state.activeProjectId=state.projects[0]?.id??null;state.activeSessionId=state.sessions.find((item)=>item.projectId===state.activeProjectId&&!item.archivedAt)?.id??null;bindUi();applyAppearance();renderAll();if(state.settings.autoUpdate!==false)setTimeout(()=>void checkUpdates(),1200);
+    document.body.classList.add('interactive-mode');for(const key of ['projects','sessions','teams','integrations','runtimes','providers','recentEvents','permissions','attention','settings','usage'])state[key]=snapshot[key]??state[key];state.eventCursor=snapshot.eventCursor??0;state.activeProjectId=state.projects[0]?.id??null;state.activeSessionId=state.sessions.find((item)=>item.projectId===state.activeProjectId&&!item.archivedAt)?.id??null;bindUi();applyAppearance();renderAll();if(state.settings.autoUpdate!==false)setTimeout(()=>void checkUpdates(),1200);
   }else{
     byId('interactive-workspace').hidden=true;byId('legacy-workspace').hidden=false;setText('version','Protocol '+versions.protocol);renderAlphaWorkflow(snapshot.workflow);renderV1GitWorkflow(snapshot.v1Git);renderDiagnosticBundle(snapshot.diagnostics);for(const tool of snapshot.tools??[])renderTool(tool);for(const runtime of snapshot.runtimes??[])renderRuntime(runtime);clear(byId('attention-list'));for(const permission of snapshot.permissions??[])renderPermission(permission,byId('attention-list'));for(const item of snapshot.attention??[])renderAttentionItem(item,byId('attention-list'));setText('attention-count',(snapshot.attention??[]).length);
   }

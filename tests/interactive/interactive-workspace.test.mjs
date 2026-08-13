@@ -121,6 +121,21 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
   const activity = f.workspace.activity(session.id);
   assert.deepEqual(activity.subagents.map((agent) => [agent.source, agent.runtimeId, agent.status]), [['runtime', 'thread-child', 'completed']]);
   assert.doesNotMatch(JSON.stringify(activity), /must-not-enter-activity/);
+  assert.deepEqual(f.workspace.snapshot().attention, []);
+
+  f.workspace.publishLocalEvent(session.id, 'subagent.event', {
+    runtimeEventType: 'subagent_failed', runtimeSubagentId: 'thread-failed', status: 'failed',
+    prompt: 'must-not-enter-projection', message: 'must-not-enter-projection',
+  });
+  const failedAttention = f.workspace.snapshot().attention;
+  assert.equal(failedAttention.length, 1);
+  assert.equal(failedAttention[0].kind, 'subagent_failed');
+  assert.equal(failedAttention[0].payload.runtimeId, 'thread-failed');
+  assert.doesNotMatch(JSON.stringify(failedAttention), /must-not-enter-projection/);
+  f.workspace.publishLocalEvent(session.id, 'subagent.event', {
+    runtimeEventType: 'subagent_stop', runtimeSubagentId: 'thread-failed', status: 'completed',
+  });
+  assert.deepEqual(f.workspace.snapshot().attention, []);
 });
 
 test('ChatGPT Provider verification uses a temporary Codex account probe and writes a safe audit', async (t) => {

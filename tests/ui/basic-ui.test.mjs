@@ -178,6 +178,9 @@ test('complete workbench exposes persisted sessions, files, attachments, ConPTY,
   assert.match(script, /Runtime 实际观察/);
   assert.match(script, /Runtime 原生/);
   assert.match(script, /subagents/);
+  assert.match(script, /subagentAttentionView/);
+  assert.match(script, /state\.permissions\.length\+state\.attention\.length/);
+  assert.match(script, /event\.type==='subagent\.event'/);
   assert.match(script, /导入历史为只读/);
   assert.match(script, /失败时整批回滚/);
   assert.match(html, /不导入密钥、登录态、工具原始参数或运行中进程/);
