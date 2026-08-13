@@ -60,6 +60,7 @@ test('settings center exposes all specification categories and functional contro
   assert.match(html, /安全策略强制启用/);
   assert.match(script, /defaultModel:byId\('setting-default-model'\)\.value/);
   assert.match(script, /fillModels\(byId\('setting-default-model'\)/);
+  assert.match(script, /审计写入降级/);
   for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','listMcp','saveMcp','deleteMcp','listSkills','skillDetail','pickSkillSource','installSkill','uninstallSkill','listMemory','readMemory','saveMemory','activity','stopBackgroundTask','listScheduledTasks','saveScheduledTask','setScheduledTaskEnabled','deleteScheduledTask','runScheduledTask','diagnosticSummary','exportDiagnostic','exportSettings','pickCcHahaSource','scanCcHahaImport','importCcHaha']) {
     assert.match(script, new RegExp(`workspace\.${method}`));
   }

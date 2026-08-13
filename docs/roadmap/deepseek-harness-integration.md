@@ -20,13 +20,13 @@
 
 ### DSH-07 Provider 验证审计
 
-- [ ] 为 Provider 验证增加可追踪但不含秘密的审计闭环
+- [x] 为 Provider 验证增加可追踪但不含秘密的审计闭环
 - 前置依赖：DSH-06
 - 交付物：Provider 验证审计事件、持久化/查询测试、实施报告
 - Checkpoints：
-  - [ ] 成功和失败验证均记录 Provider 标识、结果、错误分类和已有 `lastTest.testedAt`
-  - [ ] 审计记录不包含 API Key、认证头、完整请求/响应或用户 Prompt
-  - [ ] 审计写入失败不伪造 Provider 验证成功，且有可观察的降级结果
+  - [x] 成功和失败验证均记录 Provider 标识、结果、错误分类和已有 `lastTest.testedAt`
+  - [x] 审计记录不包含 API Key、认证头、完整请求/响应或用户 Prompt
+  - [x] 审计写入失败不伪造 Provider 验证成功，且有可观察的降级结果
 
 ### DSH-09 不确定操作详情与恢复入口
 

@@ -123,6 +123,20 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
   assert.doesNotMatch(JSON.stringify(activity), /must-not-enter-activity/);
 });
 
+test('ChatGPT Provider verification uses a temporary Codex account probe and writes a safe audit', async (t) => {
+  const f = fixture(t);
+  const result = await f.workspace.testProvider('provider:chatgpt');
+  assert.equal(result.ok, true);
+  assert.equal(result.category, 'runtime_auth');
+  const provider = f.workspace.snapshot().providers.find((item) => item.id === 'provider:chatgpt');
+  const audit = f.workspace.listProviderVerificationAudits().at(-1);
+  assert.equal(provider.lastTest.testedAt, audit.testedAt);
+  assert.equal(audit.providerKind, 'chatgpt');
+  assert.equal(audit.outcome, 'succeeded');
+  assert.equal(audit.category, 'runtime_auth');
+  assert.doesNotMatch(JSON.stringify(audit), /authSource|account|token|prompt/i);
+});
+
 test('interactive workspace exposes verified Integration and explicit Promotion to the project branch', async (t) => {
   const f = fixture(t);
   const project = f.workspace.addProject(f.repository);
@@ -354,6 +368,13 @@ test('Claude native login runs without an API Key and reports the real auth sour
   assert.equal(nativeProvider.hasSecret, false);
   assert.equal(f.workspace.snapshot().runtimes.find((runtime) => runtime.type === 'claude').authSource, 'claude-oauth');
   assert.equal((await f.workspace.testProvider(nativeProvider.id)).ok, true);
+  const providerAudit = f.workspace.listProviderVerificationAudits().at(-1);
+  assert.equal(providerAudit.providerId, nativeProvider.id);
+  assert.equal(providerAudit.providerKind, 'claude-native');
+  assert.equal(providerAudit.outcome, 'succeeded');
+  assert.equal(providerAudit.category, 'runtime_auth');
+  assert.equal(providerAudit.testedAt, f.workspace.snapshot().providers.find((item) => item.id === nativeProvider.id).lastTest.testedAt);
+  assert.doesNotMatch(JSON.stringify(providerAudit), /oauth|token|baseUrl|model|prompt/i);
   const project = f.workspace.addProject(f.repository);
   const session = await f.workspace.createSession(project.id, {
     runtimeType: 'claude', providerId: nativeProvider.id, model: 'sonnet', permissionMode: 'manual',
@@ -528,6 +549,10 @@ test('Claude native login fails explicitly when the local Runtime is logged out'
   assert.equal(result.ok, false);
   assert.equal(result.category, 'authentication_required');
   assert.equal(Number.isFinite(result.latencyMs), true);
+  const audit = f.workspace.listProviderVerificationAudits().at(-1);
+  assert.equal(audit.providerId, 'provider:claude-native');
+  assert.equal(audit.outcome, 'failed');
+  assert.equal(audit.category, 'authentication_required');
 });
 
 test('interactive Git review stages and commits only selected Worktree paths', async (t) => {

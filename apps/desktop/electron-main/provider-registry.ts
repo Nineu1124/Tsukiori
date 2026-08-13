@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { WindowsCredentialBroker, type SecretReference } from '@tsukiori/credential-broker';
+import type { ProviderVerificationAuditSink } from './provider-verification-audit.js';
 
 export type ProviderKind =
   | 'chatgpt'
@@ -21,7 +22,14 @@ export type ProviderConfig = {
   enabled: boolean;
   createdAt: number;
   updatedAt: number;
-  lastTest?: { ok: boolean; latencyMs: number; category: string; testedAt: number };
+  lastTest?: {
+    ok: boolean;
+    latencyMs: number;
+    category: string;
+    testedAt: number;
+    auditStatus?: 'recorded' | 'degraded' | 'not_configured';
+    auditCategory?: 'audit_write_failed';
+  };
 };
 
 export type ProviderView = Omit<ProviderConfig, 'secretRef'> & { hasSecret: boolean };
@@ -59,15 +67,24 @@ export function builtInProviders(now = Date.now()): ProviderConfig[] {
 export class ProviderRegistry {
   readonly #credentials: WindowsCredentialBroker;
   readonly #persist: (providers: ProviderConfig[]) => void;
+  readonly #audit: ProviderVerificationAuditSink | undefined;
+  readonly #now: () => number;
+  readonly #id: () => string;
   #providers: ProviderConfig[];
 
   constructor(options: {
     providers?: readonly ProviderConfig[];
     credentials?: WindowsCredentialBroker;
     persist: (providers: ProviderConfig[]) => void;
+    audit?: ProviderVerificationAuditSink;
+    now?: () => number;
+    id?: () => string;
   }) {
     this.#credentials = options.credentials ?? new WindowsCredentialBroker();
     this.#persist = options.persist;
+    this.#audit = options.audit;
+    this.#now = options.now ?? Date.now;
+    this.#id = options.id ?? randomUUID;
     this.#providers = mergeBuiltIns(options.providers ?? []);
   }
 
@@ -95,7 +112,7 @@ export class ProviderRegistry {
     const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl ?? preset.baseUrl, kind);
     const models = normalizeModels(input.models ?? existing?.models ?? preset.models);
     if (kind !== 'chatgpt' && models.length === 0) throw new Error('至少配置一个 Model');
-    const at = Date.now();
+    const at = this.#now();
     let secretRef = existing?.secretRef;
     const apiKey = input.apiKey?.trim();
     if (kind !== 'chatgpt' && kind !== 'claude-native' && apiKey) {
@@ -135,10 +152,12 @@ export class ProviderRegistry {
   async test(id: string): Promise<{ ok: boolean; latencyMs: number; category: string }> {
     const provider = this.get(id);
     if (provider.kind === 'chatgpt' || provider.kind === 'claude-native') {
-      return { ok: true, latencyMs: 0, category: 'runtime_auth' };
+      return this.#completeTest(provider, { ok: false, latencyMs: 0, category: 'runtime_probe_required' });
     }
-    if (!provider.secretRef) throw new Error('请先保存 API Key');
-    const started = Date.now();
+    if (!provider.secretRef) {
+      return this.#completeTest(provider, { ok: false, latencyMs: 0, category: 'credential_required' });
+    }
+    const started = this.#now();
     let result: { ok: boolean; latencyMs: number; category: string };
     try {
       result = await this.withEnvironment(provider.id, async (environment) => {
@@ -156,24 +175,19 @@ export class ProviderRegistry {
         await response.body?.cancel().catch(() => undefined);
         return {
           ok: response.ok,
-          latencyMs: Date.now() - started,
+          latencyMs: this.#now() - started,
           category: response.ok ? 'connected' : httpCategory(response.status),
         };
       });
     } catch (error) {
-      result = { ok: false, latencyMs: Date.now() - started, category: errorCategory(error) };
+      result = { ok: false, latencyMs: this.#now() - started, category: errorCategory(error) };
     }
-    provider.lastTest = { ...result, testedAt: Date.now() };
-    provider.updatedAt = Date.now();
-    this.#flush();
-    return result;
+    return this.#completeTest(provider, result);
   }
 
   recordTest(id: string, result: { ok: boolean; latencyMs: number; category: string }): void {
     const provider = this.get(id);
-    provider.lastTest = { ...result, testedAt: Date.now() };
-    provider.updatedAt = Date.now();
-    this.#flush();
+    this.#completeTest(provider, result);
   }
 
   async listModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {
@@ -241,6 +255,47 @@ export class ProviderRegistry {
 
   #flush(): void {
     this.#persist(this.raw());
+  }
+
+  #completeTest(
+    provider: ProviderConfig,
+    input: { ok: boolean; latencyMs: number; category: string },
+  ): { ok: boolean; latencyMs: number; category: string } {
+    const result = {
+      ok: input.ok === true,
+      latencyMs: Math.max(0, Math.min(60_000, Math.round(Number(input.latencyMs) || 0))),
+      category: auditCategory(input.category),
+    };
+    const testedAt = this.#now();
+    let auditStatus: 'recorded' | 'degraded' | 'not_configured' = this.#audit ? 'recorded' : 'not_configured';
+    let auditFailure = false;
+    if (this.#audit) {
+      try {
+        this.#audit({
+          schemaVersion: 1,
+          id: 'provider-audit:' + this.#id(),
+          action: 'provider_verify',
+          providerId: provider.id,
+          providerKind: provider.kind,
+          outcome: result.ok ? 'succeeded' : 'failed',
+          category: result.category,
+          latencyMs: result.latencyMs,
+          testedAt,
+        });
+      } catch {
+        auditStatus = 'degraded';
+        auditFailure = true;
+      }
+    }
+    provider.lastTest = {
+      ...result,
+      testedAt,
+      auditStatus,
+      ...(auditFailure ? { auditCategory: 'audit_write_failed' as const } : {}),
+    };
+    provider.updatedAt = testedAt;
+    this.#flush();
+    return result;
   }
 }
 
@@ -325,4 +380,9 @@ function errorCategory(error: unknown): string {
   const name = error instanceof Error ? error.name : '';
   if (name === 'TimeoutError' || name === 'AbortError') return 'timeout';
   return 'network_error';
+}
+
+function auditCategory(value: unknown): string {
+  const category = String(value ?? 'unknown').toLowerCase();
+  return /^[a-z0-9_-]{1,64}$/.test(category) ? category : 'unknown';
 }

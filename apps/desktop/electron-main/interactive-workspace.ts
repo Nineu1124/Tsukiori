@@ -35,6 +35,10 @@ import {
   deepSeekClaudeModel,
 } from './provider-registry.js';
 import {
+  ProviderVerificationAuditStore,
+  type ProviderVerificationAuditRecord,
+} from './provider-verification-audit.js';
+import {
   WorkspaceCapabilities,
   type McpServerInput,
   type ScheduledTask,
@@ -202,6 +206,7 @@ export type InteractiveWorkspaceOptions = {
   createClient?: (options: ConstructorParameters<typeof CodexAppServerClient>[0]) => CodexAppServerClient;
   createClaudeClient?: (launch: ClaudeLaunch) => ClaudeCodeClient;
   credentials?: WindowsCredentialBroker;
+  providerAuditStore?: Pick<ProviderVerificationAuditStore, 'record' | 'list'>;
 };
 
 const defaultSettings: WorkspaceSettings = {
@@ -227,6 +232,7 @@ export class InteractiveWorkspace {
   readonly #checkpoints: CheckpointService;
   readonly #ccHahaImporter: CcHahaImporter;
   readonly #providers: ProviderRegistry;
+  readonly #providerAudits: Pick<ProviderVerificationAuditStore, 'record' | 'list'>;
   readonly #capabilities: WorkspaceCapabilities;
   readonly #integrations: InteractiveIntegrationManager;
   #state: PersistedState = {
@@ -261,10 +267,12 @@ export class InteractiveWorkspace {
     mkdirSync(this.#transcriptRoot, { recursive: true });
     this.#integrations = new InteractiveIntegrationManager(options.userDataPath);
     this.#load(options.userDataPath);
+    this.#providerAudits = options.providerAuditStore ?? new ProviderVerificationAuditStore(options.userDataPath);
     this.#providers = new ProviderRegistry({
       providers: this.#state.providers,
       ...(options.credentials ? { credentials: options.credentials } : {}),
       persist: (providers) => { this.#state.providers = providers; this.#save(); },
+      audit: (record) => this.#providerAudits.record(record),
     });
     this.#capabilities = new WorkspaceCapabilities(options.userDataPath);
     this.#state.providers = this.#providers.raw();
@@ -413,6 +421,34 @@ export class InteractiveWorkspace {
 
   async testProvider(id: string): Promise<{ ok: boolean; latencyMs: number; category: string }> {
     const provider = this.#providers.get(id);
+    if (provider.kind === 'chatgpt') {
+      const started = Date.now();
+      let client: CodexAppServerClient | null = null;
+      let result: { ok: boolean; latencyMs: number; category: string };
+      try {
+        if (!this.#codexLaunch) throw new Error('codex_runtime_unavailable');
+        const options: ConstructorParameters<typeof CodexAppServerClient>[0] = {
+          cwd: this.#worktreeRoot,
+          launch: this.#codexLaunch,
+          onNotification: () => undefined,
+          onApproval: async () => ({ decision: 'decline' }),
+          onExit: () => undefined,
+        };
+        client = this.#createClient ? this.#createClient(options) : new CodexAppServerClient(options);
+        const auth = await client.start();
+        result = {
+          ok: auth.authenticated,
+          latencyMs: Date.now() - started,
+          category: auth.authenticated ? 'runtime_auth' : 'authentication_required',
+        };
+      } catch {
+        result = { ok: false, latencyMs: Date.now() - started, category: 'runtime_probe_failed' };
+      } finally {
+        await client?.stop().catch(() => undefined);
+      }
+      this.#providers.recordTest(id, result);
+      return result;
+    }
     if (provider.kind !== 'claude-native') return this.#providers.test(id);
     const started = Date.now();
     const auth = this.#claudeLaunch
@@ -426,6 +462,10 @@ export class InteractiveWorkspace {
     this.#providers.recordTest(id, result);
     this.refreshRuntimes();
     return result;
+  }
+
+  listProviderVerificationAudits(): ProviderVerificationAuditRecord[] {
+    return this.#providerAudits.list();
   }
 
   listProviderModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {

@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 const { ProviderRegistry } = await import(
   new URL('../../apps/desktop/dist/electron-main/provider-registry.js', import.meta.url)
+);
+const { ProviderVerificationAuditStore } = await import(
+  new URL('../../apps/desktop/dist/electron-main/provider-verification-audit.js', import.meta.url)
 );
 
 test('Provider Registry tests a connection without exposing or persisting the secret', async (t) => {
@@ -22,13 +28,20 @@ test('Provider Registry tests a connection without exposing or persisting the se
     delete(reference) { return secrets.delete(reference); },
   };
   const originalFetch = globalThis.fetch;
+  const audits = [];
   t.after(() => { globalThis.fetch = originalFetch; });
   globalThis.fetch = async (url, options) => {
     assert.equal(url, 'https://api.example.invalid/v1/models');
     assert.equal(options.headers.Authorization, 'Bearer provider-fixture-secret');
     return new Response('{"data":[]}', { status: 200, headers: { 'content-type': 'application/json' } });
   };
-  const registry = new ProviderRegistry({ credentials, persist: (providers) => persisted.push(structuredClone(providers)) });
+  const registry = new ProviderRegistry({
+    credentials,
+    persist: (providers) => persisted.push(structuredClone(providers)),
+    audit: (record) => audits.push(structuredClone(record)),
+    now: () => 1_800_200_000_000,
+    id: () => 'fixture-audit-id',
+  });
   const provider = registry.save({
     name: 'Fixture OpenAI', kind: 'openai-compatible', baseUrl: 'https://api.example.invalid',
     models: ['fixture-model'], apiKey: 'provider-fixture-secret',
@@ -40,6 +53,82 @@ test('Provider Registry tests a connection without exposing or persisting the se
   assert.doesNotMatch(JSON.stringify(registry.list()), /provider-fixture-secret|secretref:/);
   assert.doesNotMatch(JSON.stringify(persisted), /provider-fixture-secret/);
   assert.match(JSON.stringify(persisted), /secretref:/);
+  assert.deepEqual(audits, [{
+    schemaVersion: 1,
+    id: 'provider-audit:fixture-audit-id',
+    action: 'provider_verify',
+    providerId: provider.id,
+    providerKind: 'openai-compatible',
+    outcome: 'succeeded',
+    category: 'connected',
+    latencyMs: 0,
+    testedAt: 1_800_200_000_000,
+  }]);
+  assert.equal(registry.list().find((item) => item.id === provider.id).lastTest.testedAt, audits[0].testedAt);
+  assert.equal(registry.list().find((item) => item.id === provider.id).lastTest.auditStatus, 'recorded');
+});
+
+test('Provider verification failures are audited and missing credentials are observable', async () => {
+  const audits = [];
+  const registry = new ProviderRegistry({
+    persist: () => undefined,
+    audit: (record) => audits.push(structuredClone(record)),
+    now: () => 1_800_200_000_100,
+    id: () => 'fixture-failed-audit-id',
+  });
+  const result = await registry.test('provider:deepseek');
+  assert.deepEqual(result, { ok: false, latencyMs: 0, category: 'credential_required' });
+  assert.equal(audits[0].outcome, 'failed');
+  assert.equal(audits[0].category, 'credential_required');
+  assert.equal(audits[0].testedAt, registry.get('provider:deepseek').lastTest.testedAt);
+});
+
+test('Provider success remains distinct from a degraded audit sink', async () => {
+  const persisted = [];
+  const registry = new ProviderRegistry({
+    persist: (providers) => persisted.push(structuredClone(providers)),
+    audit: () => { throw new Error('fixture audit disk failure'); },
+    now: () => 1_800_200_000_200,
+  });
+  registry.recordTest('provider:chatgpt', { ok: true, latencyMs: 7, category: 'runtime_auth' });
+  const lastTest = registry.get('provider:chatgpt').lastTest;
+  assert.equal(lastTest.ok, true);
+  assert.equal(lastTest.auditStatus, 'degraded');
+  assert.equal(lastTest.auditCategory, 'audit_write_failed');
+  assert.doesNotMatch(JSON.stringify(persisted), /fixture audit disk failure/);
+});
+
+test('Provider Audit Store persists only its bounded allowlisted projection', (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'tsukiori-provider-audit-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const store = new ProviderVerificationAuditStore(directory);
+  store.record({
+    schemaVersion: 1,
+    id: 'provider-audit:fixture-store-id',
+    action: 'provider_verify',
+    providerId: 'provider:deepseek',
+    providerKind: 'deepseek',
+    outcome: 'failed',
+    category: 'authentication_failed',
+    latencyMs: 42,
+    testedAt: 1_800_200_000_300,
+    secret: 'must-not-be-written',
+    request: { prompt: 'must-not-be-written' },
+  });
+  const reopened = new ProviderVerificationAuditStore(directory);
+  assert.deepEqual(reopened.list(), [{
+    schemaVersion: 1,
+    id: 'provider-audit:fixture-store-id',
+    action: 'provider_verify',
+    providerId: 'provider:deepseek',
+    providerKind: 'deepseek',
+    outcome: 'failed',
+    category: 'authentication_failed',
+    latencyMs: 42,
+    testedAt: 1_800_200_000_300,
+  }]);
+  const serialized = readFileSync(join(directory, 'provider-verification-audit-v1.json'), 'utf8');
+  assert.doesNotMatch(serialized, /must-not-be-written|prompt|request|secret/);
 });
 
 test('Provider Registry rejects incompatible or unsafe endpoint forms', () => {
