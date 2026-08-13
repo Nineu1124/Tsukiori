@@ -3655,6 +3655,8 @@ src/helpers/
 
 后续任务只有在“启动条件”满足后才进入正式排期；它们不影响 V1 完成率或 G5。
 
+DeepSeek Harness 的后续优化按 `docs/roadmap/deepseek-harness-integration.md` 执行。该路线图沿用本章的 Checkpoint、证据、提交与安全规则，但不计入既有 Local V1 完成率；其中未经真实 Runtime 或脱敏 Fixture 验证的行为必须保持 `unknown`。
+
 ### B1 Claude Adapter
 
 - [ ] 在 V1 之后实现 Claude Runtime 接入

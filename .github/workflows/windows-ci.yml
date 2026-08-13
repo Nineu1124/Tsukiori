@@ -44,6 +44,7 @@ jobs:
           npm run test:ipc
           npm run test:database
           npm run test:runtime
+          npm run test:snapshot
           npm run test:permission
           npm run test:ui
           npm run probe:ui-interactions

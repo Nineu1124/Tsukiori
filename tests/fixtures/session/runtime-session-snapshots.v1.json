@@ -1,0 +1,571 @@
+{
+  "schemaVersion": 1,
+  "generator": "scripts/session-fixture-snapshots.mjs",
+  "contract": "runtime-core/EventNormalizer",
+  "externalProviderCalls": false,
+  "containsCredentials": false,
+  "containsUserPrompt": false,
+  "scenarios": [
+    {
+      "id": "normal-conversation",
+      "input": [
+        {
+          "nativeSequence": 1,
+          "nativeType": "message.started",
+          "payload": {
+            "messageId": "fixture-message-normal"
+          }
+        },
+        {
+          "nativeSequence": 2,
+          "nativeType": "text.delta",
+          "payload": {
+            "text": "fixture assistant response"
+          }
+        },
+        {
+          "nativeSequence": 3,
+          "nativeType": "message.completed",
+          "payload": {
+            "status": "completed"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "eventId": "fixture-event:1",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:normal-conversation",
+          "sessionId": "fixture-session:normal-conversation",
+          "turnId": "fixture-turn:normal-conversation:1",
+          "streamId": "fixture-stream:normal-conversation",
+          "streamSequence": 1,
+          "sessionSequence": 1,
+          "type": "assistant.message_started",
+          "payload": {
+            "messageId": "fixture-message-normal"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "normal-conversation:event:1",
+          "runtimeSessionId": "fixture-session:normal-conversation",
+          "runtimeTurnId": "fixture-turn:normal-conversation:1",
+          "connectionEpoch": "fixture-epoch:normal-conversation:1",
+          "createdAt": 1800100000001,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:2",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:normal-conversation",
+          "sessionId": "fixture-session:normal-conversation",
+          "turnId": "fixture-turn:normal-conversation:1",
+          "streamId": "fixture-stream:normal-conversation",
+          "streamSequence": 2,
+          "sessionSequence": 2,
+          "type": "assistant.text_delta",
+          "payload": {
+            "text": "fixture assistant response"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "normal-conversation:event:2",
+          "runtimeSessionId": "fixture-session:normal-conversation",
+          "runtimeTurnId": "fixture-turn:normal-conversation:1",
+          "connectionEpoch": "fixture-epoch:normal-conversation:1",
+          "createdAt": 1800100000002,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:3",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:normal-conversation",
+          "sessionId": "fixture-session:normal-conversation",
+          "turnId": "fixture-turn:normal-conversation:1",
+          "streamId": "fixture-stream:normal-conversation",
+          "streamSequence": 3,
+          "sessionSequence": 3,
+          "type": "assistant.message_completed",
+          "payload": {
+            "status": "completed"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "normal-conversation:event:3",
+          "runtimeSessionId": "fixture-session:normal-conversation",
+          "runtimeTurnId": "fixture-turn:normal-conversation:1",
+          "connectionEpoch": "fixture-epoch:normal-conversation:1",
+          "createdAt": 1800100000003,
+          "receivedAt": 0
+        }
+      ],
+      "expectedSha256": "297e0eb53facc3dac218561963f243acdcd28fb28e800bd5faea4bec85dfc739"
+    },
+    {
+      "id": "permission-roundtrip",
+      "input": [
+        {
+          "nativeSequence": 1,
+          "nativeType": "message.started",
+          "payload": {
+            "messageId": "fixture-message-permission"
+          }
+        },
+        {
+          "nativeSequence": 2,
+          "nativeType": "permission.requested",
+          "payload": {
+            "category": "file_write",
+            "risk": "medium",
+            "enforcementLevel": "interceptable"
+          }
+        },
+        {
+          "nativeSequence": 3,
+          "nativeType": "permission.resolved",
+          "payload": {
+            "decision": "allow_once",
+            "decisionScope": "once"
+          }
+        },
+        {
+          "nativeSequence": 4,
+          "nativeType": "message.completed",
+          "payload": {
+            "status": "completed"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "eventId": "fixture-event:1",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:permission-roundtrip",
+          "sessionId": "fixture-session:permission-roundtrip",
+          "turnId": "fixture-turn:permission-roundtrip:1",
+          "streamId": "fixture-stream:permission-roundtrip",
+          "streamSequence": 1,
+          "sessionSequence": 1,
+          "type": "assistant.message_started",
+          "payload": {
+            "messageId": "fixture-message-permission"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "permission-roundtrip:event:1",
+          "runtimeSessionId": "fixture-session:permission-roundtrip",
+          "runtimeTurnId": "fixture-turn:permission-roundtrip:1",
+          "connectionEpoch": "fixture-epoch:permission-roundtrip:1",
+          "createdAt": 1800100000001,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:2",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:permission-roundtrip",
+          "sessionId": "fixture-session:permission-roundtrip",
+          "turnId": "fixture-turn:permission-roundtrip:1",
+          "streamId": "fixture-stream:permission-roundtrip",
+          "streamSequence": 2,
+          "sessionSequence": 2,
+          "type": "permission.requested",
+          "payload": {
+            "category": "file_write",
+            "risk": "medium",
+            "enforcementLevel": "interceptable"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "permission-roundtrip:event:2",
+          "runtimeSessionId": "fixture-session:permission-roundtrip",
+          "runtimeTurnId": "fixture-turn:permission-roundtrip:1",
+          "connectionEpoch": "fixture-epoch:permission-roundtrip:1",
+          "createdAt": 1800100000002,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:3",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:permission-roundtrip",
+          "sessionId": "fixture-session:permission-roundtrip",
+          "turnId": "fixture-turn:permission-roundtrip:1",
+          "streamId": "fixture-stream:permission-roundtrip",
+          "streamSequence": 3,
+          "sessionSequence": 3,
+          "type": "permission.resolved",
+          "payload": {
+            "decision": "allow_once",
+            "decisionScope": "once"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "permission-roundtrip:event:3",
+          "runtimeSessionId": "fixture-session:permission-roundtrip",
+          "runtimeTurnId": "fixture-turn:permission-roundtrip:1",
+          "connectionEpoch": "fixture-epoch:permission-roundtrip:1",
+          "createdAt": 1800100000003,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:4",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:permission-roundtrip",
+          "sessionId": "fixture-session:permission-roundtrip",
+          "turnId": "fixture-turn:permission-roundtrip:1",
+          "streamId": "fixture-stream:permission-roundtrip",
+          "streamSequence": 4,
+          "sessionSequence": 4,
+          "type": "assistant.message_completed",
+          "payload": {
+            "status": "completed"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "permission-roundtrip:event:4",
+          "runtimeSessionId": "fixture-session:permission-roundtrip",
+          "runtimeTurnId": "fixture-turn:permission-roundtrip:1",
+          "connectionEpoch": "fixture-epoch:permission-roundtrip:1",
+          "createdAt": 1800100000004,
+          "receivedAt": 0
+        }
+      ],
+      "expectedSha256": "3acc14b22131e491236200b0cc968773e7ca40518a91a40245fc6819683756f8"
+    },
+    {
+      "id": "thinking-forward-compatibility",
+      "input": [
+        {
+          "nativeSequence": 1,
+          "nativeType": "message.started",
+          "payload": {
+            "messageId": "fixture-message-thinking"
+          }
+        },
+        {
+          "nativeSequence": 2,
+          "nativeType": "thinking.started",
+          "payload": {
+            "index": 0
+          }
+        },
+        {
+          "nativeSequence": 3,
+          "nativeType": "thinking.delta",
+          "payload": {
+            "index": 0,
+            "text": "fixture reasoning fragment"
+          }
+        },
+        {
+          "nativeSequence": 4,
+          "nativeType": "thinking.completed",
+          "payload": {
+            "index": 0
+          }
+        },
+        {
+          "nativeSequence": 5,
+          "nativeType": "message.completed",
+          "payload": {
+            "status": "completed"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "eventId": "fixture-event:1",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:thinking-forward-compatibility",
+          "sessionId": "fixture-session:thinking-forward-compatibility",
+          "turnId": "fixture-turn:thinking-forward-compatibility:1",
+          "streamId": "fixture-stream:thinking-forward-compatibility",
+          "streamSequence": 1,
+          "sessionSequence": 1,
+          "type": "assistant.message_started",
+          "payload": {
+            "messageId": "fixture-message-thinking"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "thinking-forward-compatibility:event:1",
+          "runtimeSessionId": "fixture-session:thinking-forward-compatibility",
+          "runtimeTurnId": "fixture-turn:thinking-forward-compatibility:1",
+          "connectionEpoch": "fixture-epoch:thinking-forward-compatibility:1",
+          "createdAt": 1800100000001,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:2",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:thinking-forward-compatibility",
+          "sessionId": "fixture-session:thinking-forward-compatibility",
+          "turnId": "fixture-turn:thinking-forward-compatibility:1",
+          "streamId": "fixture-stream:thinking-forward-compatibility",
+          "streamSequence": 2,
+          "sessionSequence": 2,
+          "type": "native.event",
+          "payload": {
+            "nativeType": "thinking.started",
+            "redacted": false,
+            "truncated": false,
+            "raw": {
+              "index": 0
+            },
+            "contentHash": "ffbf81d654b1b5c8d67a4459f25003c9434e10d05ffea0708e825ece8f9976c6"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "thinking-forward-compatibility:event:2",
+          "runtimeSessionId": "fixture-session:thinking-forward-compatibility",
+          "runtimeTurnId": "fixture-turn:thinking-forward-compatibility:1",
+          "connectionEpoch": "fixture-epoch:thinking-forward-compatibility:1",
+          "createdAt": 1800100000002,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:3",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:thinking-forward-compatibility",
+          "sessionId": "fixture-session:thinking-forward-compatibility",
+          "turnId": "fixture-turn:thinking-forward-compatibility:1",
+          "streamId": "fixture-stream:thinking-forward-compatibility",
+          "streamSequence": 3,
+          "sessionSequence": 3,
+          "type": "native.event",
+          "payload": {
+            "nativeType": "thinking.delta",
+            "redacted": false,
+            "truncated": false,
+            "raw": {
+              "index": 0,
+              "text": "fixture reasoning fragment"
+            },
+            "contentHash": "8093de054ee7bd86827573eb3743be175264c0b3ef57631596596c25dab2108f"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "thinking-forward-compatibility:event:3",
+          "runtimeSessionId": "fixture-session:thinking-forward-compatibility",
+          "runtimeTurnId": "fixture-turn:thinking-forward-compatibility:1",
+          "connectionEpoch": "fixture-epoch:thinking-forward-compatibility:1",
+          "createdAt": 1800100000003,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:4",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:thinking-forward-compatibility",
+          "sessionId": "fixture-session:thinking-forward-compatibility",
+          "turnId": "fixture-turn:thinking-forward-compatibility:1",
+          "streamId": "fixture-stream:thinking-forward-compatibility",
+          "streamSequence": 4,
+          "sessionSequence": 4,
+          "type": "native.event",
+          "payload": {
+            "nativeType": "thinking.completed",
+            "redacted": false,
+            "truncated": false,
+            "raw": {
+              "index": 0
+            },
+            "contentHash": "ffbf81d654b1b5c8d67a4459f25003c9434e10d05ffea0708e825ece8f9976c6"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "thinking-forward-compatibility:event:4",
+          "runtimeSessionId": "fixture-session:thinking-forward-compatibility",
+          "runtimeTurnId": "fixture-turn:thinking-forward-compatibility:1",
+          "connectionEpoch": "fixture-epoch:thinking-forward-compatibility:1",
+          "createdAt": 1800100000004,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:5",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:thinking-forward-compatibility",
+          "sessionId": "fixture-session:thinking-forward-compatibility",
+          "turnId": "fixture-turn:thinking-forward-compatibility:1",
+          "streamId": "fixture-stream:thinking-forward-compatibility",
+          "streamSequence": 5,
+          "sessionSequence": 5,
+          "type": "assistant.message_completed",
+          "payload": {
+            "status": "completed"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "thinking-forward-compatibility:event:5",
+          "runtimeSessionId": "fixture-session:thinking-forward-compatibility",
+          "runtimeTurnId": "fixture-turn:thinking-forward-compatibility:1",
+          "connectionEpoch": "fixture-epoch:thinking-forward-compatibility:1",
+          "createdAt": 1800100000005,
+          "receivedAt": 0
+        }
+      ],
+      "expectedSha256": "c22c0af3d6a850434d485fc97c879e9583b9792f9fd656fa47423bc93e742bae"
+    },
+    {
+      "id": "tool-lifecycle",
+      "input": [
+        {
+          "nativeSequence": 1,
+          "nativeType": "message.started",
+          "payload": {
+            "messageId": "fixture-message-tool"
+          }
+        },
+        {
+          "nativeSequence": 2,
+          "nativeType": "tool.started",
+          "payload": {
+            "tool": "read",
+            "toolUseId": "fixture-tool-1"
+          }
+        },
+        {
+          "nativeSequence": 3,
+          "nativeType": "tool.progress",
+          "payload": {
+            "tool": "read",
+            "toolUseId": "fixture-tool-1",
+            "summary": "fixture progress"
+          }
+        },
+        {
+          "nativeSequence": 4,
+          "nativeType": "tool.completed",
+          "payload": {
+            "tool": "read",
+            "toolUseId": "fixture-tool-1",
+            "status": "completed"
+          }
+        },
+        {
+          "nativeSequence": 5,
+          "nativeType": "message.completed",
+          "payload": {
+            "status": "completed"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "eventId": "fixture-event:1",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:tool-lifecycle",
+          "sessionId": "fixture-session:tool-lifecycle",
+          "turnId": "fixture-turn:tool-lifecycle:1",
+          "streamId": "fixture-stream:tool-lifecycle",
+          "streamSequence": 1,
+          "sessionSequence": 1,
+          "type": "assistant.message_started",
+          "payload": {
+            "messageId": "fixture-message-tool"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "tool-lifecycle:event:1",
+          "runtimeSessionId": "fixture-session:tool-lifecycle",
+          "runtimeTurnId": "fixture-turn:tool-lifecycle:1",
+          "connectionEpoch": "fixture-epoch:tool-lifecycle:1",
+          "createdAt": 1800100000001,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:2",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:tool-lifecycle",
+          "sessionId": "fixture-session:tool-lifecycle",
+          "turnId": "fixture-turn:tool-lifecycle:1",
+          "streamId": "fixture-stream:tool-lifecycle",
+          "streamSequence": 2,
+          "sessionSequence": 2,
+          "type": "tool.started",
+          "payload": {
+            "tool": "read",
+            "toolUseId": "fixture-tool-1"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "tool-lifecycle:event:2",
+          "runtimeSessionId": "fixture-session:tool-lifecycle",
+          "runtimeTurnId": "fixture-turn:tool-lifecycle:1",
+          "connectionEpoch": "fixture-epoch:tool-lifecycle:1",
+          "createdAt": 1800100000002,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:3",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:tool-lifecycle",
+          "sessionId": "fixture-session:tool-lifecycle",
+          "turnId": "fixture-turn:tool-lifecycle:1",
+          "streamId": "fixture-stream:tool-lifecycle",
+          "streamSequence": 3,
+          "sessionSequence": 3,
+          "type": "tool.progress",
+          "payload": {
+            "tool": "read",
+            "toolUseId": "fixture-tool-1",
+            "summary": "fixture progress"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "tool-lifecycle:event:3",
+          "runtimeSessionId": "fixture-session:tool-lifecycle",
+          "runtimeTurnId": "fixture-turn:tool-lifecycle:1",
+          "connectionEpoch": "fixture-epoch:tool-lifecycle:1",
+          "createdAt": 1800100000003,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:4",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:tool-lifecycle",
+          "sessionId": "fixture-session:tool-lifecycle",
+          "turnId": "fixture-turn:tool-lifecycle:1",
+          "streamId": "fixture-stream:tool-lifecycle",
+          "streamSequence": 4,
+          "sessionSequence": 4,
+          "type": "tool.completed",
+          "payload": {
+            "tool": "read",
+            "toolUseId": "fixture-tool-1",
+            "status": "completed"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "tool-lifecycle:event:4",
+          "runtimeSessionId": "fixture-session:tool-lifecycle",
+          "runtimeTurnId": "fixture-turn:tool-lifecycle:1",
+          "connectionEpoch": "fixture-epoch:tool-lifecycle:1",
+          "createdAt": 1800100000004,
+          "receivedAt": 0
+        },
+        {
+          "eventId": "fixture-event:5",
+          "schemaVersion": 1,
+          "scope": "turn",
+          "runtimeHandleId": "fixture-handle:tool-lifecycle",
+          "sessionId": "fixture-session:tool-lifecycle",
+          "turnId": "fixture-turn:tool-lifecycle:1",
+          "streamId": "fixture-stream:tool-lifecycle",
+          "streamSequence": 5,
+          "sessionSequence": 5,
+          "type": "assistant.message_completed",
+          "payload": {
+            "status": "completed"
+          },
+          "runtimeType": "fake",
+          "runtimeEventId": "tool-lifecycle:event:5",
+          "runtimeSessionId": "fixture-session:tool-lifecycle",
+          "runtimeTurnId": "fixture-turn:tool-lifecycle:1",
+          "connectionEpoch": "fixture-epoch:tool-lifecycle:1",
+          "createdAt": 1800100000005,
+          "receivedAt": 0
+        }
+      ],
+      "expectedSha256": "91836bec05bf80ebe2c3e5d0f3c15d4ef7f26c8378c2df067b3044cac06f8f68"
+    }
+  ]
+}

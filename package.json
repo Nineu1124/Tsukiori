@@ -12,6 +12,8 @@
     "check": "npm run check:checkpoints && npm run check:secrets",
     "check:checkpoints": "node scripts/verify-checkpoints.mjs",
     "check:secrets": "node scripts/secret-scan.mjs",
+    "test:snapshot:record": "pnpm --filter @tsukiori/runtime-core build && node scripts/session-fixture-snapshots.mjs --update",
+    "test:snapshot": "pnpm --filter @tsukiori/runtime-core build && node scripts/session-fixture-snapshots.mjs --check && node --test tests/runtime/session-snapshot.test.mjs",
     "test:contract": "node --test spikes/adapter-contract/*.test.mjs",
     "test:gate0": "node --test tests/gates/g0.test.mjs",
     "test:gate1": "pnpm run build && node --test tests/gates/g1.test.mjs",
