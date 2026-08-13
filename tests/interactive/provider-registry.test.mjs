@@ -204,7 +204,7 @@ test('DeepSeek injects the complete Claude Code model map and discovers remote m
     assert.equal(environment.ANTHROPIC_DEFAULT_SONNET_MODEL, 'deepseek-v4-pro[1m]');
     assert.equal(environment.ANTHROPIC_DEFAULT_HAIKU_MODEL, 'deepseek-v4-flash');
     assert.equal(environment.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash');
-    assert.equal(environment.CLAUDE_CODE_EFFORT_LEVEL, 'max');
+    assert.equal(Object.hasOwn(environment, 'CLAUDE_CODE_EFFORT_LEVEL'), false);
   }, 'deepseek-v4-pro');
   assert.deepEqual(await registry.listModels('provider:deepseek'), {
     models: ['deepseek-v4-pro', 'deepseek-v4-flash'], source: 'remote',

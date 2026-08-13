@@ -13,6 +13,8 @@ export const CLAUDE_MINIMUM_VERSION = '2.1.226';
 export const CLAUDE_MAXIMUM_TESTED_VERSION = '2.1.226';
 
 export type ClaudeCompatibility = 'supported' | 'unverified_newer' | 'incompatible_older';
+export const CLAUDE_THINKING_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type ClaudeThinkingEffort = typeof CLAUDE_THINKING_EFFORTS[number];
 
 export type ClaudeLaunch = {
   executable: string;
@@ -41,6 +43,7 @@ export type ClaudeTurnOptions = {
   prompt: string;
   model: string;
   permissionMode: 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
+  thinkingEffort?: ClaudeThinkingEffort;
   authMode?: 'native' | 'provider';
   environment?: Readonly<Record<string, string>>;
   onEvent: (type: string, payload: Record<string, unknown>) => void;
@@ -114,6 +117,10 @@ export function probeClaudeLaunch(candidate: ClaudeLaunchCandidate): ClaudeLaunc
   const capabilities = capabilityMarkers
     .filter(([, marker]) => helpText.includes(marker))
     .map(([name]) => name);
+  if (helpText.includes('--effort <level>')
+    && CLAUDE_THINKING_EFFORTS.every((level) => helpText.includes(level))) {
+    capabilities.push('effort-control');
+  }
   return {
     ...candidate,
     version,
@@ -173,6 +180,12 @@ export class ClaudeCodeClient {
       });
     };
     const capabilities = new Set(this.#launch.capabilities ?? []);
+    const thinkingEffort = options.thinkingEffort === undefined
+      ? undefined
+      : safeThinkingEffort(options.thinkingEffort);
+    if (thinkingEffort && !capabilities.has('effort-control')) {
+      throw new ClaudeAdapterError(`Claude Code ${this.#launch.version} 未验证 --effort 控制能力`);
+    }
     const authMode = options.authMode ?? 'provider';
     const args = [
       ...(this.#launch.prefixArgs ?? []),
@@ -181,6 +194,7 @@ export class ClaudeCodeClient {
       ...(capabilities.has('hook-events') ? ['--include-hook-events'] : []),
       ...(capabilities.has('subagent-forwarding') ? ['--forward-subagent-text'] : []),
       ...(authMode === 'provider' ? ['--bare'] : []),
+      ...(thinkingEffort ? ['--effort', thinkingEffort] : []),
       '--permission-mode', options.permissionMode, '--model', safeModel(options.model),
       ...(options.forkFromSessionId
         ? [
@@ -521,7 +535,7 @@ export function buildClaudeRuntimeEnvironment(
 const claudeProviderEnvironmentKeys: readonly RuntimeProviderEnvironmentKey[] = [
   'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
   'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-  'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL',
+  'CLAUDE_CODE_SUBAGENT_MODEL',
 ];
 
 function compatibility(version: string): ClaudeCompatibility {
@@ -546,6 +560,13 @@ function safeSessionId(value: string): string {
     throw new ClaudeAdapterError('Claude Session ID 无效');
   }
   return sessionId;
+}
+
+function safeThinkingEffort(value: string): ClaudeThinkingEffort {
+  if (!CLAUDE_THINKING_EFFORTS.includes(value as ClaudeThinkingEffort)) {
+    throw new ClaudeAdapterError('Claude Thinking effort 无效');
+  }
+  return value as ClaudeThinkingEffort;
 }
 
 function safeModel(value: string): string {

@@ -32,12 +32,42 @@ test('discovery locks the tested version, capabilities, and sanitized native aut
   const launch = discoverClaudeLaunch({ candidates: [f.candidate] });
   assert.equal(launch.version, CLAUDE_MAXIMUM_TESTED_VERSION);
   assert.equal(launch.compatibility, 'supported');
-  for (const capability of ['stream-json', 'session-resume', 'hook-events', 'subagent-forwarding', 'mcp-config', 'skills']) {
+  for (const capability of ['stream-json', 'session-resume', 'hook-events', 'subagent-forwarding', 'mcp-config', 'skills', 'effort-control']) {
     assert.equal(launch.capabilities.includes(capability), true, capability);
   }
   assert.deepEqual(probeClaudeAuth(launch), {
     authenticated: true, source: 'claude-oauth', method: 'oauth_token', provider: 'firstParty',
   });
+});
+
+test('verified Thinking effort is passed only through the exact Claude CLI argument', async (t) => {
+  const f = fixture(t);
+  const client = new ClaudeCodeClient(discoverClaudeLaunch({ candidates: [f.candidate] }));
+  await new Promise((resolveExit, rejectExit) => client.startTurn({
+    cwd: f.directory, sessionId: randomUUID(), resume: false, prompt: 'fixture-effort', model: 'sonnet',
+    permissionMode: 'plan', authMode: 'native', thinkingEffort: 'max',
+    onEvent: () => undefined,
+    onExit: (error) => error ? rejectExit(new Error(error)) : resolveExit(),
+  }));
+  const invocation = JSON.parse(readFileSync(f.logPath, 'utf8').trim());
+  assert.deepEqual(
+    invocation.args.slice(invocation.args.indexOf('--effort'), invocation.args.indexOf('--effort') + 2),
+    ['--effort', 'max'],
+  );
+  assert.equal(invocation.providerEnvironmentKeys.includes('CLAUDE_CODE_EFFORT_LEVEL'), false);
+  await client.stop();
+});
+
+test('Thinking effort fails closed when the discovered CLI lacks the verified capability', (t) => {
+  const f = fixture(t, { effortControl: false });
+  const launch = discoverClaudeLaunch({ candidates: [f.candidate] });
+  assert.equal(launch.capabilities.includes('effort-control'), false);
+  const client = new ClaudeCodeClient(launch);
+  assert.throws(() => client.startTurn({
+    cwd: f.directory, sessionId: randomUUID(), resume: false, prompt: 'fixture-effort-denied', model: 'sonnet',
+    permissionMode: 'plan', authMode: 'native', thinkingEffort: 'high',
+    onEvent: () => undefined, onExit: () => undefined,
+  }), /未验证 --effort/);
 });
 
 test('published B1 capability matrix is versioned, partial, and sanitized', () => {

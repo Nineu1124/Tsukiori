@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "task": "T-DSH-05",
+  "capturedAt": "2026-08-14",
+  "containsCredentials": false,
+  "containsPrompt": false,
+  "containsUserSource": false,
+  "claudeCode": {
+    "version": "2.1.228",
+    "probe": "version-and-help-only",
+    "helpSha256": "71ad650f59e08ae40ede14c534db4f49d8590ee5a4f92f6da2882d3a5560fea6",
+    "helpBytes": 16890,
+    "argument": "--effort",
+    "advertisedValues": ["low", "medium", "high", "xhigh", "max"],
+    "supportLevel": "supported-interface"
+  },
+  "deepSeekProviderApi": {
+    "models": ["deepseek-v4-pro", "deepseek-v4-flash"],
+    "openAiFormat": {
+      "thinkingSwitch": "thinking.type",
+      "effortParameter": "reasoning_effort",
+      "supportLevel": "supported"
+    },
+    "anthropicFormat": {
+      "thinkingSwitch": "thinking",
+      "effortParameter": "output_config.effort",
+      "supportLevel": "supported"
+    },
+    "sources": [
+      "https://api-docs.deepseek.com/api/create-chat-completion/",
+      "https://api-docs.deepseek.com/guides/anthropic_api/"
+    ]
+  },
+  "claudeCodeToDeepSeek": {
+    "effortMapping": "unknown",
+    "reason": "No accepted versioned request-shape evidence proves that Claude Code --effort becomes DeepSeek output_config.effort.",
+    "rejectedProbe": {
+      "localRequestObserved": false,
+      "acceptedAsEvidence": false,
+      "rawOutputPersisted": false
+    }
+  },
+  "hostDisplayPreference": {
+    "supportLevel": "supported",
+    "affectsModel": false,
+    "persistedLocally": true
+  }
+}

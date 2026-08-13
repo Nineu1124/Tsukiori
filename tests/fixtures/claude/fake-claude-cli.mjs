@@ -10,11 +10,13 @@ if (args.includes('--version')) {
 }
 
 if (args.includes('--help')) {
-  process.stdout.write([
+  const help = [
     '--output-format stream-json', '--resume', '--fork-session', '--include-hook-events',
     '--forward-subagent-text', '--mcp-config', '--disable-slash-commands', '--json-schema',
     '--permission-mode <mode> (choices: "acceptEdits", "manual", "dontAsk", "plan")',
-  ].join('\n'));
+  ];
+  if (config.effortControl !== false) help.push('--effort <level> (choices: "low", "medium", "high", "xhigh", "max")');
+  process.stdout.write(help.join('\n'));
   process.exit(0);
 }
 

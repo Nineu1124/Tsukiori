@@ -466,6 +466,7 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
         ...(typeof command.providerId === 'string' ? { providerId: command.providerId } : {}),
         ...(typeof command.model === 'string' ? { model: command.model } : {}),
         ...(typeof command.permissionMode === 'string' ? { permissionMode: command.permissionMode as 'manual' | 'plan' | 'acceptEdits' | 'dontAsk' } : {}),
+        ...(typeof command.thinkingEffort === 'string' ? { thinkingEffort: command.thinkingEffort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' } : {}),
       }) };
     }
     if (command.type === 'fork_session') return {
@@ -480,6 +481,7 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
         ...(typeof command.providerId === 'string' ? { providerId: command.providerId } : {}),
         ...(typeof command.model === 'string' ? { model: command.model } : {}),
         ...(typeof command.permissionMode === 'string' ? { permissionMode: command.permissionMode } : {}),
+        ...(typeof command.thinkingEffort === 'string' ? { thinkingEffort: command.thinkingEffort } : {}),
       }),
     };
     if (command.type === 'rename_session') return {

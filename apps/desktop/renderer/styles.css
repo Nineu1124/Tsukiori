@@ -1489,3 +1489,8 @@ body.reduce-motion .team-detail,body.reduce-motion .status-dot { animation: none
   contain-intrinsic-size: auto 240px;
 }
 .turn-spinner { will-change: transform; }
+
+/* DSH-05: host-only Thinking display preference and conditional capability notice. */
+body.hide-thinking .thinking-body { display: none; }
+body.hide-thinking .thinking-block { background: rgba(248,246,255,.48); }
+.thinking-control-status { align-self: center; max-width: 230px; color: #7b6fd0; font-size: 9px; line-height: 1.35; }

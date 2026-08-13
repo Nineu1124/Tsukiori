@@ -34,13 +34,17 @@ test('Claude native and Provider launches isolate inherited and previous Provide
     ANTHROPIC_BASE_URL: 'https://api.deepseek.example.invalid/anthropic',
     ANTHROPIC_MODEL: 'deepseek-fixture[1m]',
     CLAUDE_CODE_SUBAGENT_MODEL: 'deepseek-fixture-flash',
-    CLAUDE_CODE_EFFORT_LEVEL: 'max',
   }, 'provider', contaminated);
   assert.deepEqual(RUNTIME_PROVIDER_ENVIRONMENT_KEYS.filter((key) => Object.hasOwn(provider, key)), [
     'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
-    'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL',
+    'CLAUDE_CODE_SUBAGENT_MODEL',
   ]);
+  assert.equal(Object.hasOwn(provider, 'CLAUDE_CODE_EFFORT_LEVEL'), false);
   assert.equal(Object.hasOwn(provider, 'OPENAI_API_KEY'), false);
+  assert.throws(
+    () => buildClaudeRuntimeEnvironment({ CLAUDE_CODE_EFFORT_LEVEL: 'max' }, 'provider', contaminated),
+    /runtime_provider_environment_key_not_allowed:CLAUDE_CODE_EFFORT_LEVEL/,
+  );
 });
 
 test('Codex launch accepts only its selected key and rejects unexpected additions', () => {

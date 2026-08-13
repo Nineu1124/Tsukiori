@@ -27,6 +27,7 @@ import {
   probeClaudeAuth as probeClaudeNativeAuth,
   type ClaudeAuthStatus,
   type ClaudeLaunch,
+  type ClaudeThinkingEffort,
 } from '@tsukiori/adapter-claude';
 import {
   CodexAppServerClient,
@@ -68,6 +69,11 @@ import {
   type InteractiveIntegrationStrategy,
 } from './integration-workspace.js';
 import { SubagentProjectionStore } from './subagent-projection-store.js';
+import {
+  resolveThinkingControl,
+  validatedThinkingEffort,
+  type ThinkingControlMatrix,
+} from './thinking-control.js';
 
 type RuntimeType = 'codex' | 'claude';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -91,6 +97,7 @@ type SessionState = {
   model: string;
   environment: 'windows-native';
   permissionMode: PermissionMode;
+  thinkingEffort?: ClaudeThinkingEffort;
   worktreePath: string;
   branch: string;
   threadId?: string;
@@ -136,6 +143,7 @@ type WorkspaceSettings = {
   theme: 'light';
   density: 'comfortable' | 'compact';
   reduceMotion: boolean;
+  showThinking: boolean;
   autoUpdate: boolean;
   startMinimized: boolean;
   defaultProjectDirectory: string;
@@ -218,7 +226,7 @@ export type InteractiveWorkspaceOptions = {
 };
 
 const defaultSettings: WorkspaceSettings = {
-  language: 'zh-CN', theme: 'light', density: 'comfortable', reduceMotion: false,
+  language: 'zh-CN', theme: 'light', density: 'comfortable', reduceMotion: false, showThinking: true,
   autoUpdate: true, startMinimized: false, defaultProjectDirectory: '',
   defaultRuntime: 'codex', defaultProviderId: 'provider:chatgpt', defaultModel: 'auto',
   defaultPermissionMode: 'manual',
@@ -309,6 +317,12 @@ export class InteractiveWorkspace {
       integrations: this.#integrations.list(),
       runtimes: this.#runtimes,
       providers: this.#providers.list(),
+      thinkingControls: this.#providers.list().flatMap((provider) => this.#runtimes
+        .filter((runtime) => runtime.type === 'codex' || runtime.type === 'claude')
+        .map((runtime) => ({
+          providerId: provider.id,
+          ...resolveThinkingControl(runtime, provider.kind),
+        }))),
       mcpServers: this.#capabilities.listMcp(),
       scheduledTasks: this.#capabilities.listScheduledTasks(),
       settings: this.#state.settings,
@@ -392,6 +406,7 @@ export class InteractiveWorkspace {
       error: '等待 Generic ACP Adapter', capabilities: [],
     });
     this.#runtimes = states;
+    this.#sanitizeThinkingEfforts();
     return states;
   }
 
@@ -402,6 +417,7 @@ export class InteractiveWorkspace {
       theme: 'light',
       density: input.density === 'compact' ? 'compact' : input.density === 'comfortable' ? 'comfortable' : current.density,
       reduceMotion: typeof input.reduceMotion === 'boolean' ? input.reduceMotion : current.reduceMotion,
+      showThinking: typeof input.showThinking === 'boolean' ? input.showThinking : current.showThinking,
       autoUpdate: typeof input.autoUpdate === 'boolean' ? input.autoUpdate : current.autoUpdate,
       startMinimized: typeof input.startMinimized === 'boolean' ? input.startMinimized : current.startMinimized,
       defaultProjectDirectory: safeSettingText(input.defaultProjectDirectory, current.defaultProjectDirectory, 1_024),
@@ -902,6 +918,7 @@ export class InteractiveWorkspace {
       name: uniqueForkName(source.name, this.#state.sessions),
       runtimeType: 'claude', providerId: source.providerId, model: source.model,
       environment: 'windows-native', permissionMode: source.permissionMode,
+      ...(source.thinkingEffort ? { thinkingEffort: source.thinkingEffort } : {}),
       worktreePath, branch, threadId: randomUUID(),
       forkedFromSessionId: source.id, forkSourceRuntimeSessionId: source.threadId,
       turnCount: 0, status: 'ready', createdAt: Date.now(), updatedAt: Date.now(),
@@ -1253,7 +1270,7 @@ export class InteractiveWorkspace {
     }
   }
 
-  async createSession(projectId: string, selection?: Partial<Pick<SessionState, 'runtimeType' | 'providerId' | 'model' | 'permissionMode'>>): Promise<SessionState> {
+  async createSession(projectId: string, selection?: Partial<Pick<SessionState, 'runtimeType' | 'providerId' | 'model' | 'permissionMode' | 'thinkingEffort'>>): Promise<SessionState> {
     const project = this.#project(projectId);
     const runtimeType = selection?.runtimeType ?? this.#state.settings.defaultRuntime;
     const providerId = selection?.providerId ?? compatibleDefaultProvider(runtimeType, this.#state.settings.defaultProviderId);
@@ -1266,6 +1283,10 @@ export class InteractiveWorkspace {
     const preferredModel = selection?.model ?? this.#state.settings.defaultModel;
     const model = safeModel(provider.models.includes(preferredModel) ? preferredModel : provider.models[0] ?? 'auto');
     const selectedPermission = permissionMode(selection?.permissionMode ?? defaultPermission(runtimeType));
+    const thinkingEffort = validatedThinkingEffort(
+      selection?.thinkingEffort,
+      this.#thinkingControl(runtimeType, provider.id),
+    );
     const token = randomUUID();
     const branch = 'tsukiori/session-' + token.slice(0, 8);
     const worktreePath = join(this.#worktreeRoot, project.id.replace(':', '-'), token.slice(0, 12));
@@ -1276,6 +1297,7 @@ export class InteractiveWorkspace {
       id: 'session:' + token, projectId,
       name: (runtimeType === 'codex' ? 'Codex ' : 'Claude ') + runtimeCount,
       runtimeType, providerId, model, environment: 'windows-native', permissionMode: selectedPermission,
+      ...(thinkingEffort ? { thinkingEffort } : {}),
       worktreePath, branch, ...(runtimeType === 'claude' ? { threadId: randomUUID() } : {}),
       turnCount: 0, status: 'ready', createdAt: Date.now(), updatedAt: Date.now(),
     };
@@ -1288,7 +1310,7 @@ export class InteractiveWorkspace {
     return session;
   }
 
-  async updateSessionOptions(sessionId: string, input: { providerId?: string; model?: string; permissionMode?: string }): Promise<SessionState> {
+  async updateSessionOptions(sessionId: string, input: { providerId?: string; model?: string; permissionMode?: string; thinkingEffort?: string }): Promise<SessionState> {
     const session = this.#session(sessionId);
     this.#assertSessionWritable(session);
     if (session.turnCount > 0 || session.status === 'running') throw new Error('Session 首次 Turn 后 Runtime 参数已锁定');
@@ -1297,9 +1319,17 @@ export class InteractiveWorkspace {
     if (providerNeedsSecret(provider) && !provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
     const runtime = this.#runtimes.find((item) => item.type === session.runtimeType);
     if (provider.kind === 'claude-native' && !runtime?.authenticated) throw new Error('Claude Code 本机 Runtime 尚未登录');
+    const providerChanged = provider.id !== session.providerId;
+    const matrix = this.#thinkingControl(session.runtimeType, provider.id);
+    const requestedEffort = input.thinkingEffort !== undefined
+      ? input.thinkingEffort
+      : providerChanged ? undefined : session.thinkingEffort;
+    const thinkingEffort = validatedThinkingEffort(requestedEffort, matrix);
     session.providerId = provider.id;
     session.model = safeModel(input.model ?? provider.models[0] ?? session.model);
     session.permissionMode = permissionMode(input.permissionMode ?? session.permissionMode);
+    if (thinkingEffort) session.thinkingEffort = thinkingEffort;
+    else delete session.thinkingEffort;
     session.updatedAt = Date.now();
     this.#save();
     return session;
@@ -1337,6 +1367,7 @@ export class InteractiveWorkspace {
         ...(session.forkSourceRuntimeMessageId ? { resumeSessionAt: session.forkSourceRuntimeMessageId } : {}),
         prompt, model: provider.kind === 'deepseek' ? deepSeekClaudeModel(session.model) : session.model,
         permissionMode: claudePermission(session.permissionMode),
+        ...(session.thinkingEffort ? { thinkingEffort: session.thinkingEffort } : {}),
         authMode: provider.kind === 'claude-native' ? 'native' : 'provider', environment,
         onEvent: (type, payload) => this.#runtimeEvent(sessionId, type, payload),
         onExit: (error) => {
@@ -2058,6 +2089,29 @@ export class InteractiveWorkspace {
     if (session.importedReadOnly) throw new Error('导入历史为只读；请先显式 Fork，再修改代码或启动 Runtime');
   }
 
+  #thinkingControl(runtimeType: RuntimeType, providerId: string): ThinkingControlMatrix {
+    const provider = this.#providers.get(providerId);
+    const runtime = this.#runtimes.find((item) => item.type === runtimeType);
+    return resolveThinkingControl(runtime, provider.kind);
+  }
+
+  #sanitizeThinkingEfforts(): void {
+    let changed = false;
+    for (const session of this.#state.sessions) {
+      if (!session.thinkingEffort) continue;
+      try {
+        validatedThinkingEffort(
+          session.thinkingEffort,
+          this.#thinkingControl(session.runtimeType, session.providerId),
+        );
+      } catch {
+        delete session.thinkingEffort;
+        changed = true;
+      }
+    }
+    if (changed) this.#save();
+  }
+
   #gitMutation(sessionId: string, action: 'add', paths: readonly string[]): void {
     const session = this.#session(sessionId);
     this.#assertSessionWritable(session);
@@ -2174,6 +2228,7 @@ function migrateSession(value: Record<string, unknown>): SessionState {
     providerId: typeof value.providerId === 'string' ? value.providerId : 'provider:chatgpt',
     model: typeof value.model === 'string' ? value.model : 'auto', environment: 'windows-native',
     permissionMode: permissionMode(typeof value.permissionMode === 'string' ? value.permissionMode : defaultPermission(runtimeType)),
+    ...(isClaudeThinkingEffort(value.thinkingEffort) ? { thinkingEffort: value.thinkingEffort } : {}),
     worktreePath: String(value.worktreePath), branch: String(value.branch),
     ...(typeof value.threadId === 'string' ? { threadId: value.threadId } : {}),
     ...(typeof value.forkedFromSessionId === 'string' ? { forkedFromSessionId: value.forkedFromSessionId } : {}),
@@ -2232,6 +2287,10 @@ function migrateTeam(value: Record<string, unknown>, sessions: readonly SessionS
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
   };
+}
+
+function isClaudeThinkingEffort(value: unknown): value is ClaudeThinkingEffort {
+  return value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh' || value === 'max';
 }
 
 function migrateProject(value: Record<string, unknown>): ProjectState {

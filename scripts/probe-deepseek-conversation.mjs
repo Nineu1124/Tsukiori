@@ -90,7 +90,6 @@ try {
         ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro[1m]',
         ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
         CLAUDE_CODE_SUBAGENT_MODEL: 'deepseek-v4-flash',
-        CLAUDE_CODE_EFFORT_LEVEL: 'max',
       },
       onEvent(type, payload) {
         if (type === 'assistant.delta') assistant += String(payload.text ?? '');

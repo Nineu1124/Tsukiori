@@ -50,7 +50,7 @@ test('settings center exposes all specification categories and functional contro
     assert.match(html, new RegExp(`data-settings-page="${page}"`));
     assert.match(html, new RegExp(`data-settings-view="${page}"`));
   }
-  for (const id of ['save-settings','setting-language','setting-theme','setting-start-minimized','setting-confirm-high-risk','setting-default-runtime','setting-default-provider','setting-default-model','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','new-mcp','save-mcp','delete-provider','refresh-mcp','import-skill','refresh-skills','load-memory','save-memory','refresh-agent-activity','new-scheduled-task','save-scheduled-task','run-doctor','export-diagnostic-settings','export-settings','pick-cc-haha-source','scan-cc-haha-import','run-cc-haha-import']) {
+  for (const id of ['save-settings','setting-language','setting-theme','setting-start-minimized','setting-confirm-high-risk','setting-show-thinking','setting-default-runtime','setting-default-provider','setting-default-model','new-provider','save-provider','test-provider','fetch-provider-models','delete-provider','settings-refresh-runtimes','new-mcp','save-mcp','delete-provider','refresh-mcp','import-skill','refresh-skills','load-memory','save-memory','refresh-agent-activity','new-scheduled-task','save-scheduled-task','run-doctor','export-diagnostic-settings','export-settings','pick-cc-haha-source','scan-cc-haha-import','run-cc-haha-import']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.match(html, /id="setting-language" disabled/);
@@ -60,6 +60,7 @@ test('settings center exposes all specification categories and functional contro
   assert.match(html, /安全策略强制启用/);
   assert.match(script, /defaultModel:byId\('setting-default-model'\)\.value/);
   assert.match(script, /fillModels\(byId\('setting-default-model'\)/);
+  assert.match(script, /showThinking:byId\('setting-show-thinking'\)\.checked/);
   assert.match(script, /审计写入降级/);
   for (const method of ['updateSettings','saveProvider','testProvider','listProviderModels','listMcp','saveMcp','deleteMcp','listSkills','skillDetail','pickSkillSource','installSkill','uninstallSkill','listMemory','readMemory','saveMemory','activity','stopBackgroundTask','listScheduledTasks','saveScheduledTask','setScheduledTaskEnabled','deleteScheduledTask','runScheduledTask','diagnosticSummary','exportDiagnostic','exportSettings','pickCcHahaSource','scanCcHahaImport','importCcHaha']) {
     assert.match(script, new RegExp(`workspace\.${method}`));
@@ -87,14 +88,18 @@ test('dialogs provide consistent cancel, close, Escape, and backdrop dismissal',
 });
 
 test('Provider and Runtime selection includes API providers and two executable runtimes', async () => {
-  const [html, script,, preload] = await rendererFiles();
+  const [html, script, styles, preload] = await rendererFiles();
   for (const kind of ['openai','anthropic','deepseek','openai-compatible','anthropic-compatible']) assert.match(html, new RegExp(`value="${kind}"`));
   assert.match(script, /claude-native/);
-  for (const id of ['runtime-select','provider-select','model-select','environment-select','permission-select','create-runtime','create-provider','create-model','create-permission']) {
+  for (const id of ['runtime-select','provider-select','model-select','thinking-effort-select','environment-select','permission-select','create-runtime','create-provider','create-model','create-thinking-effort','create-permission']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(html, /id="(?:runtime|provider|model|environment|permission)-select"[^>]*disabled/);
   assert.match(script, /\['codex','claude'\]/);
+  assert.match(script, /modelEffort\?\.supportLevel==='supported'/);
+  assert.match(script, /DeepSeek effort 映射尚未验证/);
+  assert.match(script, /thinkingEffort:byId\('thinking-effort-select'\)\.value/);
+  assert.match(styles, /body\.hide-thinking \.thinking-body\s*\{[^}]*display:\s*none/);
   for (const method of ['createSession','updateSessionOptions','saveProvider','testProvider']) assert.match(preload, new RegExp(method));
 });
 

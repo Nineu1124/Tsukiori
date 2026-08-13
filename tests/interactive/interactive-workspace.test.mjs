@@ -428,7 +428,7 @@ test('Claude native login runs without an API Key and reports the real auth sour
   const f = fixture(t, {
     discoverClaude: () => ({
       executable: process.execPath, version: '2.1.226', source: 'path-executable',
-      compatibility: 'supported', capabilities: ['stream-json', 'session-resume'],
+      compatibility: 'supported', capabilities: ['stream-json', 'session-resume', 'effort-control'],
     }),
     probeClaudeAuth: () => ({ authenticated: true, source: 'claude-oauth', method: 'oauth_token', provider: 'firstParty' }),
     createClaudeClient: () => fakeClaude,
@@ -446,11 +446,12 @@ test('Claude native login runs without an API Key and reports the real auth sour
   assert.doesNotMatch(JSON.stringify(providerAudit), /oauth|token|baseUrl|model|prompt/i);
   const project = f.workspace.addProject(f.repository);
   const session = await f.workspace.createSession(project.id, {
-    runtimeType: 'claude', providerId: nativeProvider.id, model: 'sonnet', permissionMode: 'manual',
+    runtimeType: 'claude', providerId: nativeProvider.id, model: 'sonnet', permissionMode: 'manual', thinkingEffort: 'high',
   });
   await f.workspace.sendPrompt(session.id, 'native auth prompt');
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(calls.length, 1);
+  assert.equal(calls[0].thinkingEffort, 'high');
   assert.equal(f.emitted.some((event) => event.type === 'assistant.delta'), true);
   assert.equal(f.emitted.some((event) => event.type === 'assistant.thinking.delta'), true);
   assert.deepEqual(f.emitted.filter((event) => event.type === 'tool.event').map((event) => event.payload.phase), ['started', 'completed']);
@@ -473,16 +474,70 @@ test('Claude native login runs without an API Key and reports the real auth sour
   const pendingFork = f.workspace.snapshot().sessions.find((item) => item.id === session.id);
   assert.equal(pendingFork.forkSourceRuntimeSessionId, sourceRuntimeSessionId);
   assert.equal(pendingFork.forkSourceRuntimeMessageId, 'message:native');
+  assert.equal(pendingFork.thinkingEffort, 'high');
 
   await f.workspace.sendPrompt(session.id, 'continue from Claude checkpoint');
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(calls.length, 2);
   assert.equal(calls[1].forkFromSessionId, sourceRuntimeSessionId);
   assert.equal(calls[1].resumeSessionAt, 'message:native');
+  assert.equal(calls[1].thinkingEffort, 'high');
   const resumed = f.workspace.snapshot().sessions.find((item) => item.id === session.id);
   assert.equal(resumed.threadId, rewoundRuntimeSessionId);
   assert.equal(resumed.forkSourceRuntimeSessionId, undefined);
   assert.equal(resumed.forkSourceRuntimeMessageId, undefined);
+});
+
+test('Thinking controls persist across restart, clear on Provider fallback, and hide unverified DeepSeek effort', async (t) => {
+  const secrets = new Map();
+  const credentials = {
+    store(input) { const reference = input.reference ?? 'secretref:thinking-control'; secrets.set(reference, { secret: input.secret, binding: input.binding }); return reference; },
+    use(reference, binding, consumer) { const item = secrets.get(reference); assert.deepEqual(item.binding, binding); return consumer(item.secret); },
+    delete(reference) { return secrets.delete(reference); },
+  };
+  const launch = {
+    executable: process.execPath, version: '2.1.226', source: 'path-executable',
+    compatibility: 'supported', capabilities: ['stream-json', 'session-resume', 'effort-control'],
+  };
+  const auth = () => ({ authenticated: true, source: 'claude-oauth', method: 'oauth_token', provider: 'firstParty' });
+  const fakeClaude = { startTurn() { throw new Error('not_expected'); }, interrupt() {}, async stop() {} };
+  const f = fixture(t, {
+    credentials, discoverClaude: () => launch, probeClaudeAuth: auth, createClaudeClient: () => fakeClaude,
+  });
+  f.workspace.saveProvider({
+    id: 'provider:deepseek', name: 'DeepSeek', kind: 'deepseek', apiKey: 'fixture-secret',
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  });
+  const project = f.workspace.addProject(f.repository);
+  const session = await f.workspace.createSession(project.id, {
+    runtimeType: 'claude', providerId: 'provider:claude-native', model: 'sonnet', thinkingEffort: 'max',
+  });
+  assert.equal(session.thinkingEffort, 'max');
+  assert.equal(f.workspace.snapshot().thinkingControls.find((item) => item.runtimeType === 'claude' && item.providerId === 'provider:claude-native').modelEffort.supportLevel, 'supported');
+  assert.equal(f.workspace.snapshot().thinkingControls.find((item) => item.runtimeType === 'claude' && item.providerId === 'provider:deepseek').modelEffort.supportLevel, 'unknown');
+
+  const deepSeek = await f.workspace.updateSessionOptions(session.id, {
+    providerId: 'provider:deepseek', model: 'deepseek-v4-pro',
+  });
+  assert.equal(deepSeek.thinkingEffort, undefined);
+  await assert.rejects(f.workspace.updateSessionOptions(session.id, { thinkingEffort: 'max' }), /unknown/);
+  const restoredNative = await f.workspace.updateSessionOptions(session.id, {
+    providerId: 'provider:claude-native', model: 'sonnet', thinkingEffort: 'high',
+  });
+  assert.equal(restoredNative.thinkingEffort, 'high');
+  assert.equal(f.workspace.updateSettings({ showThinking: false }).showThinking, false);
+  await f.workspace.shutdown();
+
+  const reopened = new InteractiveWorkspace({
+    userDataPath: f.userData, emit: () => {}, credentials,
+    discoverCodex: () => ({ executable: process.execPath, prefixArgs: [], version: '0.146.0', source: 'path-executable' }),
+    discoverClaude: () => launch, probeClaudeAuth: auth, createClaudeClient: () => fakeClaude,
+  });
+  t.after(() => reopened.shutdown());
+  const reopenedSnapshot = reopened.snapshot();
+  assert.equal(reopenedSnapshot.sessions.find((item) => item.id === session.id).thinkingEffort, 'high');
+  assert.equal(reopenedSnapshot.settings.showThinking, false);
+  await reopened.shutdown();
 });
 
 test('Claude stdio permissions enter Attention Center and route one correlated decision back to the active Turn', async (t) => {

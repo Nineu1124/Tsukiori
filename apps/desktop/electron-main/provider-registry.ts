@@ -238,7 +238,6 @@ export class ProviderRegistry {
       environment.ANTHROPIC_DEFAULT_SONNET_MODEL = pro;
       environment.ANTHROPIC_DEFAULT_HAIKU_MODEL = flash;
       environment.CLAUDE_CODE_SUBAGENT_MODEL = flash;
-      environment.CLAUDE_CODE_EFFORT_LEVEL = 'max';
     }
     if (!provider.secretRef) return consumer(environment);
     const binding = credentialBinding(provider.id, provider.kind);

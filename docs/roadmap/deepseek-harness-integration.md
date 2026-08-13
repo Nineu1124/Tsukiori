@@ -90,10 +90,10 @@
 
 ### DSH-05 Thinking 控制 Probe
 
-- [ ] 通过真实无敏感 Probe 确定 DeepSeek/Claude Thinking 控制接口后再提供 UI
+- [x] 通过真实无敏感 Probe 确定 DeepSeek/Claude Thinking 控制接口后再提供 UI
 - 前置依赖：DSH-08
 - 交付物：版本化 Probe、能力矩阵、可选设置 UI、实施报告
 - Checkpoints：
-  - [ ] Probe 明确区分 Provider API 参数、Claude Code 环境/参数和宿主显示偏好
-  - [ ] 不支持的版本显示 unsupported/unknown，不能通过猜测环境变量启用
-  - [ ] 设置只在能力被验证时出现，并通过重启、切换 Provider 和回退测试
+  - [x] Probe 明确区分 Provider API 参数、Claude Code 环境/参数和宿主显示偏好
+  - [x] 不支持的版本显示 unsupported/unknown，不能通过猜测环境变量启用
+  - [x] 设置只在能力被验证时出现，并通过重启、切换 Provider 和回退测试
