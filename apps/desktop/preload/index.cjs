@@ -152,6 +152,9 @@ const api = Object.freeze({
     openExternalEditor: (operationId) => ipcRenderer.invoke(
       'workspace:command', { type: 'open_external_editor', operationId },
     ),
+    recoverOperation: (operationId, action) => ipcRenderer.invoke(
+      'workspace:command', { type: 'recover_operation', operationId, action },
+    ),
     decidePermission: (requestId, connectionEpoch, decision) => ipcRenderer.invoke(
       'workspace:command', { type: 'permission', requestId, connectionEpoch, decision },
     ),

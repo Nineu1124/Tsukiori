@@ -37,11 +37,26 @@ export type RecoveryReport = {
   autoReplayCount: 0;
 };
 
+export type UncertainOperationAction = 'diagnostics' | 'abandon' | 'retry';
+
+export type UncertainOperationActionResult = {
+  operationId: string;
+  operationType: OperationRecord['type'];
+  action: UncertainOperationAction;
+  status: 'unchanged' | 'failed' | 'retry_requested' | 'rejected';
+  reason: string;
+  autoReplay: false;
+};
+
 export class RecoveryManager {
   readonly #database: LocalDatabase;
   readonly #observer: ProcessObserver;
-  readonly #permissions: Pick<PermissionBroker, 'addAttention'> | undefined;
+  readonly #permissions: Pick<PermissionBroker, 'addAttention' | 'resolveAttention'> | undefined;
   readonly #recoverWorktrees: (() => WorktreeRecoveryResult[]) | undefined;
+  readonly #requestRetry: ((operation: Pick<OperationRecord, 'operationId' | 'type' | 'sessionId'>) => {
+    accepted: boolean;
+    reason: string;
+  }) | undefined;
   readonly #now: () => number;
   readonly #daemonBootId: string;
 
@@ -49,8 +64,12 @@ export class RecoveryManager {
     database: LocalDatabase;
     processObserver: ProcessObserver;
     daemonBootId: string;
-    permissions?: Pick<PermissionBroker, 'addAttention'>;
+    permissions?: Pick<PermissionBroker, 'addAttention' | 'resolveAttention'>;
     recoverWorktrees?: () => WorktreeRecoveryResult[];
+    requestRetry?: (operation: Pick<OperationRecord, 'operationId' | 'type' | 'sessionId'>) => {
+      accepted: boolean;
+      reason: string;
+    };
     now?: () => number;
   }) {
     if (!input.daemonBootId.trim()) throw new Error('Recovery requires a daemon boot identity');
@@ -58,6 +77,7 @@ export class RecoveryManager {
     this.#observer = input.processObserver;
     this.#permissions = input.permissions;
     this.#recoverWorktrees = input.recoverWorktrees;
+    this.#requestRetry = input.requestRetry;
     this.#now = input.now ?? Date.now;
     this.#daemonBootId = input.daemonBootId;
   }
@@ -75,6 +95,63 @@ export class RecoveryManager {
       operationResults,
       autoReplayCount: 0,
     };
+  }
+
+  resolveUncertainOperation(
+    operationId: string,
+    action: UncertainOperationAction,
+  ): UncertainOperationActionResult {
+    if (!operationId.trim() || !['diagnostics', 'abandon', 'retry'].includes(action)) {
+      throw new Error('Invalid uncertain operation recovery action');
+    }
+    const operation = this.#database.readOperation(operationId);
+    if (!operation || operation.status !== 'uncertain') {
+      return this.#actionResult(
+        operation ?? { operationId, type: 'git_review' },
+        action,
+        'rejected',
+        operation ? 'operation_is_not_uncertain' : 'operation_not_found',
+      );
+    }
+    if (action === 'diagnostics') {
+      return this.#actionResult(operation, action, 'unchanged', 'safe_operation_facts_available');
+    }
+    if (action === 'retry') {
+      if (operation.type === 'permission_response') {
+        return this.#actionResult(operation, action, 'rejected', 'permission_response_retry_forbidden');
+      }
+      if (!this.#requestRetry) {
+        return this.#actionResult(operation, action, 'rejected', 'retry_handler_unavailable');
+      }
+      let requested: { accepted: boolean; reason: string };
+      try {
+        requested = this.#requestRetry({
+          operationId: operation.operationId,
+          type: operation.type,
+          ...(operation.sessionId ? { sessionId: operation.sessionId } : {}),
+        });
+      } catch {
+        return this.#actionResult(operation, action, 'rejected', 'retry_handler_failed');
+      }
+      const reason = this.#safeReason(requested.reason);
+      if (!requested.accepted) return this.#actionResult(operation, action, 'rejected', reason);
+      this.#database.saveOperation({
+        ...operation,
+        status: 'failed',
+        error: { code: 'superseded_by_manual_retry', reason },
+        updatedAt: this.#now(),
+      });
+      this.#resolveOperationAttention(operation.operationId);
+      return this.#actionResult(operation, action, 'retry_requested', reason);
+    }
+    this.#database.saveOperation({
+      ...operation,
+      status: 'failed',
+      error: { code: 'recovery_abandoned_by_user' },
+      updatedAt: this.#now(),
+    });
+    this.#resolveOperationAttention(operation.operationId);
+    return this.#actionResult(operation, action, 'failed', 'abandoned_by_user');
   }
 
   #reconcileProcesses(): RecoveryOutcome[] {
@@ -213,6 +290,11 @@ export class RecoveryManager {
         operationType: operation.type,
         reason,
         autoReplay: false,
+        availableActions: [
+          'diagnostics',
+          'abandon',
+          ...(this.#requestRetry && operation.type !== 'permission_response' ? ['retry'] : []),
+        ],
       },
       at: this.#now(),
     });
@@ -226,5 +308,25 @@ export class RecoveryManager {
 
   #safeReason(value: string): string {
     return value.replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80) || 'unknown';
+  }
+
+  #resolveOperationAttention(operationId: string): void {
+    this.#permissions?.resolveAttention('recovery_uncertain', 'recovery-operation:' + operationId);
+  }
+
+  #actionResult(
+    operation: Pick<OperationRecord, 'operationId' | 'type'>,
+    action: UncertainOperationAction,
+    status: UncertainOperationActionResult['status'],
+    reason: string,
+  ): UncertainOperationActionResult {
+    return {
+      operationId: operation.operationId,
+      operationType: operation.type,
+      action,
+      status,
+      reason: this.#safeReason(reason),
+      autoReplay: false,
+    };
   }
 }

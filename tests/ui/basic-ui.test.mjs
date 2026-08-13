@@ -126,6 +126,12 @@ test('Renderer uses a fixed preload surface and does not gain Node or HTML injec
     assert.match(preload, new RegExp(method));
   }
   assert.doesNotMatch(script + preload, /innerHTML|insertAdjacentHTML|eval\(|child_process|node:fs|spawn\(|exec\(/);
+  assert.match(preload, /recoverOperation/);
+  assert.match(script, /function recoveryAttentionView/);
+  for (const field of ['operationId','operationType','reason']) assert.match(script, new RegExp(`\\['${field}'`));
+  for (const action of ['diagnostics','abandon','retry']) assert.match(script, new RegExp(action));
+  assert.match(script, /不会自动重放原操作/);
+  assert.doesNotMatch(script, /requestPayload/);
 });
 
 test('legacy smoke fixtures remain isolated from the interactive product surface', async () => {

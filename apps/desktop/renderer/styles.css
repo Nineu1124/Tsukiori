@@ -598,6 +598,14 @@ body.density-compact .message-body,body.density-compact .composer textarea { fon
 }
 .attention-item.failed::before { background: var(--tsukiori-danger); }
 .attention-item.healthy::before { background: var(--tsukiori-success); }
+.attention-item h3 { margin: 0 0 7px; font-size: 10px; }
+.attention-item dl { display: grid; gap: 5px; margin: 0; }
+.attention-item dl div { display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 6px; }
+.attention-item dt { color: var(--tsukiori-muted); font-size: 7px; }
+.attention-item dd { margin: 0; overflow-wrap: anywhere; font: 8px "Cascadia Mono",Consolas,monospace; }
+.recovery-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.recovery-actions button { padding: 5px 7px; border: 1px solid rgba(37,143,232,.28); border-radius: 5px; background: white; font-size: 8px; }
+.recovery-actions button[data-recovery-action="abandon"] { border-color: rgba(239,107,124,.42); color: #b83d51; }
 /* support-<level> chips rendered from Codex native capabilities. */
 .native-capability [data-field="supportLevel"] {
   padding: 2px 8px;

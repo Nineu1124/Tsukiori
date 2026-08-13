@@ -68,7 +68,7 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
   assert.equal(result.fakeRuntimeAliveAfterRendererCrash, true);
   assert.equal(result.fakeRuntimeEventCount, 1);
   assert.deepEqual(result.rendererState, {
-    permissionCards: 1, toolCards: 1, attentionItems: 4,
+    permissionCards: 1, toolCards: 1, attentionItems: 5,
     permissionCategory: 'shell', enforcementLevel: 'interceptable',
     runtimeCards: 2, runtimeAuthSource: 'chatgpt', runtimeCompatibility: 'supported',
     nativeCapabilityRows: 5,
@@ -83,7 +83,11 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
     alphaVisible: true, alphaPhase: 'review', alphaDestination: 'api.deepseek.com',
     workflowSteps: 5, changedFiles: 1,
     alphaActionNames: ['stage', 'commit', 'archive', 'safeCleanup'],
-    attentionKinds: ['waiting_permission', 'waiting_input', 'completed', 'failed'],
+    attentionKinds: ['waiting_permission', 'waiting_input', 'completed', 'failed', 'recovery_uncertain'],
+    recoveryOperationId: 'operation-smoke-uncertain',
+    recoveryOperationType: 'commit',
+    recoveryReason: 'git_head_requires_manual_commit_attribution',
+    recoveryActions: ['diagnostics', 'abandon', 'retry'],
     prohibitedActionCount: 0,
     v1GitVisible: true,
     v1GitActions: ['unstage', 'revert', 'integrate', 'continue', 'external-editor'],
@@ -93,7 +97,18 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
   assert.deepEqual(result.alphaCommandResult, { ok: true, command: 'stage', sequence: 1 });
   assert.deepEqual(result.integrationCommandResult, { ok: true, command: 'integrate', sequence: 2 });
   assert.deepEqual(result.editorCommandResult, { ok: true, command: 'open_external_editor', sequence: 3 });
-  assert.equal(result.smokeCommandCount, 3);
+  assert.deepEqual(result.recoveryDiagnosticResult, {
+    ok: true,
+    recovery: {
+      operationId: 'operation-smoke-uncertain',
+      operationType: 'commit',
+      action: 'diagnostics',
+      status: 'unchanged',
+      reason: 'git_head_requires_manual_commit_attribution',
+      autoReplay: false,
+    },
+  });
+  assert.equal(result.smokeCommandCount, 4);
   assert.equal(result.daemonVersion, '1.0.0-rc.7');
   assert.equal(result.protocolVersion, 1);
 });

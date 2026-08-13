@@ -30,13 +30,13 @@
 
 ### DSH-09 不确定操作详情与恢复入口
 
-- [ ] 在 Attention Center 展示不确定 Durable Operation 的安全详情和恢复动作
+- [x] 在 Attention Center 展示不确定 Durable Operation 的安全详情和恢复动作
 - 前置依赖：DSH-07
 - 交付物：白名单详情投影、恢复入口、UI/跨层测试、实施报告
 - Checkpoints：
-  - [ ] 只展示 operationId、operationType、reason 等允许字段，不暴露原始 requestPayload
-  - [ ] 用户可从详情执行明确的重试、放弃或进入诊断动作，结果可观察
-  - [ ] 非法字段、过期操作和恢复失败均有拒绝/错误状态
+  - [x] 只展示 operationId、operationType、reason 等允许字段，不暴露原始 requestPayload
+  - [x] 用户可从详情执行明确的重试、放弃或进入诊断动作，结果可观察
+  - [x] 非法字段、过期操作和恢复失败均有拒绝/错误状态
 
 ### DSH-10 Runtime 环境隔离
 

@@ -56,6 +56,40 @@ function renderPermission(permission, container = byId('permission-list')) {
   container.append(card);
 }
 
+function recoveryAttentionView(item) {
+  if (item?.kind !== 'recovery_uncertain' || !item.payload || item.payload.autoReplay !== false) return null;
+  const operationId = String(item.payload.operationId ?? '');
+  const operationType = String(item.payload.operationType ?? '');
+  const knownTypes = ['worktree_create','runtime_session_create','permission_response','git_review','git_stage','git_unstage','git_revert','commit','merge','rebase','worktree_remove'];
+  if (!/^[A-Za-z0-9:_-]{1,160}$/.test(operationId) || !knownTypes.includes(operationType)) return null;
+  const allowed = new Set(['diagnostics','abandon','retry']);
+  const actions = [...new Set((Array.isArray(item.payload.availableActions) ? item.payload.availableActions : [])
+    .map(String).filter((action) => allowed.has(action)))];
+  return { operationId, operationType, reason: String(item.payload.reason ?? 'unknown').slice(0,120), actions };
+}
+
+function renderAttentionItem(item, container) {
+  const card = document.createElement('article'); card.className = 'attention-item ' + String(item.kind ?? 'unknown');
+  const title = document.createElement('h3'); title.textContent = String(item.title ?? '待处理事项'); card.append(title);
+  const recovery = recoveryAttentionView(item);
+  if (!recovery) { container.append(card); return; }
+  const details = document.createElement('dl');
+  for (const [field, label, value] of [
+    ['operationId','Operation ID',recovery.operationId],
+    ['operationType','类型',recovery.operationType],
+    ['reason','原因',recovery.reason],
+  ]) {
+    const row=document.createElement('div'),term=document.createElement('dt'),description=document.createElement('dd');
+    term.textContent=label;description.dataset.field=field;description.textContent=value;row.append(term,description);details.append(row);
+  }
+  const boundary=document.createElement('p');boundary.className='boundary-note';boundary.textContent='不会自动重放原操作；重试会创建新的操作请求。';
+  const status=document.createElement('p');status.className='operation-status';status.setAttribute('aria-live','polite');
+  const actions=document.createElement('div');actions.className='recovery-actions';
+  const labels={diagnostics:'查看诊断',abandon:'放弃操作',retry:'安全重试'};
+  for(const action of recovery.actions){const button=document.createElement('button');button.type='button';button.dataset.recoveryAction=action;button.textContent=labels[action];button.addEventListener('click',async()=>{button.disabled=true;try{const result=operationError(await window.tsukiori.workspace.recoverOperation(recovery.operationId,action));status.textContent=`${result.recovery.status} · ${result.recovery.reason}`;if(action!=='diagnostics'){for(const sibling of actions.querySelectorAll('button'))sibling.disabled=true;}}catch(error){status.textContent=error.message;button.disabled=false;}});actions.append(button);}
+  card.append(details,boundary,actions,status);container.append(card);
+}
+
 function renderTool(tool) {
   const card = byId('tool-card-template').content.firstElementChild.cloneNode(true);
   setField(card, 'title', tool.title); setField(card, 'summary', tool.summary); byId('tool-list').append(card);
@@ -604,6 +638,6 @@ try {
   if(snapshot?.mode==='interactive'){
     document.body.classList.add('interactive-mode');for(const key of ['projects','sessions','teams','integrations','runtimes','providers','recentEvents','permissions','settings','usage'])state[key]=snapshot[key]??state[key];state.eventCursor=snapshot.eventCursor??0;state.activeProjectId=state.projects[0]?.id??null;state.activeSessionId=state.sessions.find((item)=>item.projectId===state.activeProjectId&&!item.archivedAt)?.id??null;bindUi();applyAppearance();renderAll();if(state.settings.autoUpdate!==false)setTimeout(()=>void checkUpdates(),1200);
   }else{
-    byId('interactive-workspace').hidden=true;byId('legacy-workspace').hidden=false;setText('version','Protocol '+versions.protocol);renderAlphaWorkflow(snapshot.workflow);renderV1GitWorkflow(snapshot.v1Git);renderDiagnosticBundle(snapshot.diagnostics);for(const tool of snapshot.tools??[])renderTool(tool);for(const runtime of snapshot.runtimes??[])renderRuntime(runtime);clear(byId('attention-list'));for(const permission of snapshot.permissions??[])renderPermission(permission,byId('attention-list'));for(const item of snapshot.attention??[]){const card=document.createElement('article');card.className='attention-item '+item.kind;card.textContent=item.title;byId('attention-list').append(card);}setText('attention-count',(snapshot.attention??[]).length);
+    byId('interactive-workspace').hidden=true;byId('legacy-workspace').hidden=false;setText('version','Protocol '+versions.protocol);renderAlphaWorkflow(snapshot.workflow);renderV1GitWorkflow(snapshot.v1Git);renderDiagnosticBundle(snapshot.diagnostics);for(const tool of snapshot.tools??[])renderTool(tool);for(const runtime of snapshot.runtimes??[])renderRuntime(runtime);clear(byId('attention-list'));for(const permission of snapshot.permissions??[])renderPermission(permission,byId('attention-list'));for(const item of snapshot.attention??[])renderAttentionItem(item,byId('attention-list'));setText('attention-count',(snapshot.attention??[]).length);
   }
 }catch(error){setText('status','Daemon 不可用');byId('daemon-dot').classList.add('failed');}

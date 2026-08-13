@@ -55,6 +55,13 @@ const workspaceSnapshot = smokeMode ? {
       actions: [{ id: 'review_diff', label: 'Review Diff' }] },
     { id: 'smoke-attention-failed', kind: 'failed', status: 'open',
       title: '失败事项示例', sourceRef: 'turn-failed', actions: [] },
+    { id: 'smoke-attention-recovery', kind: 'recovery_uncertain', status: 'open',
+      title: '操作在 Daemon 恢复后需要人工确认', sourceRef: 'recovery-operation:operation-smoke-uncertain',
+      risk: 'high', payload: {
+        operationId: 'operation-smoke-uncertain', operationType: 'commit',
+        reason: 'git_head_requires_manual_commit_attribution', autoReplay: false,
+        availableActions: ['diagnostics', 'abandon', 'retry'],
+      } },
   ],
   tools: [{ id: 'smoke-tool', title: 'Shell', summary: 'git status' }],
   runtimes: [{
@@ -239,6 +246,11 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
             .map((element) => element.dataset.action),
           attentionKinds: [...document.querySelectorAll('.attention-item')]
             .map((element) => [...element.classList].find((name) => name !== 'attention-item')),
+          recoveryOperationId: document.querySelector('.attention-item.recovery_uncertain [data-field="operationId"]')?.textContent,
+          recoveryOperationType: document.querySelector('.attention-item.recovery_uncertain [data-field="operationType"]')?.textContent,
+          recoveryReason: document.querySelector('.attention-item.recovery_uncertain [data-field="reason"]')?.textContent,
+          recoveryActions: [...document.querySelectorAll('.attention-item.recovery_uncertain [data-recovery-action]')]
+            .map((element) => element.dataset.recoveryAction),
           prohibitedActionCount: document.querySelectorAll(
             '[data-action="merge"],[data-runtime="claude"],[data-runtime="acp"],[data-platform]',
           ).length,
@@ -267,6 +279,10 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
     `window.tsukiori.workspace.openExternalEditor('operation:smoke-conflict')`,
     true,
   ) as Record<string, unknown>;
+  const recoveryDiagnosticResult = await window.webContents.executeJavaScript(
+    `window.tsukiori.workspace.recoverOperation('operation-smoke-uncertain', 'diagnostics')`,
+    true,
+  ) as Record<string, unknown>;
   const crash = new Promise<Electron.RenderProcessGoneDetails>((resolveCrash) => {
     window.webContents.once('render-process-gone', (_event, details) => resolveCrash(details));
   });
@@ -289,6 +305,7 @@ async function runSmoke(window: BrowserWindow): Promise<void> {
         alphaCommandResult,
         integrationCommandResult,
         editorCommandResult,
+        recoveryDiagnosticResult,
         smokeCommandCount,
         daemonVersion: status.daemonVersion,
         protocolVersion: status.protocolVersion,
@@ -327,6 +344,7 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
     const allowed = new Set([
       'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
       'integrate', 'continue_integration', 'open_external_editor', 'export_diagnostic',
+      'recover_operation',
       'computer_use_status', 'computer_use_foreground', 'computer_use_acquire',
       'computer_use_release', 'computer_use_request', 'computer_use_approve',
     ]);
@@ -343,6 +361,27 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
       ok: true,
       foreground: { pid: 4242, name: 'fixture-app.exe', startTime: 1, titleHash: 'fixture-title' },
     };
+    if (command.type === 'recover_operation') {
+      const operationId = String(command.operationId ?? '');
+      const action = String(command.action ?? '');
+      const item = (workspaceSnapshot.attention as Array<Record<string, unknown>>).find((candidate) => {
+        const payload = object(candidate.payload);
+        return candidate.kind === 'recovery_uncertain' && payload.operationId === operationId;
+      });
+      const payload = object(item?.payload);
+      const actions = Array.isArray(payload.availableActions) ? payload.availableActions.map(String) : [];
+      if (!item || !['diagnostics', 'abandon', 'retry'].includes(action) || !actions.includes(action)) {
+        return { ok: false, code: 'recovery_action_unavailable', message: '恢复动作不可用或已过期' };
+      }
+      return { ok: true, recovery: {
+        operationId,
+        operationType: String(payload.operationType),
+        action,
+        status: action === 'diagnostics' ? 'unchanged' : action === 'retry' ? 'retry_requested' : 'failed',
+        reason: action === 'diagnostics' ? String(payload.reason) : action === 'retry' ? 'new_operation_requested' : 'abandoned_by_user',
+        autoReplay: false,
+      } };
+    }
     return { ok: true, command: command.type, sequence: smokeCommandCount };
   }
   const workspace = interactiveWorkspace;
@@ -410,6 +449,11 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
     }
     if (command.type === 'pin_project') return {
       ok: true, project: workspace.pinProject(String(command.projectId ?? ''), command.pinned === true),
+    };
+    if (command.type === 'recover_operation') return {
+      ok: false,
+      code: 'recovery_manager_not_connected',
+      message: '正式 Daemon/IPC Recovery 接入将在 DSH-02 完成',
     };
     if (command.type === 'refresh_runtimes') return { ok: true, runtime: workspace.refreshRuntimes() };
     if (command.type === 'poll_events') return {

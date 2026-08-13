@@ -168,3 +168,79 @@ test('Runtime, Worktree, Commit, Merge, permission, and cleanup operations get d
   assert.ok(attention.some((item) => item.sourceRef === 'recovery-operation:operation-cleanup'));
   assert.equal(attention.every((item) => item.payload.autoReplay === false), true);
 });
+
+test('uncertain operation actions expose safe facts, never replay payloads, and resolve durable attention', (t) => {
+  const { database, at } = fixture(t);
+  let attentionSerial = 0;
+  const broker = new PermissionBroker(database, {
+    now: () => at + 400,
+    id: () => 'recovery-action-attention-' + ++attentionSerial,
+  });
+  for (const [id, type] of [
+    ['retry', 'commit'],
+    ['abandon', 'git_stage'],
+    ['permission', 'permission_response'],
+  ]) {
+    database.saveOperation({
+      id: 'record-action-' + id,
+      operationId: 'operation-action-' + id,
+      type,
+      sessionId: 'session-1',
+      status: 'running',
+      requestPayload: { schemaVersion: 1, opaqueOriginalPayload: 'must-not-enter-retry-handler' },
+      createdAt: at,
+      updatedAt: at,
+    });
+  }
+  const retryRequests = [];
+  const manager = new RecoveryManager({
+    database,
+    permissions: broker,
+    daemonBootId: 'boot-recovery-actions',
+    now: () => at + 500,
+    processObserver: { observe: () => ({ state: 'absent' }) },
+    requestRetry: (operation) => {
+      retryRequests.push(structuredClone(operation));
+      return { accepted: true, reason: 'new_operation_requested' };
+    },
+  });
+  manager.reconcile();
+  const retryAttention = broker.snapshot().attention.find(
+    (item) => item.sourceRef === 'recovery-operation:operation-action-retry',
+  );
+  assert.deepEqual(retryAttention.payload.availableActions, ['diagnostics', 'abandon', 'retry']);
+  assert.deepEqual(
+    manager.resolveUncertainOperation('operation-action-retry', 'diagnostics'),
+    {
+      operationId: 'operation-action-retry', operationType: 'commit', action: 'diagnostics',
+      status: 'unchanged', reason: 'safe_operation_facts_available', autoReplay: false,
+    },
+  );
+  assert.equal(database.readOperation('operation-action-retry').status, 'uncertain');
+
+  const retried = manager.resolveUncertainOperation('operation-action-retry', 'retry');
+  assert.equal(retried.status, 'retry_requested');
+  assert.equal(retried.autoReplay, false);
+  assert.deepEqual(retryRequests, [{
+    operationId: 'operation-action-retry', type: 'commit', sessionId: 'session-1',
+  }]);
+  assert.doesNotMatch(JSON.stringify(retryRequests), /opaqueOriginalPayload|must-not-enter/);
+  assert.equal(database.readOperation('operation-action-retry').status, 'failed');
+  assert.equal(database.readOperation('operation-action-retry').error.code, 'superseded_by_manual_retry');
+  assert.equal(broker.snapshot().attention.find((item) => item.sourceRef === retryAttention.sourceRef).status, 'resolved');
+
+  const abandoned = manager.resolveUncertainOperation('operation-action-abandon', 'abandon');
+  assert.equal(abandoned.status, 'failed');
+  assert.equal(database.readOperation('operation-action-abandon').error.code, 'recovery_abandoned_by_user');
+  assert.equal(broker.snapshot().attention.find(
+    (item) => item.sourceRef === 'recovery-operation:operation-action-abandon',
+  ).status, 'resolved');
+
+  const forbidden = manager.resolveUncertainOperation('operation-action-permission', 'retry');
+  assert.equal(forbidden.status, 'rejected');
+  assert.equal(forbidden.reason, 'permission_response_retry_forbidden');
+  assert.equal(database.readOperation('operation-action-permission').status, 'uncertain');
+  assert.equal(manager.resolveUncertainOperation('operation-action-retry', 'retry').reason, 'operation_is_not_uncertain');
+  assert.equal(manager.resolveUncertainOperation('operation-missing', 'diagnostics').reason, 'operation_not_found');
+  assert.throws(() => manager.resolveUncertainOperation('operation-action-permission', 'erase'), /Invalid/);
+});
