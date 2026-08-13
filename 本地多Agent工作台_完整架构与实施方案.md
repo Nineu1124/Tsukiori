@@ -3637,6 +3637,7 @@ src/helpers/
   - [x] 新工作台审阅面板接入真实 Integration Worktree：Merge/Rebase 隔离验证、冲突/验证失败恢复、显式 Promotion、目标竞争拒绝、恢复引用与丢弃清理均可观察，验证阶段不修改项目主工作区
   - [x] 最小化启动接入真实 BrowserWindow 生命周期，正常产品进程使用单实例锁；真实 Electron 探针验证首实例 minimized、第二实例退出并恢复原窗口，退出后无孤儿 Named Pipe Host
   - [x] 默认 Model 可随 Provider 选择并用于新 Session；当前未实现的英文界面与系统主题明确锁定，高风险确认由安全策略强制启用且不能由旧状态或 Renderer 参数关闭
+  - [x] 动画补丁采用可追踪的 170ms 入场/130ms 退场、Opacity-only Backdrop 和真实消息行虚拟化；Reduced Motion 对 token 与硬编码动画均生效，Electron 探针验证持久化、0.01ms 时长和单次迭代
 
 ### G5 阶段 5 Gate
 

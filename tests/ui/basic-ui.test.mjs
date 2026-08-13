@@ -202,8 +202,10 @@ test('every button receives motion feedback with specialized actions and reduced
   assert.match(styles, /--motion-fast:\s*120ms/);
   assert.match(styles, /--motion-panel:\s*180ms/);
   assert.match(styles, /--motion-overlay:\s*170ms/);
+  assert.match(styles, /--motion-overlay-exit:\s*130ms/);
   assert.match(styles, /--motion-dialog:\s*260ms/);
   assert.match(styles, /--ease-enter:\s*cubic-bezier\(\.2,\.8,\.2,1\)/);
+  assert.match(styles, /--ease-exit:\s*cubic-bezier\(\.4,0,1,1\)/);
   assert.match(styles, /button\s*\{[\s\S]*transition:[\s\S]*transform var\(--motion-fast\)/);
   assert.match(styles, /button:not\(:disabled\):hover\s*\{[\s\S]*translateY\(-1px\)/);
   assert.match(styles, /button:not\(:disabled\):active\s*\{[\s\S]*translateY\(0\)/);
@@ -213,8 +215,17 @@ test('every button receives motion feedback with specialized actions and reduced
   assert.match(styles, /#new-team,#panel-new-team,#confirm-create-team/);
   assert.match(styles, /\.settings-dialog\[open\][\s\S]*tsukiori-dialog-in var\(--motion-dialog\) var\(--ease-enter\)/);
   assert.match(styles, /@keyframes tsukiori-dialog-in\s*\{\s*0%\s*\{[^}]*translateY\(10px\)[^}]*\}\s*100%\s*\{[^}]*translateY\(0\)/);
-  assert.match(styles, /\.reduce-motion button[\s\S]*animation:\s*none !important/);
+  assert.match(styles, /@keyframes tsukiori-backdrop-in\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}\s*to\s*\{\s*opacity:\s*1;/);
+  assert.doesNotMatch(styles, /@keyframes tsukiori-backdrop-in\s*\{[^}]*backdrop-filter/);
+  assert.match(styles, /\.app-shell\.right-collapsed \.attention-panel[\s\S]*var\(--motion-overlay-exit\) var\(--ease-exit\)/);
+  assert.match(styles, /\.conversation > :is\(\.welcome-message,\.chat-message,\.turn-divider,\.thinking-block\)[\s\S]*content-visibility:\s*auto[\s\S]*contain-intrinsic-size:\s*auto 240px/);
+  assert.doesNotMatch(styles, /data-fixed-menu-anchor|--motion-instant|--motion-dialog-exit|--ease-move/);
+  assert.match(styles, /\.reduce-motion \*,\.reduce-motion \*::before,\.reduce-motion \*::after[^}]*animation-iteration-count:\s*1 !important/);
   assert.match(styles, /@media \(prefers-reduced-motion:\s*reduce\)/);
+  const interactionProbe = await readFile(join(root, 'scripts', 'probe-ui-interactions.mjs'), 'utf8');
+  for (const result of ['reduceMotionPersisted','reduceMotionApplied','reducedMotionAnimationDuration','reducedMotionAnimationFinite','reducedMotionTransitionDuration','conversationRowsVirtualized']) {
+    assert.match(interactionProbe, new RegExp(result));
+  }
   for (const id of ['workspace-settings','project-filter','session-favorite','terminal-tab-shell','terminal-new']) {
     assert.match(html, new RegExp(`id="${id}"`));
     assert.match(script, new RegExp(`byId\\('${id}'\\)\\.addEventListener`));

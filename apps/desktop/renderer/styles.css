@@ -20,9 +20,11 @@
   --motion-control: 160ms;
   --motion-panel: 180ms;
   --motion-overlay: 170ms;
+  --motion-overlay-exit: 130ms;
   --motion-dialog: 260ms;
   --ease-tsukiori: ease;
   --ease-enter: cubic-bezier(.2,.8,.2,1);
+  --ease-exit: cubic-bezier(.4,0,1,1);
   --titlebar-height: 40px;
   --rail-width: 300px;
   --work-panel-width: 360px;
@@ -84,8 +86,26 @@ dialog { border: 0; padding: 0; color: var(--tsukiori-text); }.session-dialog { 
 #diagnostic-settings-detail { min-height: 150px; max-height: 360px; overflow: auto; padding: 12px; border-radius: 7px; color: #cfe4ee; background: #102536; white-space: pre-wrap; font: 10px/1.5 "Cascadia Mono",Consolas,monospace; }
 .interactive-mode #active-session { grid-template-rows: 48px 28px minmax(140px,1fr) auto auto var(--terminal-height); }.interactive-mode .chat-message.user { justify-self: end; }.interactive-mode .chat-message.assistant { background: transparent; }
 body.density-compact .session-rail { gap: 6px; }
-.reduce-motion *,.reduce-motion *::before,.reduce-motion *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
-@media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+body.reduce-motion {
+  --motion-fast: .01ms;
+  --motion-control: .01ms;
+  --motion-panel: .01ms;
+  --motion-overlay: .01ms;
+  --motion-overlay-exit: .01ms;
+  --motion-dialog: .01ms;
+}
+.reduce-motion *,.reduce-motion *::before,.reduce-motion *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: .01ms;
+    --motion-control: .01ms;
+    --motion-panel: .01ms;
+    --motion-overlay: .01ms;
+    --motion-overlay-exit: .01ms;
+    --motion-dialog: .01ms;
+  }
+  *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
 @media (max-width: 1300px) { .app-shell { grid-template-columns: 240px minmax(480px,1fr) var(--work-panel-width); }.metric-grid { grid-template-columns: 1fr 1fr; }.composer-selectors label:nth-child(4) { display: none; } }
 
 .settings-card-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }.capability-editor { display: grid; gap: 10px; }.capability-editor h3 { margin: 0; }.capability-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }.capability-form-grid label,.settings-project-picker { display: grid; gap: 5px; color: #607a8e; font-size: 9px; }.capability-form-grid input,.capability-form-grid select,.capability-form-grid textarea,.settings-project-picker select,#memory-path,#memory-content { width: 100%; min-width: 0; padding: 7px; border: 1px solid rgba(37,143,232,.24); border-radius: 5px; background: white; font: inherit; font-size: 9px; }.capability-form-grid label:nth-child(4),.capability-form-grid label:nth-child(5),.capability-form-grid label:nth-child(6) { grid-column: 1 / -1; }.capability-detail { max-height: 320px; overflow: auto; margin: 10px 0 0; padding: 10px; color: #cfe4ee; background: #102536; white-space: pre-wrap; font: 9px/1.5 "Cascadia Mono",Consolas,monospace; }.memory-editor-grid { display: grid; grid-template-columns: minmax(180px,.7fr) minmax(320px,1.3fr); gap: 12px; margin-top: 11px; }.memory-editor-grid > div:last-child { display: grid; gap: 7px; }.memory-editor-grid #memory-content { min-height: 280px; resize: vertical; font: 10px/1.5 "Cascadia Mono",Consolas,monospace; }.mcp-server-row,.skill-server-row,.memory-file-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; align-items: center; padding: 9px 4px; border-bottom: 1px solid #edf5fa; }.mcp-server-row strong,.mcp-server-row small,.skill-server-row strong,.skill-server-row small,.memory-file-row strong,.memory-file-row small { display: block; }.mcp-server-row small,.skill-server-row small,.memory-file-row small { margin-top: 3px; color: #7890a3; font-size: 8px; }.mcp-server-row button,.skill-server-row button,.memory-file-row button { padding: 5px 7px; border: 1px solid rgba(37,143,232,.24); border-radius: 5px; background: white; font-size: 8px; }.mcp-server-row button.danger,.skill-server-row button.danger { color: #bf4657; border-color: rgba(239,107,124,.32); }
@@ -216,7 +236,8 @@ button:disabled:active {
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes tsukiori-backdrop-in {
-  from { background: rgba(31,61,89,0); backdrop-filter: blur(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Below the desktop baseline, the right work panel overlays instead of shrinking the conversation. */
@@ -239,13 +260,14 @@ button:disabled:active {
     width: min(var(--work-panel-width),calc(100vw - 90px));
     visibility: visible;
     box-shadow: -18px 0 45px rgba(28,74,110,.16);
-    transition: transform var(--motion-overlay) ease,visibility var(--motion-overlay);
+    transition: transform var(--motion-overlay) var(--ease-enter),visibility var(--motion-overlay);
   }
   .app-shell.right-collapsed .attention-panel {
     visibility: hidden;
     padding: 10px 12px;
     border-left: 1px solid var(--tsukiori-border);
     transform: translateX(105%);
+    transition: transform var(--motion-overlay-exit) var(--ease-exit),visibility var(--motion-overlay-exit);
   }
 }
 
@@ -1450,3 +1472,10 @@ body.reduce-motion .attention-panel [data-panel-view]:not([hidden]) { animation:
 .team-actions .primary { color: #fff; background: var(--tsukiori-primary); }
 .team-actions .danger-quiet { color: #c64b5a; border-color: rgba(229,102,116,.20); }
 body.reduce-motion .team-detail,body.reduce-motion .status-dot { animation: none; }
+
+/* Only virtualize real conversation rows; controls and future menu anchors remain measurable. */
+.conversation > :is(.welcome-message,.chat-message,.turn-divider,.thinking-block) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
+.turn-spinner { will-change: transform; }

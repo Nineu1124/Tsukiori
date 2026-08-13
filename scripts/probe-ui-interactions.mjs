@@ -143,6 +143,7 @@ try {
     results.settingsSaveFullyVisible = saveRect.top >= dialogRect.top && saveRect.bottom <= dialogRect.bottom;
     results.settingsSaveHitTarget = document.elementFromPoint(saveRect.left + saveRect.width / 2, saveRect.top + saveRect.height / 2) === save;
     document.querySelector('#setting-start-minimized').checked = true;
+    document.querySelector('#setting-reduce-motion').checked = true;
     results.languageLocked = document.querySelector('#setting-language').disabled && document.querySelector('#setting-language').value === 'zh-CN';
     results.themeLocked = document.querySelector('#setting-theme').disabled && document.querySelector('#setting-theme').value === 'light';
     results.highRiskConfirmationForced = document.querySelector('#setting-confirm-high-risk').disabled && document.querySelector('#setting-confirm-high-risk').checked;
@@ -152,6 +153,23 @@ try {
     results.settingsSaveClicked = document.querySelector('#settings-save-status').textContent.includes('已保存');
     const savedSettings = (await window.tsukiori.workspace.snapshot()).settings;
     results.startMinimizedPersisted = savedSettings.startMinimized === true;
+    results.reduceMotionPersisted = savedSettings.reduceMotion === true;
+    results.reduceMotionApplied = document.body.classList.contains('reduce-motion');
+    const spinner = document.createElement('span');
+    spinner.className = 'turn-spinner';
+    document.body.append(spinner);
+    const spinnerStyle = getComputedStyle(spinner);
+    const shellStyle = getComputedStyle(document.querySelector('.app-shell'));
+    const conversationRow = document.createElement('article');
+    conversationRow.className = 'chat-message assistant';
+    document.querySelector('#conversation').append(conversationRow);
+    const conversationRowStyle = getComputedStyle(conversationRow);
+    results.reducedMotionAnimationDuration = spinnerStyle.animationDuration.split(',').every((value) => Number.parseFloat(value) <= .001);
+    results.reducedMotionAnimationFinite = spinnerStyle.animationIterationCount.split(',').every((value) => Number.parseFloat(value) === 1);
+    results.reducedMotionTransitionDuration = shellStyle.transitionDuration.split(',').every((value) => Number.parseFloat(value) <= .001);
+    results.conversationRowsVirtualized = conversationRowStyle.contentVisibility === 'auto' && conversationRowStyle.containIntrinsicSize.includes('240px');
+    spinner.remove();
+    conversationRow.remove();
     results.defaultModelPersisted = savedSettings.defaultModel === document.querySelector('#setting-default-model').value;
     dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
     await wait();
@@ -254,7 +272,7 @@ try {
     || item.overlayPanel !== (item.width < 1180))) {
     throw new Error('Responsive layout matrix failed: ' + JSON.stringify(layoutMatrix));
   }
-  process.stdout.write(JSON.stringify({ schemaVersion: 5, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
+  process.stdout.write(JSON.stringify({ schemaVersion: 6, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
   await cdp.call('Runtime.evaluate', { expression: 'window.close()' }).catch(() => undefined);
   cdp.close();
   await waitForExit(child, 15_000);
