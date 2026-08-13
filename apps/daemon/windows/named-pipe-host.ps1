@@ -18,7 +18,16 @@ param(
   [ValidateRange(1, 9223372036854775807)]
   [long]$DaemonStartTimeUtcTicks = 0,
 
-  [int]$MaxConnections = 32
+  [int]$MaxConnections = 32,
+
+  [ValidateRange(1, 2)]
+  [long]$RetainedFromSequence = 1,
+
+  [ValidateSet('available', 'unavailable')]
+  [string]$SnapshotRecovery = 'available',
+
+  [ValidateSet('none', 'duplicate', 'out_of_order')]
+  [string]$StreamFault = 'none'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -342,13 +351,48 @@ for ($connectionIndex = 0; $connectionIndex -lt $MaxConnections; $connectionInde
         Write-Audit 'request.rejected' 'invalid_sequence' $epoch
         continue
       }
-
-      $mode = if ([long]$snapshot -eq 1) { 'incremental' } else { 'snapshot' }
-      $selected = if ($mode -eq 'incremental') {
-        @($events | Where-Object { $_.streamSequence -gt [long]$last })
-      } else {
-        @($events)
+      if ($snapshot -isnot [int] -and $snapshot -isnot [long]) {
+        Write-JsonLine $writer ([ordered]@{ jsonrpc = '2.0'; id = [string]$request.id; error = [ordered]@{ code = 'invalid_params' } })
+        Write-Audit 'request.rejected' 'invalid_snapshot_version' $epoch
+        continue
       }
+      if ([long]$snapshot -lt 0) {
+        Write-JsonLine $writer ([ordered]@{ jsonrpc = '2.0'; id = [string]$request.id; error = [ordered]@{ code = 'invalid_params' } })
+        Write-Audit 'request.rejected' 'invalid_snapshot_version' $epoch
+        continue
+      }
+
+      $snapshotMatches = [long]$snapshot -eq 1
+      $hasRetentionGap = $snapshotMatches -and [long]$last -lt 2 -and ([long]$last + 1) -lt $RetainedFromSequence
+      $needsSnapshot = (-not $snapshotMatches) -or $hasRetentionGap
+      $reason = if (-not $snapshotMatches) {
+        'snapshot_version_changed'
+      } elseif ($hasRetentionGap) {
+        'event_retention_gap'
+      } else {
+        'stream_contiguous'
+      }
+      $mode = if (-not $needsSnapshot) {
+        'incremental'
+      } elseif ($SnapshotRecovery -eq 'available') {
+        'snapshot'
+      } else {
+        'unrecoverable'
+      }
+      $selected = if ($mode -eq 'incremental') {
+        @($events | Where-Object { $_.streamSequence -gt [long]$last -and $_.streamSequence -ge $RetainedFromSequence })
+      } elseif ($mode -eq 'snapshot') {
+        @($events | Where-Object { $_.streamSequence -ge $RetainedFromSequence })
+      } else {
+        @()
+      }
+      if ($mode -eq 'incremental' -and $selected.Count -gt 0 -and $StreamFault -eq 'duplicate') {
+        $selected = @($selected) + @($selected[0])
+      } elseif ($mode -eq 'incremental' -and $selected.Count -gt 1 -and $StreamFault -eq 'out_of_order') {
+        [array]::Reverse($selected)
+      }
+      $recoveryState = if ($mode -eq 'incremental') { 'incremental_replay' } elseif ($mode -eq 'snapshot') { 'snapshot_recovery' } else { 'unrecoverable' }
+      $recoveryReason = if ($mode -eq 'unrecoverable') { 'snapshot_unavailable_for_' + $reason } else { $reason }
       Write-JsonLine $writer ([ordered]@{
         jsonrpc = '2.0'
         id = [string]$request.id
@@ -359,9 +403,19 @@ for ($connectionIndex = 0; $connectionIndex -lt $MaxConnections; $connectionInde
           } else { $null }
           streamId = $DaemonInstanceId
           latestStreamSequence = 2
-          events = [object[]]$selected
+          events = [object[]]@($selected)
+          recovery = [ordered]@{
+            state = $recoveryState
+            reason = $recoveryReason
+            requestedAfter = [long]$last
+            retainedFrom = $RetainedFromSequence
+            latestStreamSequence = 2
+            snapshotVersion = 1
+            autoReplay = $false
+          }
         }
       })
+      Write-Audit 'stream.recovery' ($recoveryState + '_' + $recoveryReason) $epoch
     }
   } catch {
     Write-Audit 'connection.error' $_.Exception.GetType().Name $epoch

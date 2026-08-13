@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { JsonValue, SessionEventRecord } from '@tsukiori/domain';
 export * from './runtime-environment.js';
+export * from './recovery-projection.js';
+import { runtimeRecoveryProjection } from './recovery-projection.js';
 
 export type EventScope = 'daemon' | 'runtime' | 'project' | 'session' | 'turn';
 export type HostEventType =
@@ -238,9 +240,13 @@ export class EventNormalizer {
     activity: string;
     health: string;
   }[]): EventEnvelope[] {
+    const recovery = runtimeRecoveryProjection(this.#runtimeType);
+    if (recovery.state !== 'snapshot_recovery') {
+      throw new Error('Runtime Snapshot Recovery is unverified: ' + recovery.runtimeType);
+    }
     const warning = this.#envelope({
       nativeType: 'runtime.unknown', connectionEpoch: this.#epoch,
-      payload: { reason: 'event_replay_unavailable', mode: 'snapshot_recovery' },
+      payload: { ...recovery, mode: recovery.state },
     }, 'runtime.warning');
     return [warning, ...sessions.map((session) => this.#envelope({
       nativeType: 'session.state', connectionEpoch: this.#epoch,

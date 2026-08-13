@@ -801,11 +801,14 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
 });
 ipcMain.handle('daemon:status', async () => {
   const status = await supervisor.probe();
+  const snapshot = supervisor.snapshot();
   return {
     state: 'running',
     daemonVersion: status.daemonVersion,
     protocolVersion: status.protocolVersion,
     instanceId: status.instanceId,
+    recoveryMode: snapshot.recoveryMode,
+    recovery: snapshot.recovery,
   };
 });
 

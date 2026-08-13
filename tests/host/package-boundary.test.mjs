@@ -42,7 +42,9 @@ test('workspace package dependency direction follows the architecture boundary',
   assert.deepEqual(runtimeCore.dependencies, { '@tsukiori/domain': 'workspace:*' });
   assert.deepEqual(observability.dependencies, { '@tsukiori/runtime-core': 'workspace:*' });
   assert.deepEqual(fakeAdapter.dependencies, { '@tsukiori/runtime-core': 'workspace:*' });
-  assert.deepEqual(claudeAdapter.dependencies ?? {}, {});
+  assert.deepEqual(claudeAdapter.dependencies, {
+    '@tsukiori/runtime-core': 'workspace:*',
+  });
   assert.deepEqual(codexAdapter.dependencies, {
     '@tsukiori/database': 'workspace:*',
     '@tsukiori/domain': 'workspace:*',
@@ -93,6 +95,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/adapter-fake': 'workspace:*',
     '@tsukiori/credential-broker': 'workspace:*',
     '@tsukiori/protocol': 'workspace:*',
+    '@tsukiori/runtime-core': 'workspace:*',
     'node-pty': '1.1.0',
   });
 

@@ -22,6 +22,8 @@ test('Renderer is sandboxed and receives only the fixed Preload API', async () =
   assert.match(main, /webSecurity:\s*true/);
   assert.match(main, /setWindowOpenHandler\(\(\) => \(\{ action: 'deny' \}\)\)/);
   assert.match(main, /app\.requestSingleInstanceLock\(\)/);
+  assert.match(main, /recoveryMode:\s*snapshot\.recoveryMode/);
+  assert.match(main, /recovery:\s*snapshot\.recovery/);
   assert.match(main, /app\.on\('second-instance'/);
   assert.match(main, /mainWindow\.restore\(\)/);
   assert.match(main, /window\.once\('ready-to-show'/);

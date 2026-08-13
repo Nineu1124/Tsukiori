@@ -5,6 +5,7 @@ import {
   isIpcAuthenticated,
   isIpcChallenge,
   isIpcError,
+  isSubscriptionResult,
   type IpcAuthenticated,
   type SubscriptionResult,
 } from '@tsukiori/protocol';
@@ -107,7 +108,21 @@ export class NamedPipeClient {
       lastStreamSequence,
       knownSnapshotVersion,
     });
-    return response as SubscriptionResult;
+    if (!isSubscriptionResult(response)) throw new Error('Invalid IPC subscription recovery result');
+    if (response.recovery.requestedAfter !== lastStreamSequence) {
+      throw new Error('Mismatched IPC recovery cursor');
+    }
+    if (response.mode === 'incremental') {
+      const expected = response.events.map((_, index) => lastStreamSequence + index + 1);
+      if (!response.events.every((event, index) => event.streamSequence === expected[index])) {
+        throw new Error('Non-contiguous IPC incremental replay');
+      }
+      const finalSequence = response.events.at(-1)?.streamSequence ?? lastStreamSequence;
+      if (finalSequence !== response.latestStreamSequence) {
+        throw new Error('Incomplete IPC incremental replay');
+      }
+    }
+    return response;
   }
 
   async request(method: string, params: unknown): Promise<unknown> {

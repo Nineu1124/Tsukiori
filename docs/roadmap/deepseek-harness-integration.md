@@ -50,13 +50,13 @@
 
 ### DSH-02 恢复事件闭环
 
-- [ ] 统一 Daemon、Runtime 与 IPC 恢复过程的快照/事件闭环
+- [x] 统一 Daemon、Runtime 与 IPC 恢复过程的快照/事件闭环
 - 前置依赖：DSH-10
 - 交付物：跨 Runtime 恢复投影、恢复 Fixture、集成测试、实施报告
 - Checkpoints：
-  - [ ] Fake、OpenCode、Claude 与 Codex 按各自 SupportLevel 产生一致的恢复结果
-  - [ ] IPC 重连区分增量补发、Snapshot Recovery 与无法恢复三种可观察状态
-  - [ ] Daemon/Runtime 强退、事件缺口和重复事件均通过失败注入验证
+  - [x] Fake、OpenCode、Claude 与 Codex 按各自 SupportLevel 产生一致的恢复结果
+  - [x] IPC 重连区分增量补发、Snapshot Recovery 与无法恢复三种可观察状态
+  - [x] Daemon/Runtime 强退、事件缺口和重复事件均通过失败注入验证
 
 ### DSH-01 SubAgent 生命周期持久化
 

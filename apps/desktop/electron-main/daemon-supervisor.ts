@@ -10,6 +10,8 @@ import {
   type DaemonMessage,
   type DaemonReadyMessage,
   type DaemonStatusMessage,
+  type SubscriptionRecovery,
+  type SubscriptionResult,
 } from '@tsukiori/protocol';
 import {
   WindowsCredentialBroker,
@@ -59,6 +61,8 @@ export type DaemonSnapshot = {
   protocolVersion: number | null;
   instanceId: string | null;
   pid: number | null;
+  recoveryMode: SubscriptionResult['mode'] | null;
+  recovery: SubscriptionRecovery | null;
 };
 
 export class DaemonSupervisor {
@@ -70,6 +74,7 @@ export class DaemonSupervisor {
   #reader: Interface | null = null;
   #ready: DaemonReadyMessage | null = null;
   #ipcClient: NamedPipeClient | null = null;
+  #lastSubscription: SubscriptionResult | null = null;
   #bootstrapToken = '';
   #bootstrapSecretRef: SecretReference | null = null;
   readonly #credentials: WindowsCredentialBroker;
@@ -99,6 +104,8 @@ export class DaemonSupervisor {
       protocolVersion: this.#ready?.protocolVersion ?? null,
       instanceId: this.#ready?.instanceId ?? null,
       pid: this.#ready?.pid ?? null,
+      recoveryMode: this.#lastSubscription?.mode ?? null,
+      recovery: this.#lastSubscription?.recovery ?? null,
     };
   }
 
@@ -164,6 +171,7 @@ export class DaemonSupervisor {
       this.#deleteBootstrapSecret();
       this.#child = null;
       this.#ready = null;
+      this.#lastSubscription = null;
     });
     child.once('error', (error) => {
       this.#startupReject?.(error);
@@ -233,7 +241,9 @@ export class DaemonSupervisor {
     });
     await client.connect();
     this.#ipcClient = client;
-    return client.subscribe(lastStreamSequence, knownSnapshotVersion);
+    const subscription = await client.subscribe(lastStreamSequence, knownSnapshotVersion);
+    this.#lastSubscription = subscription;
+    return subscription;
   }
 
   async probe(): Promise<DaemonStatusMessage> {
@@ -353,6 +363,7 @@ export class DaemonSupervisor {
     }
     this.#child = null;
     this.#ready = null;
+    this.#lastSubscription = null;
     this.#bootstrapToken = '';
     this.#bootstrapSecretRef = null;
   }
@@ -377,7 +388,7 @@ export class DaemonSupervisor {
       || lease.ipcProtocolVersion !== IPC_PROTOCOL_VERSION) {
       throw new Error('Running Daemon lease is incompatible; refusing duplicate start');
     }
-    const client = await this.#credentials.use(
+    const attached = await this.#credentials.use(
       lease.bootstrapSecretRef,
       DAEMON_CREDENTIAL_BINDING,
       async (secret) => {
@@ -395,7 +406,8 @@ export class DaemonSupervisor {
             || ping.protocolVersion !== HOST_PROTOCOL_VERSION) {
             throw new Error('Running Daemon lease identity mismatch');
           }
-          return candidate;
+          const subscription = await candidate.subscribe(0, 0);
+          return { client: candidate, subscription };
         } catch (error) {
           candidate.close();
           throw new Error('Running Daemon could not be safely authenticated; refusing duplicate start', {
@@ -415,7 +427,8 @@ export class DaemonSupervisor {
       pipeName: lease.pipeName,
       ipcProtocolVersion: IPC_PROTOCOL_VERSION,
     };
-    this.#ipcClient = client;
+    this.#ipcClient = attached.client;
+    this.#lastSubscription = attached.subscription;
     return true;
   }
 
@@ -536,6 +549,7 @@ export class DaemonSupervisor {
     this.#reader = null;
     this.#child = null;
     this.#ready = null;
+    this.#lastSubscription = null;
     this.#startupResolve = null;
     this.#startupReject = null;
   }

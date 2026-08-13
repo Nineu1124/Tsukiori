@@ -24,7 +24,7 @@ const sanitizedFixture = JSON.parse(
   readFileSync(join(repositoryRoot, 'tests', 'fixtures', 'ipc', 't1.2-result.json'), 'utf8'),
 );
 
-async function startHost() {
+async function startHost(options = {}) {
   const pipeName = 'tsukiori-' + randomUUID();
   const daemonInstanceId = randomUUID();
   const bootstrapToken = randomBytes(32).toString('hex');
@@ -46,6 +46,12 @@ async function startHost() {
       String(process.pid),
       '-MaxConnections',
       '12',
+      '-RetainedFromSequence',
+      String(options.retainedFromSequence ?? 1),
+      '-SnapshotRecovery',
+      options.snapshotRecovery ?? 'available',
+      '-StreamFault',
+      options.streamFault ?? 'none',
     ],
     {
       cwd: repositoryRoot,
@@ -176,6 +182,10 @@ test('CurrentUserOnly pipe verifies peer SID and authenticates a compatible clie
 
   const initial = await client.subscribe(0, 0);
   assert.equal(initial.mode, 'snapshot');
+  assert.deepEqual(initial.recovery, {
+    state: 'snapshot_recovery', reason: 'snapshot_version_changed', requestedAfter: 0,
+    retainedFrom: 1, latestStreamSequence: 2, snapshotVersion: 1, autoReplay: false,
+  });
   assert.equal(initial.snapshot.version, 1);
   assert.deepEqual(initial.events.map(({ streamSequence }) => streamSequence), [1, 2]);
   client.close();
@@ -193,6 +203,7 @@ test('GUI reconnect receives only missing increments with a new connection epoch
   const firstAuth = await first.connect();
   const firstResult = await first.subscribe(0, 1);
   assert.equal(firstResult.mode, 'incremental');
+  assert.equal(firstResult.recovery.state, 'incremental_replay');
   assert.deepEqual(firstResult.events.map(({ streamSequence }) => streamSequence), [1, 2]);
   first.close();
 
@@ -202,6 +213,10 @@ test('GUI reconnect receives only missing increments with a new connection epoch
   assert.notEqual(secondAuth.connectionEpoch, firstAuth.connectionEpoch);
   const resumed = await second.subscribe(1, 1);
   assert.equal(resumed.mode, 'incremental');
+  assert.deepEqual(resumed.recovery, {
+    state: 'incremental_replay', reason: 'stream_contiguous', requestedAfter: 1,
+    retainedFrom: 1, latestStreamSequence: 2, snapshotVersion: 1, autoReplay: false,
+  });
   assert.deepEqual(resumed.events.map(({ streamSequence }) => streamSequence), [2]);
 
   await assert.rejects(
@@ -212,6 +227,49 @@ test('GUI reconnect receives only missing increments with a new connection epoch
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   assert.match(host.getAudit(), /connection\.closed/);
 });
+
+test('event retention gap falls back to Snapshot Recovery with explicit facts', async (t) => {
+  const host = await startHost({ retainedFromSequence: 2 });
+  t.after(() => host.stop());
+  const client = clientFor(host);
+  await client.connect();
+  const result = await client.subscribe(0, 1);
+  assert.equal(result.mode, 'snapshot');
+  assert.equal(result.snapshot.version, 1);
+  assert.deepEqual(result.events.map(({ streamSequence }) => streamSequence), [2]);
+  assert.deepEqual(result.recovery, {
+    state: 'snapshot_recovery', reason: 'event_retention_gap', requestedAfter: 0,
+    retainedFrom: 2, latestStreamSequence: 2, snapshotVersion: 1, autoReplay: false,
+  });
+  client.close();
+});
+
+test('missing replay and unavailable Snapshot produce an explicit unrecoverable result', async (t) => {
+  const host = await startHost({ retainedFromSequence: 2, snapshotRecovery: 'unavailable' });
+  t.after(() => host.stop());
+  const client = clientFor(host);
+  await client.connect();
+  const result = await client.subscribe(0, 1);
+  assert.equal(result.mode, 'unrecoverable');
+  assert.equal(result.snapshot, null);
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(result.recovery, {
+    state: 'unrecoverable', reason: 'snapshot_unavailable_for_event_retention_gap', requestedAfter: 0,
+    retainedFrom: 2, latestStreamSequence: 2, snapshotVersion: 1, autoReplay: false,
+  });
+  client.close();
+});
+
+for (const streamFault of ['duplicate', 'out_of_order']) {
+  test(`client rejects ${streamFault} replay events instead of projecting corrupt state`, async (t) => {
+    const host = await startHost({ streamFault });
+    t.after(() => host.stop());
+    const client = clientFor(host);
+    await client.connect();
+    await assert.rejects(client.subscribe(0, 1), /Invalid IPC subscription recovery result|Non-contiguous/);
+    client.close();
+  });
+}
 
 test('incompatible protocol, stale instance, and invalid proof are rejected and audited', async (t) => {
   const host = await startHost();
@@ -248,6 +306,7 @@ test('invalid params, unknown methods, and invalid JSON are rejected', async (t)
   const client = clientFor(host);
   await client.connect();
   await assert.rejects(client.subscribe(-1, 1), /invalid_params/);
+  await assert.rejects(client.subscribe(0, -1), /invalid_params/);
   await assert.rejects(client.request('unknown.method', {}), /method_not_found/);
   client.close();
 

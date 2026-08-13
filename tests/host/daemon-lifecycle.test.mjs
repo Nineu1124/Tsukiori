@@ -30,6 +30,8 @@ test('Desktop supervisor starts, detects, probes, and stops the specified Daemon
   assert.equal(started.daemonVersion, DAEMON_VERSION);
   assert.equal(started.protocolVersion, HOST_PROTOCOL_VERSION);
   assert.ok(started.pid > 0);
+  assert.equal(started.recoveryMode, 'snapshot');
+  assert.equal(started.recovery.state, 'snapshot_recovery');
 
   const status = await supervisor.probe();
   assert.equal(status.pid, started.pid);
@@ -44,6 +46,8 @@ test('Desktop supervisor starts, detects, probes, and stops the specified Daemon
   assert.equal(resumed.mode, 'incremental');
   assert.equal(resumed.snapshot, null);
   assert.deepEqual(resumed.events.map(({ streamSequence }) => streamSequence), [2]);
+  assert.equal(supervisor.snapshot().recoveryMode, 'incremental');
+  assert.equal(supervisor.snapshot().recovery.state, 'incremental_replay');
 
   await supervisor.stop();
   assert.deepEqual(supervisor.snapshot(), {
@@ -52,6 +56,8 @@ test('Desktop supervisor starts, detects, probes, and stops the specified Daemon
     protocolVersion: null,
     instanceId: null,
     pid: null,
+    recoveryMode: null,
+    recovery: null,
   });
 });
 
@@ -67,6 +73,27 @@ test('Desktop rejects and terminates a Daemon with an unexpected version', async
     /Daemon version mismatch/,
   );
   assert.equal(supervisor.snapshot().state, 'stopped');
+});
+
+test('Desktop invalidates recovery facts after an unexpected Daemon exit', async (t) => {
+  const supervisor = new DaemonSupervisor({
+    daemonEntry,
+    executable: process.execPath,
+    expectedVersion: DAEMON_VERSION,
+  });
+  t.after(() => supervisor.stop(true).catch(() => undefined));
+
+  const started = await supervisor.start();
+  assert.equal(started.recovery.state, 'snapshot_recovery');
+  process.kill(started.pid, 'SIGTERM');
+
+  const deadline = Date.now() + 5_000;
+  while (supervisor.snapshot().state !== 'stopped' && Date.now() < deadline) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
+  }
+  assert.equal(supervisor.snapshot().state, 'stopped');
+  assert.equal(supervisor.snapshot().recoveryMode, null);
+  assert.equal(supervisor.snapshot().recovery, null);
 });
 
 test('keep policy survives GUI release, reauthenticates the same Daemon, and stop removes its lease', async (t) => {
@@ -100,6 +127,8 @@ test('keep policy survives GUI release, reauthenticates the same Daemon, and sto
   const attached = await second.start();
   assert.equal(attached.instanceId, started.instanceId);
   assert.equal(attached.pid, started.pid);
+  assert.equal(attached.recoveryMode, 'snapshot');
+  assert.equal(attached.recovery.state, 'snapshot_recovery');
   const probe = await second.probe();
   assert.equal(probe.instanceId, started.instanceId);
   assert.equal(probe.pid, started.pid);
