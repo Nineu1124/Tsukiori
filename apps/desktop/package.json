@@ -19,6 +19,7 @@
     "@tsukiori/adapter-fake": "workspace:*",
     "@tsukiori/credential-broker": "workspace:*",
     "@tsukiori/protocol": "workspace:*",
+    "@tsukiori/runtime-core": "workspace:*",
     "node-pty": "1.1.0"
   },
   "devDependencies": {

@@ -40,13 +40,13 @@
 
 ### DSH-10 Runtime 环境隔离
 
-- [ ] 对 Claude 与 Codex 的真实启动路径统一执行 Provider 环境清理
+- [x] 对 Claude 与 Codex 的真实启动路径统一执行 Provider 环境清理
 - 前置依赖：DSH-09
 - 交付物：环境策略、跨 Runtime 启动测试、秘密扫描报告
 - Checkpoints：
-  - [ ] Claude、Codex 和子进程仅获得当前 Provider 明确允许的环境变量
-  - [ ] 切换 Provider 后不会继承上一 Provider 的 API Key、Base URL、Model 或派生变量
-  - [ ] 清理规则覆盖正常启动、恢复、并行 Session 和失败重试
+  - [x] Claude、Codex 和子进程仅获得当前 Provider 明确允许的环境变量
+  - [x] 切换 Provider 后不会继承上一 Provider 的 API Key、Base URL、Model 或派生变量
+  - [x] 清理规则覆盖正常启动、恢复、并行 Session 和失败重试
 
 ### DSH-02 恢复事件闭环
 

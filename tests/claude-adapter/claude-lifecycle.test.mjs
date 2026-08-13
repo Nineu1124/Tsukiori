@@ -83,6 +83,7 @@ test('native mode streams thinking, text, tools, completion, and does not inheri
   assert.equal(events.at(-1).payload.status, 'completed');
   const invocation = JSON.parse(readFileSync(f.logPath, 'utf8').trim());
   assert.equal(invocation.apiKeyPresent, false);
+  assert.deepEqual(invocation.providerEnvironmentKeys, []);
   assert.equal(invocation.inputType, 'user');
   assert.equal(invocation.parentToolUseId, null);
   assert.equal(invocation.args.includes('--bare'), false);
@@ -164,8 +165,34 @@ test('Provider mode is isolated with --bare, uses resume, and receives only the 
   }));
   const invocation = JSON.parse(readFileSync(f.logPath, 'utf8').trim());
   assert.equal(invocation.apiKeyPresent, true);
+  assert.deepEqual(invocation.providerEnvironmentKeys, ['ANTHROPIC_API_KEY']);
   assert.equal(invocation.args.includes('--bare'), true);
   assert.equal(invocation.args.includes('--resume'), true);
+  await client.stop();
+});
+
+test('Claude failure retry and parallel Turns never inherit the previous Provider environment', async (t) => {
+  const f = fixture(t);
+  const client = new ClaudeCodeClient(discoverClaudeLaunch({ candidates: [f.candidate] }));
+  await new Promise((resolveExit) => client.startTurn({
+    cwd: f.directory, sessionId: randomUUID(), resume: false, prompt: 'fixture-fail', model: 'sonnet',
+    permissionMode: 'plan', authMode: 'provider', environment: { ANTHROPIC_API_KEY: 'fixture-first-key' },
+    onEvent: () => undefined, onExit: () => resolveExit(),
+  }));
+  const parallel = [
+    { ANTHROPIC_API_KEY: 'fixture-parallel-api-key' },
+    { ANTHROPIC_AUTH_TOKEN: 'fixture-parallel-auth-token' },
+  ];
+  await Promise.all(parallel.map((environment) => new Promise((resolveExit) => client.startTurn({
+    cwd: f.directory, sessionId: randomUUID(), resume: false, prompt: 'fixture-provider-retry', model: 'sonnet',
+    permissionMode: 'plan', authMode: 'provider', environment,
+    onEvent: () => undefined, onExit: () => resolveExit(),
+  }))));
+  const invocations = readFileSync(f.logPath, 'utf8').trim().split(/\r?\n/).map(JSON.parse);
+  assert.deepEqual(invocations[0].providerEnvironmentKeys, ['ANTHROPIC_API_KEY']);
+  assert.deepEqual(invocations.slice(1).map((item) => item.providerEnvironmentKeys).sort(), [
+    ['ANTHROPIC_API_KEY'], ['ANTHROPIC_AUTH_TOKEN'],
+  ].sort());
   await client.stop();
 });
 

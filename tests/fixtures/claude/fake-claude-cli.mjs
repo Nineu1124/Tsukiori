@@ -55,6 +55,14 @@ function start(message) {
     inputType: message.type,
     parentToolUseId: message.parent_tool_use_id,
     apiKeyPresent: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
+    providerEnvironmentKeys: [
+      'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
+      'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+      'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_USE_BEDROCK',
+      'CLAUDE_CODE_USE_VERTEX', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL',
+      'AZURE_OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'OPENROUTER_API_KEY',
+      'AWS_BEARER_TOKEN_BEDROCK', 'GOOGLE_APPLICATION_CREDENTIALS',
+    ].filter((key) => Object.hasOwn(process.env, key)),
   }) + '\n');
   if (prompt.includes('fixture-fail')) {
     process.stderr.write('Bearer fixture-super-secret-value\n');

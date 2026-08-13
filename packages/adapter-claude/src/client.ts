@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import {
+  isolateRuntimeEnvironment,
+  type RuntimeProviderEnvironmentKey,
+} from '@tsukiori/runtime-core';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -499,17 +503,26 @@ function cleanProviderEnvironment(
   additions: Readonly<Record<string, string>> | undefined,
   authMode: 'native' | 'provider',
 ): NodeJS.ProcessEnv {
-  const environment = { ...process.env };
-  for (const key of [
-    'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
-    'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-    'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL',
-    'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY',
-  ]) delete environment[key];
-  if (authMode === 'provider') Object.assign(environment, additions ?? {});
-  Object.assign(environment, { NO_COLOR: '1', GIT_TERMINAL_PROMPT: '0' });
-  return environment;
+  return buildClaudeRuntimeEnvironment(additions, authMode);
 }
+
+export function buildClaudeRuntimeEnvironment(
+  additions: Readonly<Record<string, string>> | undefined,
+  authMode: 'native' | 'provider',
+  base: Readonly<NodeJS.ProcessEnv> = process.env,
+): NodeJS.ProcessEnv {
+  return isolateRuntimeEnvironment(
+    base,
+    authMode === 'provider' ? additions : undefined,
+    claudeProviderEnvironmentKeys,
+  );
+}
+
+const claudeProviderEnvironmentKeys: readonly RuntimeProviderEnvironmentKey[] = [
+  'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL',
+];
 
 function compatibility(version: string): ClaudeCompatibility {
   if (compareSemver(version, CLAUDE_MINIMUM_VERSION) < 0) return 'incompatible_older';

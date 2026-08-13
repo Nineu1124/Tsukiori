@@ -44,6 +44,9 @@ importers:
       '@tsukiori/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@tsukiori/runtime-core':
+        specifier: workspace:*
+        version: link:../../packages/runtime-core
       node-pty:
         specifier: 1.1.0
         version: 1.1.0
@@ -55,7 +58,11 @@ importers:
         specifier: 26.15.7
         version: 26.15.7(electron-builder-squirrel-windows@26.15.7)
 
-  packages/adapter-claude: {}
+  packages/adapter-claude:
+    dependencies:
+      '@tsukiori/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
 
   packages/adapter-codex:
     dependencies:

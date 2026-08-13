@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 
 const configPath = process.argv[2];
@@ -9,6 +9,20 @@ if (process.argv.includes('--version')) {
   process.exit(0);
 }
 if (!process.argv.includes('app-server')) process.exit(3);
+if (config.environmentLogPath) {
+  const keys = [
+    'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    'CLAUDE_CODE_SUBAGENT_MODEL', 'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_VERTEX', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL',
+    'AZURE_OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'OPENROUTER_API_KEY',
+    'AWS_BEARER_TOKEN_BEDROCK', 'GOOGLE_APPLICATION_CREDENTIALS',
+  ].filter((key) => Object.hasOwn(process.env, key));
+  appendFileSync(config.environmentLogPath, JSON.stringify({
+    providerEnvironmentKeys: keys,
+    selectedKeyMatches: process.env.OPENAI_API_KEY === config.expectedOpenaiKey,
+  }) + '\n');
+}
 
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let lastClientResponse = null;

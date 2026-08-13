@@ -3,6 +3,10 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import {
+  isolateRuntimeEnvironment,
+  type RuntimeProviderEnvironmentKey,
+} from '@tsukiori/runtime-core';
 
 export type CodexLaunch = {
   executable: string;
@@ -257,11 +261,14 @@ function object(value: unknown): Record<string, unknown> {
 }
 
 function cleanProviderEnvironment(additions?: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
-  const environment = { ...process.env };
-  for (const key of [
-    'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_MODEL',
-    'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY',
-  ]) delete environment[key];
-  Object.assign(environment, additions ?? {}, { NO_COLOR: '1', GIT_TERMINAL_PROMPT: '0' });
-  return environment;
+  return buildCodexRuntimeEnvironment(additions);
 }
+
+export function buildCodexRuntimeEnvironment(
+  additions?: Readonly<Record<string, string>>,
+  base: Readonly<NodeJS.ProcessEnv> = process.env,
+): NodeJS.ProcessEnv {
+  return isolateRuntimeEnvironment(base, additions, codexProviderEnvironmentKeys);
+}
+
+const codexProviderEnvironmentKeys: readonly RuntimeProviderEnvironmentKey[] = ['OPENAI_API_KEY'];

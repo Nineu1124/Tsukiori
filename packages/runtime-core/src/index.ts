@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { JsonValue, SessionEventRecord } from '@tsukiori/domain';
+export * from './runtime-environment.js';
 
 export type EventScope = 'daemon' | 'runtime' | 'project' | 'session' | 'turn';
 export type HostEventType =
