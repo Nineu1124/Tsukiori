@@ -80,13 +80,13 @@
 
 ### DSH-08 Compaction 事件
 
-- [ ] 先接入已验证的 Codex Compaction，再决定 Claude 支持等级
+- [x] 先接入已验证的 Codex Compaction，再决定 Claude 支持等级
 - 前置依赖：DSH-04
 - 交付物：Codex Fixture/映射/UI；Claude Spike 结论；兼容性更新
 - Checkpoints：
-  - [ ] Codex `thread/compacted` 由锁定 Schema 和脱敏 Fixture 验证
-  - [ ] Compaction 前后 Session/Turn 关联、统计与 UI 提示一致
-  - [ ] Claude 未取得真实版本化证据前保持 `unknown`
+  - [x] Codex `thread/compacted` 由锁定 Schema 和脱敏 Fixture 验证
+  - [x] Compaction 前后 Session/Turn 关联、统计与 UI 提示一致
+  - [x] Claude 未取得真实版本化证据前保持 `unknown`
 
 ### DSH-05 Thinking 控制 Probe
 

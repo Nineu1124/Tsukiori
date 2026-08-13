@@ -973,6 +973,8 @@ body.density-compact .message-body,body.density-compact .composer textarea { fon
 .checkpoint-row strong { font-size: 10px; white-space: nowrap; }
 .checkpoint-row small { margin-top: 3px; color: #71899c; font-size: 8px; line-height: 1.35; }
 .checkpoint-event { color: #1e7ebc; border-color: rgba(37,143,232,.22); }
+.compaction-event { justify-self: center; max-width: 92%; padding: 5px 10px; border: 1px solid rgba(142,123,239,.22); border-radius: 99px; color: #6f5fc5; background: rgba(248,246,255,.88); }
+.compaction-event[data-status="usage_observed"] { color: #278e6c; border-color: rgba(39,142,108,.22); background: rgba(239,251,246,.9); }
 
 .integration-panel { margin-top: 14px; padding-top: 8px; border-top: 1px solid rgba(37,143,232,.22); }
 .integration-target { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 3px 8px; align-items: center; margin-top: 8px; padding: 8px 10px; border: 1px solid rgba(37,143,232,.24); border-left: 3px solid var(--tsukiori-primary); background: rgba(242,250,255,.88); }

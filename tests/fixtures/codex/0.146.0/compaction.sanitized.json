@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "runtimeVersion": "0.146.0",
+  "schemaSha256": "776ab888b2e673311a4c53ed086d66b061dcfdc8ca595b4cf43220c2b3d04368",
+  "usageBefore": {
+    "method": "thread/tokenUsage/updated",
+    "params": {
+      "threadId": "fixture-thread-compaction",
+      "turnId": "fixture-turn-compaction",
+      "tokenUsage": {
+        "last": {
+          "inputTokens": 9000,
+          "cachedInputTokens": 0,
+          "outputTokens": 2000,
+          "reasoningOutputTokens": 1000,
+          "totalTokens": 12000
+        },
+        "total": {
+          "inputTokens": 9000,
+          "cachedInputTokens": 0,
+          "outputTokens": 2000,
+          "reasoningOutputTokens": 1000,
+          "totalTokens": 12000
+        },
+        "modelContextWindow": 32000
+      }
+    }
+  },
+  "notification": {
+    "method": "thread/compacted",
+    "params": {
+      "threadId": "fixture-thread-compaction",
+      "turnId": "fixture-turn-compaction"
+    }
+  },
+  "usageAfter": {
+    "method": "thread/tokenUsage/updated",
+    "params": {
+      "threadId": "fixture-thread-compaction",
+      "turnId": "fixture-turn-compaction",
+      "tokenUsage": {
+        "last": {
+          "inputTokens": 700,
+          "cachedInputTokens": 0,
+          "outputTokens": 200,
+          "reasoningOutputTokens": 100,
+          "totalTokens": 1000
+        },
+        "total": {
+          "inputTokens": 9700,
+          "cachedInputTokens": 0,
+          "outputTokens": 2200,
+          "reasoningOutputTokens": 1100,
+          "totalTokens": 13000
+        },
+        "modelContextWindow": 32000
+      }
+    }
+  },
+  "compatibility": [
+    {
+      "runtime": "codex",
+      "version": "0.146.0",
+      "capability": "context_compaction_notification",
+      "supportLevel": "supported",
+      "evidence": "locked_schema_and_sanitized_fixture"
+    },
+    {
+      "runtime": "claude-code",
+      "version": "2.1.201",
+      "capability": "context_compaction_notification",
+      "supportLevel": "unknown",
+      "evidence": "no_versioned_native_event_evidence"
+    }
+  ]
+}

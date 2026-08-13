@@ -14,7 +14,13 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { WindowsCredentialBroker } from '@tsukiori/credential-broker';
-import { ThinkingBlockProjector, type ThinkingBlockEventType } from '@tsukiori/runtime-core';
+import {
+  CodexCompactionTracker,
+  ThinkingBlockProjector,
+  type CodexCompactionEventType,
+  type CodexCompactionMethod,
+  type ThinkingBlockEventType,
+} from '@tsukiori/runtime-core';
 import {
   ClaudeCodeClient,
   discoverClaudeLaunch,
@@ -249,6 +255,7 @@ export class InteractiveWorkspace {
   #activeTurns = new Map<string, string>();
   #thinking = new Map<string, ThinkingBlockProjector>();
   #codexThinkingBlocks = new Map<string, Set<string>>();
+  #compactions = new Map<string, CodexCompactionTracker>();
   #events = new Map<string, WorkspaceEvent[]>();
   #eventLog: WorkspaceEvent[] = [];
   #eventSequence = 0;
@@ -1670,6 +1677,26 @@ export class InteractiveWorkspace {
   }
 
   #notification(sessionId: string, method: string, params: Record<string, unknown>): void {
+    if (method === 'thread/tokenUsage/updated' || method === 'thread/compacted') {
+      const session = this.#session(sessionId);
+      const activeTurnId = this.#activeTurns.get(sessionId);
+      const result = this.#compactionTracker(sessionId).ingest(method as CodexCompactionMethod, params, {
+        ...(session.threadId ? { expectedThreadId: session.threadId } : {}),
+        ...(activeTurnId ? { activeTurnId } : {}),
+      });
+      if (result.status === 'rejected') {
+        this.#emit({ sessionId, type: 'native.event', payload: {
+          nativeType: method,
+          reason: 'compaction_' + result.reason,
+          parameterKeys: Object.keys(params).slice(0, 32).map((key) => safeSettingText(key, 'unknown', 80)),
+          redacted: true,
+        } });
+      } else {
+        for (const event of result.events) this.#emit({ sessionId, type: event.type, payload: event.payload });
+      }
+      this.#save();
+      return;
+    }
     if (method === 'item/agentMessage/delta') {
       this.#emit({ sessionId, type: 'assistant.delta', payload: { text: truncate(String(params.delta ?? ''), 32_000) } });
       return;
@@ -1879,6 +1906,7 @@ export class InteractiveWorkspace {
     const path = this.#transcriptPath(sessionId);
     if (!existsSync(path) || statSync(path).size > 8 * 1024 * 1024) {
       this.#events.set(sessionId, []);
+      this.#compactions.delete(sessionId);
       return;
     }
     const events: WorkspaceEvent[] = [];
@@ -1897,6 +1925,18 @@ export class InteractiveWorkspace {
       } catch { /* Invalid rows were already rejected by CheckpointService. */ }
     }
     this.#events.set(sessionId, events);
+    this.#compactions.delete(sessionId);
+  }
+
+  #compactionTracker(sessionId: string): CodexCompactionTracker {
+    const existing = this.#compactions.get(sessionId);
+    if (existing) return existing;
+    const tracker = new CodexCompactionTracker();
+    for (const event of this.#events.get(sessionId) ?? []) {
+      if (isCompactionProjectionEvent(event.type)) tracker.restore(event.type, event.payload);
+    }
+    this.#compactions.set(sessionId, tracker);
+    return tracker;
   }
 
   #approval(sessionId: string, approval: CodexApproval): Promise<unknown> {
@@ -2107,7 +2147,23 @@ export class InteractiveWorkspace {
   #usage(): Record<string, unknown> {
     const byRuntime: Record<string, number> = {};
     for (const session of this.#state.sessions) byRuntime[session.runtimeType] = (byRuntime[session.runtimeType] ?? 0) + session.turnCount;
-    return { sessionCount: this.#state.sessions.length, turnCount: this.#state.sessions.reduce((sum, item) => sum + item.turnCount, 0), byRuntime };
+    let tokenCount = 0;
+    let compactionCount = 0;
+    let pendingCompactionCount = 0;
+    for (const session of this.#state.sessions.filter((item) => item.runtimeType === 'codex')) {
+      const summary = this.#compactionTracker(session.id).summary(session.threadId);
+      tokenCount = safeAggregate(tokenCount, summary.latestTotalTokens);
+      compactionCount = safeAggregate(compactionCount, summary.compactionCount);
+      pendingCompactionCount = safeAggregate(pendingCompactionCount, summary.pendingCount);
+    }
+    return {
+      sessionCount: this.#state.sessions.length,
+      turnCount: this.#state.sessions.reduce((sum, item) => sum + item.turnCount, 0),
+      tokenCount,
+      compactionCount,
+      pendingCompactionCount,
+      byRuntime,
+    };
   }
 }
 
@@ -2378,8 +2434,17 @@ function transcriptEvent(type: string): boolean {
   return [
     'user.message', 'assistant.message.started', 'assistant.thinking.started', 'assistant.thinking.delta',
     'assistant.thinking.completed', 'assistant.delta', 'assistant.message.completed', 'tool.event',
+    'assistant.usage', 'context.compacted', 'context.compaction.updated',
     'turn.completed', 'runtime.error', 'native.event', 'attachment.added', 'subagent.event', 'checkpoint.created', 'checkpoint.rewound',
   ].includes(type);
+}
+
+function isCompactionProjectionEvent(type: string): type is CodexCompactionEventType {
+  return type === 'assistant.usage' || type === 'context.compacted' || type === 'context.compaction.updated';
+}
+
+function safeAggregate(left: number, right: number): number {
+  return Math.min(Number.MAX_SAFE_INTEGER, left + right);
 }
 
 function isThinkingEvent(type: string): type is ThinkingBlockEventType {

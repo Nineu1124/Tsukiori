@@ -38,6 +38,21 @@ function fixture(t, options = {}) {
     async forkThread(threadId, lastTurnId) { codexForks.push({ threadId, lastTurnId }); return 'thread-rewound'; }
     async startTurn() {
       clientOptions.onNotification('turn/started', { turn: { id: 'turn-real' } });
+      clientOptions.onNotification('thread/tokenUsage/updated', {
+        threadId: 'thread-real', turnId: 'turn-real', tokenUsage: {
+          last: { inputTokens: 9_000, cachedInputTokens: 0, outputTokens: 2_000, reasoningOutputTokens: 1_000, totalTokens: 12_000 },
+          total: { inputTokens: 9_000, cachedInputTokens: 0, outputTokens: 2_000, reasoningOutputTokens: 1_000, totalTokens: 12_000 },
+          modelContextWindow: 32_000,
+        },
+      });
+      clientOptions.onNotification('thread/compacted', { threadId: 'thread-real', turnId: 'turn-real' });
+      clientOptions.onNotification('thread/tokenUsage/updated', {
+        threadId: 'thread-real', turnId: 'turn-real', tokenUsage: {
+          last: { inputTokens: 700, cachedInputTokens: 0, outputTokens: 200, reasoningOutputTokens: 100, totalTokens: 1_000 },
+          total: { inputTokens: 9_700, cachedInputTokens: 0, outputTokens: 2_200, reasoningOutputTokens: 1_100, totalTokens: 13_000 },
+          modelContextWindow: 32_000,
+        },
+      });
       clientOptions.onNotification('item/started', { item: { type: 'userMessage', text: 'must not become a tool' } });
       clientOptions.onNotification('item/completed', { item: { type: 'userMessage', text: 'must not become a tool' } });
       clientOptions.onNotification('item/reasoning/summaryPartAdded', { itemId: 'reasoning-safe', summaryIndex: 0, threadId: 'thread-real', turnId: 'turn-real' });
@@ -142,6 +157,18 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
     { blockId: 'codex:reasoning-safe:summary:0', chunkCount: 2, contentPersisted: false },
     { blockId: 'codex:reasoning-safe:summary:1', chunkCount: 1, contentPersisted: false },
   ]);
+  const compaction = f.emitted.filter((event) => event.type.startsWith('context.compact'));
+  assert.deepEqual(compaction.map((event) => event.type), ['context.compacted', 'context.compaction.updated']);
+  assert.equal(compaction[0].payload.threadId, 'thread-real');
+  assert.equal(compaction[0].payload.turnId, 'turn-real');
+  assert.equal(compaction[0].payload.observedTotalTokensBefore, 12_000);
+  assert.equal(compaction[1].payload.observedTotalTokensAfter, 13_000);
+  assert.equal(compaction[1].payload.usageDelta, 1_000);
+  assert.equal(compaction[1].payload.association, 'same_turn');
+  assert.equal(compaction[1].payload.compactionId, compaction[0].payload.compactionId);
+  assert.equal(f.workspace.snapshot().usage.tokenCount, 13_000);
+  assert.equal(f.workspace.snapshot().usage.compactionCount, 1);
+  assert.equal(f.workspace.snapshot().usage.pendingCompactionCount, 0);
   const native = f.emitted.find((event) => event.type === 'native.event' && event.payload.nativeType === 'future/runtimeEvent');
   assert.equal(native.payload.redacted, true);
   assert.doesNotMatch(JSON.stringify(native), /must-not-enter-native-event/);

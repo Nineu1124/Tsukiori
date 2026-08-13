@@ -99,7 +99,7 @@ test('Provider and Runtime selection includes API providers and two executable r
 });
 
 test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/EXECUTE semantics', async () => {
-  const [, script, styles] = await rendererFiles();
+  const [html, script, styles] = await rendererFiles();
   const workspace = await readFile(join(root, 'apps', 'desktop', 'electron-main', 'interactive-workspace.ts'), 'utf8');
   assert.match(workspace, /\['agentMessage', 'userMessage'\]\.includes\(itemType\)/);
   assert.match(script, /event\.type === 'user\.message'/);
@@ -114,6 +114,15 @@ test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/E
   assert.match(script, /function utf8Tail/);
   assert.match(script, /new TextEncoder\(\)/);
   assert.match(script, /较早内容已截断/);
+  assert.match(script, /function appendCompaction/);
+  assert.match(script, /function updateCompaction/);
+  assert.match(script, /function optionalSafeNumber/);
+  assert.match(script, /context\.compacted/);
+  assert.match(script, /context\.compaction\.updated/);
+  assert.match(script, /event\.type==='context\.compacted'.*reloadSnapshot/);
+  assert.match(html, /id="usage-tokens"/);
+  assert.match(html, /id="usage-compactions"/);
+  assert.match(styles, /\.compaction-event/);
   assert.match(script, /function upsertToolEvent/);
   assert.match(script, /state\.toolCards\.get\(id\)/);
   assert.match(script, /assistant\.thinking\.delta/);

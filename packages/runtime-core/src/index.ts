@@ -3,6 +3,7 @@ import type { JsonValue, SessionEventRecord } from '@tsukiori/domain';
 export * from './runtime-environment.js';
 export * from './recovery-projection.js';
 export * from './thinking-block.js';
+export * from './codex-compaction.js';
 import { runtimeRecoveryProjection } from './recovery-projection.js';
 
 export type EventScope = 'daemon' | 'runtime' | 'project' | 'session' | 'turn';
