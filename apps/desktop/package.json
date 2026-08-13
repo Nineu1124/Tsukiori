@@ -1,6 +1,6 @@
 {
   "name": "@tsukiori/desktop",
-  "version": "1.0.0-rc.7",
+  "version": "1.0.0-rc.8",
   "private": true,
   "description": "Local-first multi-agent desktop workspace",
   "author": "Nineu1124",

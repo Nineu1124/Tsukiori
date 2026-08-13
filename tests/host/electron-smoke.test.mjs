@@ -109,6 +109,6 @@ test('a real Renderer crash does not terminate the independently spawned Daemon'
     },
   });
   assert.equal(result.smokeCommandCount, 4);
-  assert.equal(result.daemonVersion, '1.0.0-rc.7');
+  assert.equal(result.daemonVersion, '1.0.0-rc.8');
   assert.equal(result.protocolVersion, 1);
 });

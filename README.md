@@ -2,7 +2,7 @@
 
 Tsukiori 是一个本地优先的多 Agent 工作台。项目文件、会话数据和运行记录保存在本机；模型请求由用户选择的 Runtime 直接发送到对应 Provider。
 
-当前状态：Local V1 Windows 候选版。`v1.0.0-rc.7` 新增真实 Integration Worktree Merge/Rebase、冲突恢复和显式 Promotion，并补实单实例、最小化启动与默认 Model 设置；安装包仍是个人未签名发行版。
+当前状态：Local V1 Windows 候选版。`v1.0.0-rc.8` 完成 DeepSeek Harness 后续路线图：恢复事件闭环、SubAgent 生命周期、Provider 验证审计、不确定操作恢复、Thinking 块元数据、Codex Compaction 与能力门控的 Thinking 控制；安装包仍是个人未签名发行版。
 
 完整架构与实施清单见 [本地多Agent工作台_完整架构与实施方案.md](./本地多Agent工作台_完整架构与实施方案.md)。
 
@@ -18,7 +18,7 @@ Tsukiori 是一个本地优先的多 Agent 工作台。项目文件、会话数�
 - MCP、Skills、Memory、定时任务、Agent Team、ConPTY、文件预览和可拖拽工作面板均保存在本机。
 - Windows Computer Use 通过一次性 PowerShell Helper 支持截图、鼠标和键盘动作；每次动作需要用户确认，能力标记为 `interceptable`，不是 OS 安全沙箱。
 
-T1.2 将实现当前用户限定的 Named Pipe、握手、重连与请求校验。当前 stdin/stdout JSONL 仅是 T1.1 的 bootstrap 控制通道，不是正式 IPC。
+当前用户限定的 Named Pipe、握手、重连、增量补发与 Snapshot Recovery 已接入；Runtime 与 Provider 的未验证能力仍保持 `unknown`。
 
 ## 本地验证
 

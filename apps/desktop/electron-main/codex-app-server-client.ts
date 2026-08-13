@@ -128,7 +128,7 @@ export class CodexAppServerClient {
       this.#child = null;
     });
     await this.request('initialize', {
-      clientInfo: { name: 'tsukiori', title: 'Tsukiori', version: '1.0.0-rc.7' },
+      clientInfo: { name: 'tsukiori', title: 'Tsukiori', version: '1.0.0-rc.8' },
     });
     this.notify('initialized', {});
     const account = object(await this.request('account/read', { refreshToken: false }));
