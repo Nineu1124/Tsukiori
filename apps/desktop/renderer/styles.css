@@ -1494,3 +1494,9 @@ body.reduce-motion .team-detail,body.reduce-motion .status-dot { animation: none
 body.hide-thinking .thinking-body { display: none; }
 body.hide-thinking .thinking-block { background: rgba(248,246,255,.48); }
 .thinking-control-status { align-self: center; max-width: 230px; color: #7b6fd0; font-size: 9px; line-height: 1.35; }
+.runtime-orb.api { background: linear-gradient(145deg,#258fe8,#55c7e8); }
+
+/* Direct API provider profiles: keep the dense settings proportions while allowing catalog-sized model lists. */
+.provider-editor textarea { min-width: 0; padding: 8px; border: 1px solid rgba(37,143,232,.26); border-radius: 6px; resize: vertical; color: var(--tsukiori-text); background: white; font: inherit; font-size: 10px; line-height: 1.45; }
+.provider-capacity-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.provider-safety-note { margin: 0; padding: 8px 10px; border-left: 3px solid var(--tsukiori-primary); color: #668297; background: #f2f9fd; font-size: 8px; line-height: 1.5; }

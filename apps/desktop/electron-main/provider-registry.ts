@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { WindowsCredentialBroker, type SecretReference } from '@tsukiori/credential-broker';
 import type { ProviderVerificationAuditSink } from './provider-verification-audit.js';
+import { providerCatalogModels, verifyApiProvider } from './api-runtime.js';
 
 export type ProviderKind =
   | 'chatgpt'
@@ -8,16 +9,39 @@ export type ProviderKind =
   | 'openai'
   | 'anthropic'
   | 'deepseek'
+  | 'google'
+  | 'openrouter'
+  | 'xai'
+  | 'groq'
+  | 'mistral'
+  | 'cerebras'
+  | 'together'
+  | 'zai'
+  | 'moonshot'
+  | 'minimax'
+  | 'fireworks'
+  | 'kimi'
   | 'openai-compatible'
   | 'anthropic-compatible';
+
+export type ApiProtocol =
+  | 'openai-completions'
+  | 'openai-responses'
+  | 'anthropic-messages'
+  | 'google-generative-ai'
+  | 'mistral-conversations';
+
+export type ProviderApiFormat = ApiProtocol | 'chatgpt' | 'claude-native';
 
 export type ProviderConfig = {
   id: string;
   name: string;
   kind: ProviderKind;
-  apiFormat: 'openai' | 'anthropic' | 'chatgpt' | 'claude-native';
+  apiFormat: ProviderApiFormat;
   baseUrl: string;
   models: string[];
+  contextWindow: number;
+  maxTokens: number;
   secretRef?: SecretReference;
   enabled: boolean;
   createdAt: number;
@@ -38,20 +62,35 @@ export type ProviderInput = {
   id?: string;
   name: string;
   kind: ProviderKind;
+  apiFormat?: ApiProtocol;
   baseUrl?: string;
   models?: readonly string[];
+  contextWindow?: number;
+  maxTokens?: number;
   apiKey?: string;
   enabled?: boolean;
 };
 
-const defaults: Record<ProviderKind, Pick<ProviderConfig, 'apiFormat' | 'baseUrl' | 'models'>> = {
-  chatgpt: { apiFormat: 'chatgpt', baseUrl: 'https://chatgpt.com/backend-api', models: ['auto'] },
-  'claude-native': { apiFormat: 'claude-native', baseUrl: '', models: ['sonnet', 'opus'] },
-  openai: { apiFormat: 'openai', baseUrl: 'https://api.openai.com', models: ['gpt-5.4', 'gpt-5.4-mini'] },
-  anthropic: { apiFormat: 'anthropic', baseUrl: 'https://api.anthropic.com', models: ['claude-sonnet-4-6', 'claude-opus-4-6'] },
-  deepseek: { apiFormat: 'anthropic', baseUrl: 'https://api.deepseek.com/anthropic', models: ['deepseek-v4-pro', 'deepseek-v4-flash'] },
-  'openai-compatible': { apiFormat: 'openai', baseUrl: '', models: [] },
-  'anthropic-compatible': { apiFormat: 'anthropic', baseUrl: '', models: [] },
+const defaults: Record<ProviderKind, Pick<ProviderConfig, 'apiFormat' | 'baseUrl' | 'models' | 'contextWindow' | 'maxTokens'>> = {
+  chatgpt: { apiFormat: 'chatgpt', baseUrl: 'https://chatgpt.com/backend-api', models: ['auto'], contextWindow: 128_000, maxTokens: 16_384 },
+  'claude-native': { apiFormat: 'claude-native', baseUrl: '', models: ['sonnet', 'opus'], contextWindow: 200_000, maxTokens: 32_768 },
+  openai: { apiFormat: 'openai-responses', baseUrl: 'https://api.openai.com', models: ['gpt-5.4', 'gpt-5.4-mini'], contextWindow: 1_000_000, maxTokens: 128_000 },
+  anthropic: { apiFormat: 'anthropic-messages', baseUrl: 'https://api.anthropic.com', models: ['claude-sonnet-4-6', 'claude-opus-4-6'], contextWindow: 200_000, maxTokens: 64_000 },
+  deepseek: { apiFormat: 'openai-completions', baseUrl: 'https://api.deepseek.com', models: ['deepseek-v4-pro', 'deepseek-v4-flash'], contextWindow: 1_000_000, maxTokens: 256_000 },
+  google: { apiFormat: 'google-generative-ai', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', models: ['gemini-3.1-pro-preview', 'gemini-3.5-flash'], contextWindow: 1_000_000, maxTokens: 65_536 },
+  openrouter: { apiFormat: 'openai-completions', baseUrl: 'https://openrouter.ai/api/v1', models: ['openrouter/auto', 'openrouter/free'], contextWindow: 262_144, maxTokens: 32_768 },
+  xai: { apiFormat: 'openai-completions', baseUrl: 'https://api.x.ai/v1', models: ['grok-4.3', 'grok-build-0.1'], contextWindow: 256_000, maxTokens: 32_768 },
+  groq: { apiFormat: 'openai-completions', baseUrl: 'https://api.groq.com/openai/v1', models: ['openai/gpt-oss-120b', 'qwen/qwen3-32b'], contextWindow: 131_072, maxTokens: 32_768 },
+  mistral: { apiFormat: 'mistral-conversations', baseUrl: 'https://api.mistral.ai', models: ['codestral-latest', 'mistral-large-latest'], contextWindow: 262_144, maxTokens: 32_768 },
+  cerebras: { apiFormat: 'openai-completions', baseUrl: 'https://api.cerebras.ai/v1', models: ['gpt-oss-120b', 'zai-glm-4.7'], contextWindow: 131_072, maxTokens: 32_768 },
+  together: { apiFormat: 'openai-completions', baseUrl: 'https://api.together.ai/v1', models: ['deepseek-ai/DeepSeek-V4-Pro', 'openai/gpt-oss-120b'], contextWindow: 262_144, maxTokens: 32_768 },
+  zai: { apiFormat: 'openai-completions', baseUrl: 'https://api.z.ai/api/coding/paas/v4', models: ['glm-5.2', 'glm-5-turbo'], contextWindow: 200_000, maxTokens: 32_768 },
+  moonshot: { apiFormat: 'openai-completions', baseUrl: 'https://api.moonshot.ai/v1', models: ['kimi-k2.7-code', 'kimi-k2.6'], contextWindow: 262_144, maxTokens: 32_768 },
+  minimax: { apiFormat: 'anthropic-messages', baseUrl: 'https://api.minimax.io/anthropic', models: ['MiniMax-M2.7', 'MiniMax-M3'], contextWindow: 204_800, maxTokens: 32_768 },
+  fireworks: { apiFormat: 'openai-completions', baseUrl: 'https://api.fireworks.ai/inference/v1', models: ['accounts/fireworks/models/deepseek-v4-pro', 'accounts/fireworks/models/kimi-k2p7-code'], contextWindow: 262_144, maxTokens: 32_768 },
+  kimi: { apiFormat: 'anthropic-messages', baseUrl: 'https://api.kimi.com/coding', models: ['kimi-for-coding', 'kimi-for-coding-highspeed'], contextWindow: 262_144, maxTokens: 32_768 },
+  'openai-compatible': { apiFormat: 'openai-completions', baseUrl: '', models: [], contextWindow: 131_072, maxTokens: 8_192 },
+  'anthropic-compatible': { apiFormat: 'anthropic-messages', baseUrl: '', models: [], contextWindow: 131_072, maxTokens: 8_192 },
 };
 
 export function builtInProviders(now = Date.now()): ProviderConfig[] {
@@ -68,6 +107,7 @@ export class ProviderRegistry {
   readonly #credentials: WindowsCredentialBroker;
   readonly #persist: (providers: ProviderConfig[]) => void;
   readonly #audit: ProviderVerificationAuditSink | undefined;
+  readonly #verify: typeof verifyApiProvider;
   readonly #now: () => number;
   readonly #id: () => string;
   #providers: ProviderConfig[];
@@ -77,12 +117,14 @@ export class ProviderRegistry {
     credentials?: WindowsCredentialBroker;
     persist: (providers: ProviderConfig[]) => void;
     audit?: ProviderVerificationAuditSink;
+    verify?: typeof verifyApiProvider;
     now?: () => number;
     id?: () => string;
   }) {
     this.#credentials = options.credentials ?? new WindowsCredentialBroker();
     this.#persist = options.persist;
     this.#audit = options.audit;
+    this.#verify = options.verify ?? verifyApiProvider;
     this.#now = options.now ?? Date.now;
     this.#id = options.id ?? randomUUID;
     this.#providers = mergeBuiltIns(options.providers ?? []);
@@ -110,8 +152,13 @@ export class ProviderRegistry {
     const name = cleanName(input.name);
     const preset = defaults[kind];
     const baseUrl = normalizeBaseUrl(input.baseUrl ?? existing?.baseUrl ?? preset.baseUrl, kind);
-    const models = normalizeModels(input.models ?? existing?.models ?? preset.models);
+    const apiFormat = providerApiFormat(input.apiFormat ?? existing?.apiFormat, kind);
+    const requestedModels = input.models ?? existing?.models ?? preset.models;
+    const models = normalizeModels(requestedModels.length > 0 ? requestedModels : preset.models);
     if (kind !== 'chatgpt' && models.length === 0) throw new Error('至少配置一个 Model');
+    const contextWindow = capacity(input.contextWindow ?? existing?.contextWindow ?? preset.contextWindow, 'Context Window');
+    const maxTokens = capacity(input.maxTokens ?? existing?.maxTokens ?? preset.maxTokens, 'Max Tokens');
+    if (maxTokens > contextWindow) throw new Error('Max Tokens 不能大于 Context Window');
     const at = this.#now();
     let secretRef = existing?.secretRef;
     const apiKey = input.apiKey?.trim();
@@ -123,7 +170,7 @@ export class ProviderRegistry {
       });
     }
     const provider: ProviderConfig = {
-      id, name, kind, apiFormat: preset.apiFormat, baseUrl, models,
+      id, name, kind, apiFormat, baseUrl, models, contextWindow, maxTokens,
       ...(secretRef ? { secretRef } : {}),
       enabled: input.enabled ?? existing?.enabled ?? true,
       createdAt: existing?.createdAt ?? at,
@@ -160,24 +207,9 @@ export class ProviderRegistry {
     const started = this.#now();
     let result: { ok: boolean; latencyMs: number; category: string };
     try {
-      result = await this.withEnvironment(provider.id, async (environment) => {
-        const token = environment.OPENAI_API_KEY ?? environment.ANTHROPIC_API_KEY ?? environment.ANTHROPIC_AUTH_TOKEN;
-        if (!token) throw new Error('credential_unavailable');
-        const endpoint = provider.apiFormat === 'openai' ? provider.baseUrl + '/v1/models' : provider.baseUrl + '/v1/messages';
-        const headers: Record<string, string> = provider.apiFormat === 'openai'
-          ? { Authorization: 'Bearer ' + token }
-          : { 'x-api-key': token, Authorization: 'Bearer ' + token, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' };
-        const response = await fetch(endpoint, {
-          method: provider.apiFormat === 'openai' ? 'GET' : 'POST', headers,
-          ...(provider.apiFormat === 'anthropic' ? { body: JSON.stringify({ model: provider.models[0], max_tokens: 1, messages: [{ role: 'user', content: 'Reply OK.' }] }) } : {}),
-          redirect: 'error', signal: AbortSignal.timeout(20_000),
-        });
-        await response.body?.cancel().catch(() => undefined);
-        return {
-          ok: response.ok,
-          latencyMs: this.#now() - started,
-          category: response.ok ? 'connected' : httpCategory(response.status),
-        };
+      result = await this.withSecret(provider.id, async (secret) => {
+        const verified = await this.#verify(provider, secret);
+        return { ...verified, latencyMs: this.#now() - started };
       });
     } catch (error) {
       result = { ok: false, latencyMs: this.#now() - started, category: errorCategory(error) };
@@ -190,18 +222,20 @@ export class ProviderRegistry {
     this.#completeTest(provider, result);
   }
 
-  async listModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {
+  async listModels(id: string): Promise<{ models: string[]; source: 'catalog' | 'remote' | 'configured' }> {
     const provider = this.get(id);
-    if (provider.kind === 'chatgpt' || provider.kind === 'claude-native' || provider.kind === 'anthropic' || provider.kind === 'anthropic-compatible') {
+    const catalog = providerCatalogModels(provider.kind);
+    if (catalog.length > 0) {
+      return { models: normalizeModels(catalog.map((model) => model.id)), source: 'catalog' };
+    }
+    if (provider.kind === 'chatgpt' || provider.kind === 'claude-native' || provider.kind === 'anthropic-compatible') {
       return { models: [...provider.models], source: 'configured' };
     }
     if (!provider.secretRef) throw new Error('请先保存 API Key');
     return await this.withEnvironment(provider.id, async (environment) => {
       const token = environment.OPENAI_API_KEY ?? environment.ANTHROPIC_AUTH_TOKEN;
       if (!token) throw new Error('credential_unavailable');
-      const endpoint = provider.kind === 'deepseek'
-        ? 'https://api.deepseek.com/models'
-        : provider.baseUrl + '/v1/models';
+      const endpoint = provider.baseUrl.replace(/\/+$/, '') + '/models';
       const response = await fetch(endpoint, {
         headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
         redirect: 'error', signal: AbortSignal.timeout(20_000),
@@ -226,8 +260,10 @@ export class ProviderRegistry {
     const provider = this.get(id);
     const environment: Record<string, string> = {};
     if (provider.kind === 'claude-native') return consumer(environment);
-    if (provider.apiFormat === 'anthropic') {
-      environment.ANTHROPIC_BASE_URL = provider.baseUrl;
+    if (provider.apiFormat === 'anthropic-messages' || provider.kind === 'deepseek') {
+      environment.ANTHROPIC_BASE_URL = provider.kind === 'deepseek'
+        ? provider.baseUrl.replace(/\/+$/, '') + '/anthropic'
+        : provider.baseUrl;
       environment.ANTHROPIC_MODEL = selectedModel ?? provider.models[0] ?? '';
     }
     if (provider.kind === 'deepseek') {
@@ -245,6 +281,12 @@ export class ProviderRegistry {
       environment[binding.environmentVariable] = secret;
       return consumer(environment);
     });
+  }
+
+  withSecret<T>(id: string, consumer: (secret: string) => T): T {
+    const provider = this.get(id);
+    if (!provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
+    return this.#credentials.use(provider.secretRef, credentialBinding(provider.id, provider.kind), consumer);
   }
 
   private view(provider: ProviderConfig): ProviderView {
@@ -317,13 +359,18 @@ function mergeBuiltIns(providers: readonly ProviderConfig[]): ProviderConfig[] {
 
 function validatePersisted(provider: ProviderConfig): ProviderConfig {
   const kind = providerKind(provider.kind);
+  const preset = defaults[kind];
+  const contextWindow = capacity(provider.contextWindow ?? preset.contextWindow, 'Context Window');
+  const maxTokens = Math.min(capacity(provider.maxTokens ?? preset.maxTokens, 'Max Tokens'), contextWindow);
   return {
     ...provider,
     name: cleanName(provider.name),
     kind,
-    apiFormat: defaults[kind].apiFormat,
+    apiFormat: providerApiFormat(provider.apiFormat, kind),
     baseUrl: normalizeBaseUrl(provider.baseUrl, kind),
     models: normalizeModels(provider.models),
+    contextWindow,
+    maxTokens,
     enabled: provider.enabled !== false,
   };
 }
@@ -347,12 +394,13 @@ function normalizeBaseUrl(value: string, kind: ProviderKind): string {
   if (url.username || url.password || url.hash || url.search) throw new Error('Base URL 不能包含认证、查询或片段');
   const local = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
   if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new Error('远程 Provider 必须使用 HTTPS');
-  return url.toString().replace(/\/$/, '');
+  const normalized = url.toString().replace(/\/$/, '');
+  return kind === 'deepseek' ? normalized.replace(/\/anthropic$/, '') : normalized;
 }
 
 function normalizeModels(values: readonly string[]): string[] {
   const models = [...new Set(values.map((value) => String(value).trim()).filter(Boolean))];
-  if (models.length > 32 || models.some((value) => value.length > 128 || /[\r\n\0]/.test(value))) {
+  if (models.length > 512 || models.some((value) => value.length > 256 || /[\r\n\0]/.test(value))) {
     throw new Error('Model 列表无效');
   }
   return models;
@@ -364,8 +412,24 @@ function credentialBinding(id: string, kind: ProviderKind) {
     runtimeType: 'provider', runtimeProfileId: id,
     environmentVariable: kind === 'openai' || kind === 'openai-compatible'
       ? 'OPENAI_API_KEY'
-      : kind === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'ANTHROPIC_AUTH_TOKEN',
+      : kind === 'anthropic' ? 'ANTHROPIC_API_KEY'
+        : kind === 'deepseek' || kind === 'anthropic-compatible' ? 'ANTHROPIC_AUTH_TOKEN'
+          : 'TSUKIORI_PROVIDER_API_KEY',
   } as const;
+}
+
+function providerApiFormat(value: unknown, kind: ProviderKind): ProviderApiFormat {
+  const preset = defaults[kind].apiFormat;
+  if (kind !== 'openai-compatible') return preset;
+  if (value === 'openai' || value === 'openai-completions') return 'openai-completions';
+  if (value === 'openai-responses') return value;
+  return preset;
+}
+
+function capacity(value: unknown, label: string): number {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 1 || number > 4_000_000) throw new Error(`${label} 无效`);
+  return number;
 }
 
 function httpCategory(status: number): string {

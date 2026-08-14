@@ -97,3 +97,15 @@
   - [x] Probe 明确区分 Provider API 参数、Claude Code 环境/参数和宿主显示偏好
   - [x] 不支持的版本显示 unsupported/unknown，不能通过猜测环境变量启用
   - [x] 设置只在能力被验证时出现，并通过重启、切换 Provider 和回退测试
+
+### DSH-11 多 Provider Direct API Runtime
+
+- [x] 参考 DSH 的 Provider Route、模型目录与统一流事件实现宿主直连的多模型 API Runtime
+- 前置依赖：DSH-05
+- 交付物：Direct API Runtime、Provider Catalog、Credential 绑定、设置 UI、迁移、自动化测试与实施报告
+- Checkpoints：
+  - [x] OpenAI、Anthropic、DeepSeek、Gemini、OpenRouter、xAI、Groq、Mistral、Cerebras、Together、Z.ai、Moonshot、MiniMax、Fireworks、Kimi 及两类兼容端点可配置，并锁定明确协议、Base URL、Model 与容量
+  - [x] Direct API Session 支持流式文本、Thinking、Abort、用量、错误分类和本地历史恢复；当前未接入的工具循环明确保持 `degraded` 并拒绝执行
+  - [x] API Key 只通过 Windows Credential Manager 的绑定引用进入选中请求，不进入状态文件、Transcript、Renderer Snapshot、测试 Fixture 或日志
+  - [x] Provider 连接测试不保存响应正文，目录型 Provider 使用锁定 Catalog，自定义 OpenAI-compatible 可显式选择 Chat Completions 或 Responses
+  - [x] TypeScript、Interactive、UI、安全、Checkpoint 与秘密扫描全部通过；公开测试不需要真实 Provider 凭据

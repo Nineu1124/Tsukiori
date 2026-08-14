@@ -87,15 +87,17 @@ test('dialogs provide consistent cancel, close, Escape, and backdrop dismissal',
   }
 });
 
-test('Provider and Runtime selection includes API providers and two executable runtimes', async () => {
+test('Provider and Runtime selection includes multi-vendor APIs and three executable runtimes', async () => {
   const [html, script, styles, preload] = await rendererFiles();
-  for (const kind of ['openai','anthropic','deepseek','openai-compatible','anthropic-compatible']) assert.match(html, new RegExp(`value="${kind}"`));
+  for (const kind of ['openai','anthropic','deepseek','google','openrouter','xai','groq','mistral','cerebras','together','zai','moonshot','minimax','fireworks','kimi','openai-compatible','anthropic-compatible']) assert.match(html, new RegExp(`value="${kind}"`));
   assert.match(script, /claude-native/);
-  for (const id of ['runtime-select','provider-select','model-select','thinking-effort-select','environment-select','permission-select','create-runtime','create-provider','create-model','create-thinking-effort','create-permission']) {
+  for (const id of ['runtime-select','provider-select','model-select','thinking-effort-select','environment-select','permission-select','create-runtime','create-provider','create-model','create-thinking-effort','create-permission','provider-api-format','provider-context-window','provider-max-tokens']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.doesNotMatch(html, /id="(?:runtime|provider|model|environment|permission)-select"[^>]*disabled/);
-  assert.match(script, /\['codex','claude'\]/);
+  assert.match(script, /\['codex','claude','api'\]/);
+  assert.match(script, /Direct API/);
+  assert.match(script, /apiFormat:byId\('provider-api-format'\)\.value/);
   assert.match(script, /modelEffort\?\.supportLevel==='supported'/);
   assert.match(script, /DeepSeek effort 映射尚未验证/);
   assert.match(script, /thinkingEffort:byId\('thinking-effort-select'\)\.value/);

@@ -62,8 +62,12 @@ test('Windows Credential Manager stores an opaque reference and injects only int
       binding.environmentVariable,
       expectedHash,
       'OPENAI_API_KEY',
+      'TSUKIORI_PROVIDER_API_KEY',
     ],
-    environment: { OPENAI_API_KEY: 'other-provider-fixture-secret' },
+    environment: {
+      OPENAI_API_KEY: 'other-provider-fixture-secret',
+      TSUKIORI_PROVIDER_API_KEY: 'generic-provider-fixture-secret',
+    },
     observeInvocation: (value) => { observed = value; },
   });
   assert.equal(result.status, 0);

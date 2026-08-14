@@ -339,6 +339,79 @@ test('Codex Checkpoint rewinds code and transcript through thread/fork without m
   assert.deepEqual(new Set(f.workspace.listCheckpoints(session.id).map((item) => item.kind)), new Set(['manual', 'recovery']));
 });
 
+test('interactive workspace runs a Direct API session with local history and an external credential reference', async (t) => {
+  const secrets = new Map();
+  const credentials = {
+    store(input) {
+      const reference = input.reference ?? 'secretref:00000000-0000-4000-8000-000000000009';
+      secrets.set(reference, { secret: input.secret, binding: input.binding });
+      return reference;
+    },
+    use(reference, binding, consumer) {
+      const value = secrets.get(reference);
+      assert.deepEqual(value.binding, binding);
+      return consumer(value.secret);
+    },
+    delete(reference) { return secrets.delete(reference); },
+  };
+  let observedHistory;
+  const apiRuntime = {
+    async runTurn(input) {
+      assert.equal(input.apiKey, 'fixture-direct-api-secret');
+      assert.equal(input.provider.kind, 'openrouter');
+      assert.equal(input.modelId, 'openrouter/auto');
+      assert.equal(input.signal.aborted, false);
+      observedHistory = structuredClone(input.history);
+      input.callbacks.onEvent('turn.started', { turnId: input.turnId, providerId: input.provider.id, model: input.modelId });
+      input.callbacks.onEvent('assistant.message.started', { messageId: 'api-message:fixture' });
+      input.callbacks.onEvent('assistant.delta', { text: 'Direct API fixture response' });
+      input.callbacks.onEvent('assistant.usage', {
+        providerId: input.provider.id, model: input.modelId,
+        inputTokens: 4, outputTokens: 3, totalTokens: 7, estimatedCost: 0.001,
+      });
+      input.callbacks.onEvent('api.assistant.message', {
+        schemaVersion: 1,
+        providerId: input.provider.id,
+        message: {
+          role: 'assistant', content: [{ type: 'text', text: 'Direct API fixture response' }],
+          api: 'openai-completions', provider: input.provider.id, model: input.modelId,
+          usage: { input: 4, output: 3, cacheRead: 0, cacheWrite: 0, totalTokens: 7, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.001 } },
+          stopReason: 'stop', timestamp: 1_800_300_100_000,
+        },
+      });
+      input.callbacks.onEvent('assistant.message.completed', { messageId: 'api-message:fixture', stopReason: 'stop' });
+      input.callbacks.onEvent('turn.completed', { turnId: input.turnId, status: 'completed' });
+      return {};
+    },
+  };
+  const f = fixture(t, { credentials, apiRuntime });
+  const provider = f.workspace.saveProvider({
+    name: 'OpenRouter Fixture', kind: 'openrouter', apiKey: 'fixture-direct-api-secret',
+    models: ['openrouter/auto'], contextWindow: 32_000, maxTokens: 4_096,
+  });
+  const project = f.workspace.addProject(f.repository);
+  const session = await f.workspace.createSession(project.id, {
+    runtimeType: 'api', providerId: provider.id, model: 'openrouter/auto', permissionMode: 'manual',
+  });
+  const started = await f.workspace.sendPrompt(session.id, 'memory-only direct API prompt');
+  assert.match(started.turnId, /^api-turn:/);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(observedHistory.at(-1).role, 'user');
+  assert.equal(observedHistory.at(-1).content, 'memory-only direct API prompt');
+  assert.equal(f.emitted.some((event) => event.type === 'assistant.delta' && event.payload.text === 'Direct API fixture response'), true);
+  assert.equal(f.workspace.snapshot().sessions.find((item) => item.id === session.id).status, 'ready');
+  assert.equal(f.workspace.snapshot().usage.apiTokenCount, 7);
+  const persisted = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
+  assert.doesNotMatch(persisted, /fixture-direct-api-secret|memory-only direct API prompt/);
+  assert.match(persisted, /secretref:/);
+  const transcriptName = (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl';
+  const transcript = readFileSync(join(f.userData, 'transcripts', transcriptName), 'utf8');
+  assert.match(transcript, /memory-only direct API prompt/);
+  assert.match(transcript, /Direct API fixture response/);
+  assert.doesNotMatch(transcript, /fixture-direct-api-secret/);
+});
+
 test('interactive workspace stores provider secrets outside state and runs a Claude Code session', async (t) => {
   const temporary = mkdtempSync(join(tmpdir(), 'tsukiori-claude-'));
   const repository = join(temporary, 'repository');

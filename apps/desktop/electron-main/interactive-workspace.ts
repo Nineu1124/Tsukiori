@@ -74,8 +74,9 @@ import {
   validatedThinkingEffort,
   type ThinkingControlMatrix,
 } from './thinking-control.js';
+import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
 
-type RuntimeType = 'codex' | 'claude';
+type RuntimeType = 'codex' | 'claude' | 'api';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
 
 type ProjectState = {
@@ -221,6 +222,7 @@ export type InteractiveWorkspaceOptions = {
   probeClaudeAuth?: (launch: ClaudeLaunch) => ClaudeAuthStatus;
   createClient?: (options: ConstructorParameters<typeof CodexAppServerClient>[0]) => CodexAppServerClient;
   createClaudeClient?: (launch: ClaudeLaunch) => ClaudeCodeClient;
+  apiRuntime?: ApiRuntimeClient;
   credentials?: WindowsCredentialBroker;
   providerAuditStore?: Pick<ProviderVerificationAuditStore, 'record' | 'list'>;
 };
@@ -245,6 +247,7 @@ export class InteractiveWorkspace {
   readonly #probeClaudeAuth: (launch: ClaudeLaunch) => ClaudeAuthStatus;
   readonly #createClient: InteractiveWorkspaceOptions['createClient'];
   readonly #createClaudeClient: InteractiveWorkspaceOptions['createClaudeClient'];
+  readonly #apiRuntime: ApiRuntimeClient;
   readonly #checkpoints: CheckpointService;
   readonly #ccHahaImporter: CcHahaImporter;
   readonly #providers: ProviderRegistry;
@@ -261,6 +264,7 @@ export class InteractiveWorkspace {
   #claudeClient: ClaudeCodeClient | null = null;
   #clients = new Map<string, CodexAppServerClient>();
   #activeTurns = new Map<string, string>();
+  #apiAborts = new Map<string, AbortController>();
   #thinking = new Map<string, ThinkingBlockProjector>();
   #codexThinkingBlocks = new Map<string, Set<string>>();
   #compactions = new Map<string, CodexCompactionTracker>();
@@ -282,6 +286,7 @@ export class InteractiveWorkspace {
     this.#probeClaudeAuth = options.probeClaudeAuth ?? probeClaudeNativeAuth;
     this.#createClient = options.createClient;
     this.#createClaudeClient = options.createClaudeClient;
+    this.#apiRuntime = options.apiRuntime ?? new ApiRuntimeClient();
     mkdirSync(options.userDataPath, { recursive: true });
     mkdirSync(this.#worktreeRoot, { recursive: true });
     mkdirSync(this.#transcriptRoot, { recursive: true });
@@ -393,6 +398,18 @@ export class InteractiveWorkspace {
       this.#claudeClient = null;
       states.push(unavailableRuntime('claude', 'Claude Code', message(error)));
     }
+    const apiProviderCount = this.#providers.list().filter((provider) => (
+      provider.enabled !== false && provider.hasSecret
+      && provider.kind !== 'chatgpt' && provider.kind !== 'claude-native'
+    )).length;
+    states.push({
+      id: 'runtime:api', type: 'api', name: 'Direct API', available: true,
+      version: 'pi-ai 0.82.1', source: 'embedded', authenticated: apiProviderCount > 0,
+      authSource: apiProviderCount > 0 ? `${apiProviderCount} 个本机凭据` : 'Windows Credential Manager',
+      supportLevel: 'degraded',
+      error: '直接 API 对话、流式回复、取消与历史续聊可用；工具执行尚未接入权限代理',
+      capabilities: ['multi-provider', 'streaming', 'conversation-resume', 'abort', 'model-catalog'],
+    });
     states.push({
       id: 'runtime:opencode', type: 'opencode', name: 'OpenCode', available: false,
       version: '1.18.4 verified', source: 'adapter-not-connected', authenticated: false,
@@ -421,7 +438,8 @@ export class InteractiveWorkspace {
       autoUpdate: typeof input.autoUpdate === 'boolean' ? input.autoUpdate : current.autoUpdate,
       startMinimized: typeof input.startMinimized === 'boolean' ? input.startMinimized : current.startMinimized,
       defaultProjectDirectory: safeSettingText(input.defaultProjectDirectory, current.defaultProjectDirectory, 1_024),
-      defaultRuntime: input.defaultRuntime === 'claude' ? 'claude' : input.defaultRuntime === 'codex' ? 'codex' : current.defaultRuntime,
+      defaultRuntime: input.defaultRuntime === 'claude' || input.defaultRuntime === 'codex' || input.defaultRuntime === 'api'
+        ? input.defaultRuntime : current.defaultRuntime,
       defaultProviderId: safeSettingText(input.defaultProviderId, current.defaultProviderId, 128),
       defaultModel: safeSettingText(input.defaultModel, current.defaultModel, 128),
       defaultPermissionMode: permissionMode(input.defaultPermissionMode ?? current.defaultPermissionMode),
@@ -505,7 +523,7 @@ export class InteractiveWorkspace {
     return this.#providerAudits.list();
   }
 
-  listProviderModels(id: string): Promise<{ models: string[]; source: 'remote' | 'configured' }> {
+  listProviderModels(id: string): Promise<{ models: string[]; source: 'catalog' | 'remote' | 'configured' }> {
     return this.#providers.listModels(id);
   }
 
@@ -897,8 +915,8 @@ export class InteractiveWorkspace {
 
   async forkSession(sessionId: string): Promise<SessionState> {
     const source = this.#session(sessionId);
-    if (source.runtimeType !== 'claude' || !source.threadId || source.turnCount < 1) {
-      throw new Error('当前仅支持 Fork 已运行过的 Claude Session');
+    if (!['claude', 'api'].includes(source.runtimeType) || !source.threadId || source.turnCount < 1) {
+      throw new Error('当前支持 Fork 已运行过的 Claude 或 Direct API Session');
     }
     if (source.status === 'running' || source.status === 'waiting_permission' || source.status === 'starting') {
       throw new Error('运行中的 Session 不能 Fork');
@@ -916,11 +934,12 @@ export class InteractiveWorkspace {
     const session: SessionState = {
       id: 'session:' + token, projectId: source.projectId,
       name: uniqueForkName(source.name, this.#state.sessions),
-      runtimeType: 'claude', providerId: source.providerId, model: source.model,
+      runtimeType: source.runtimeType, providerId: source.providerId, model: source.model,
       environment: 'windows-native', permissionMode: source.permissionMode,
       ...(source.thinkingEffort ? { thinkingEffort: source.thinkingEffort } : {}),
       worktreePath, branch, threadId: randomUUID(),
-      forkedFromSessionId: source.id, forkSourceRuntimeSessionId: source.threadId,
+      forkedFromSessionId: source.id,
+      ...(source.runtimeType === 'claude' ? { forkSourceRuntimeSessionId: source.threadId } : {}),
       turnCount: 0, status: 'ready', createdAt: Date.now(), updatedAt: Date.now(),
     };
     this.#state.sessions.push(session);
@@ -1139,7 +1158,8 @@ export class InteractiveWorkspace {
     this.#save();
     try {
       for (const [index, agent] of agents.entries()) {
-        const runtimeType = agent.runtimeType === 'claude' ? 'claude' : 'codex';
+        const runtimeType: RuntimeType = agent.runtimeType === 'claude' || agent.runtimeType === 'api'
+          ? agent.runtimeType : 'codex';
         const role = safeSettingText(agent.role, `Agent ${index + 1}`, 80);
         const session = await this.createSession(projectId, {
           runtimeType,
@@ -1293,12 +1313,13 @@ export class InteractiveWorkspace {
     mkdirSync(dirname(worktreePath), { recursive: true });
     this.#git(project.gitRoot, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD']);
     const runtimeCount = this.#state.sessions.filter((item) => item.runtimeType === runtimeType).length + 1;
+    const runtimeName = runtimeType === 'codex' ? 'Codex' : runtimeType === 'claude' ? 'Claude' : 'API';
     const session: SessionState = {
       id: 'session:' + token, projectId,
-      name: (runtimeType === 'codex' ? 'Codex ' : 'Claude ') + runtimeCount,
+      name: `${runtimeName} ${runtimeCount}`,
       runtimeType, providerId, model, environment: 'windows-native', permissionMode: selectedPermission,
       ...(thinkingEffort ? { thinkingEffort } : {}),
-      worktreePath, branch, ...(runtimeType === 'claude' ? { threadId: randomUUID() } : {}),
+      worktreePath, branch, ...(runtimeType !== 'codex' ? { threadId: randomUUID() } : {}),
       turnCount: 0, status: 'ready', createdAt: Date.now(), updatedAt: Date.now(),
     };
     this.#state.sessions.push(session);
@@ -1357,6 +1378,35 @@ export class InteractiveWorkspace {
         this.#save();
         return { turnId };
       }
+      if (session.runtimeType === 'api') {
+        const provider = this.#providers.get(session.providerId);
+        const turnId = `api-turn:${randomUUID()}`;
+        const controller = new AbortController();
+        const history = readApiHistory(this.#events.get(sessionId) ?? []);
+        const running = this.#providers.withSecret(provider.id, (apiKey) => this.#apiRuntime.runTurn({
+          turnId,
+          provider: { ...provider, models: [...provider.models] },
+          modelId: session.model,
+          apiKey,
+          history,
+          signal: controller.signal,
+          callbacks: { onEvent: (type, payload) => this.#runtimeEvent(sessionId, type, payload) },
+        }));
+        this.#apiAborts.set(sessionId, controller);
+        this.#activeTurns.set(sessionId, turnId);
+        session.turnCount += 1;
+        this.#save();
+        void running.catch((error: unknown) => {
+          const detail = truncate(error instanceof Error ? error.message : String(error), 2_000);
+          const interrupted = controller.signal.aborted || (error instanceof Error && error.name === 'AbortError');
+          this.#runtimeEvent(sessionId, 'runtime.error', { message: interrupted ? 'Direct API Turn 已中断' : detail });
+          this.#runtimeEvent(sessionId, 'turn.completed', {
+            turnId, status: interrupted ? 'interrupted' : 'failed',
+            ...(interrupted ? {} : { error: detail }),
+          });
+        }).finally(() => this.#apiAborts.delete(sessionId));
+        return { turnId };
+      }
       const claude = this.#claudeClient;
       if (!claude || !session.threadId) throw new Error('Claude Code Runtime 不可用');
       const provider = this.#providers.get(session.providerId);
@@ -1398,7 +1448,11 @@ export class InteractiveWorkspace {
     const session = this.#session(sessionId);
     const turnId = this.#activeTurns.get(sessionId);
     if (!turnId) throw new Error('当前没有可中断的 Turn');
-    if (session.runtimeType === 'claude') this.#claudeClient?.interrupt(turnId);
+    if (session.runtimeType === 'api') {
+      const controller = this.#apiAborts.get(sessionId);
+      if (!controller) throw new Error('当前 Direct API Turn 不可中断');
+      controller.abort();
+    } else if (session.runtimeType === 'claude') this.#claudeClient?.interrupt(turnId);
     else {
       const client = this.#clients.get(sessionId);
       if (!client || !session.threadId) throw new Error('当前 Codex Turn 不可中断');
@@ -1490,8 +1544,10 @@ export class InteractiveWorkspace {
       }
       const client = await this.#ensureCodexClient(sessionId);
       forkedCodexThreadId = await client.forkThread(checkpoint.runtimeSessionId, checkpoint.runtimeTurnId);
-    } else if (!checkpoint.runtimeSessionId || !checkpoint.runtimeMessageId) {
+    } else if (session.runtimeType === 'claude' && (!checkpoint.runtimeSessionId || !checkpoint.runtimeMessageId)) {
       throw new Error('此 Checkpoint 缺少 Claude Session/Message 锚点，不能安全回退对话');
+    } else if (session.runtimeType === 'api' && (!checkpoint.runtimeSessionId || !checkpoint.runtimeTurnId)) {
+      throw new Error('此 Checkpoint 缺少 Direct API Session/Turn 锚点，不能安全回退对话');
     }
     const result = this.#checkpoints.rewind({
       sessionId,
@@ -1504,10 +1560,14 @@ export class InteractiveWorkspace {
     });
     if (session.runtimeType === 'codex') {
       session.threadId = forkedCodexThreadId as string;
-    } else {
+    } else if (session.runtimeType === 'claude') {
       session.threadId = randomUUID();
       session.forkSourceRuntimeSessionId = checkpoint.runtimeSessionId as string;
       session.forkSourceRuntimeMessageId = checkpoint.runtimeMessageId as string;
+    } else {
+      session.threadId = randomUUID();
+      delete session.forkSourceRuntimeSessionId;
+      delete session.forkSourceRuntimeMessageId;
     }
     session.turnCount = checkpoint.turnCount;
     session.status = 'ready';
@@ -1649,6 +1709,8 @@ export class InteractiveWorkspace {
 
   async shutdown(): Promise<void> {
     if (this.#schedulerTimer) { clearInterval(this.#schedulerTimer); this.#schedulerTimer = null; }
+    for (const controller of this.#apiAborts.values()) controller.abort();
+    this.#apiAborts.clear();
     for (const pending of this.#approvals.values()) {
       if (pending.kind === 'codex') pending.reject(new Error('Tsukiori 正在退出'));
     }
@@ -1916,10 +1978,10 @@ export class InteractiveWorkspace {
     runtimeMessageId?: string;
   } {
     const events = this.#events.get(session.id) ?? [];
-    if (session.runtimeType === 'codex') {
+    if (session.runtimeType === 'codex' || session.runtimeType === 'api') {
       const completed = [...events].reverse().find((event) => event.type === 'turn.completed');
       const runtimeTurnId = typeof completed?.payload.turnId === 'string' ? completed.payload.turnId : '';
-      if (!runtimeTurnId) throw new Error('当前 Codex Transcript 缺少最后完成 Turn ID，不能创建一致性 Checkpoint');
+      if (!runtimeTurnId) throw new Error(`当前 ${session.runtimeType === 'api' ? 'Direct API' : 'Codex'} Transcript 缺少最后完成 Turn ID，不能创建一致性 Checkpoint`);
       return { runtimeSessionId: session.threadId as string, runtimeTurnId };
     }
     const message = [...events].reverse().find((event) => event.type === 'assistant.message.started');
@@ -2204,16 +2266,28 @@ export class InteractiveWorkspace {
     let tokenCount = 0;
     let compactionCount = 0;
     let pendingCompactionCount = 0;
+    let apiTokenCount = 0;
+    let apiEstimatedCost = 0;
     for (const session of this.#state.sessions.filter((item) => item.runtimeType === 'codex')) {
       const summary = this.#compactionTracker(session.id).summary(session.threadId);
       tokenCount = safeAggregate(tokenCount, summary.latestTotalTokens);
       compactionCount = safeAggregate(compactionCount, summary.compactionCount);
       pendingCompactionCount = safeAggregate(pendingCompactionCount, summary.pendingCount);
     }
+    for (const session of this.#state.sessions.filter((item) => item.runtimeType === 'api')) {
+      for (const event of this.#events.get(session.id) ?? []) {
+        if (event.type !== 'assistant.usage') continue;
+        apiTokenCount = safeAggregate(apiTokenCount, Number.isSafeInteger(event.payload.totalTokens) ? Number(event.payload.totalTokens) : 0);
+        const cost = Number(event.payload.estimatedCost);
+        if (Number.isFinite(cost) && cost >= 0) apiEstimatedCost = Math.min(Number.MAX_SAFE_INTEGER, apiEstimatedCost + cost);
+      }
+    }
     return {
       sessionCount: this.#state.sessions.length,
       turnCount: this.#state.sessions.reduce((sum, item) => sum + item.turnCount, 0),
       tokenCount,
+      apiTokenCount,
+      apiEstimatedCost,
       compactionCount,
       pendingCompactionCount,
       byRuntime,
@@ -2222,7 +2296,8 @@ export class InteractiveWorkspace {
 }
 
 function migrateSession(value: Record<string, unknown>): SessionState {
-  const runtimeType: RuntimeType = value.runtimeType === 'claude' ? 'claude' : 'codex';
+  const runtimeType: RuntimeType = value.runtimeType === 'claude' || value.runtimeType === 'api'
+    ? value.runtimeType : 'codex';
   return {
     id: String(value.id), projectId: String(value.projectId), name: String(value.name), runtimeType,
     providerId: typeof value.providerId === 'string' ? value.providerId : 'provider:chatgpt',
@@ -2306,17 +2381,24 @@ function migrateProject(value: Record<string, unknown>): ProjectState {
 }
 
 function assertProviderCompatibility(runtime: RuntimeType, kind: ProviderKind): void {
-  const allowed = runtime === 'codex'
+  const allowed: ProviderKind[] = runtime === 'codex'
     ? ['chatgpt', 'openai', 'openai-compatible']
-    : ['claude-native', 'anthropic', 'deepseek', 'anthropic-compatible'];
-  if (!allowed.includes(kind)) throw new Error(`${runtime === 'codex' ? 'Codex' : 'Claude Code'} 不支持 ${kind} Provider`);
+    : runtime === 'claude'
+      ? ['claude-native', 'anthropic', 'deepseek', 'anthropic-compatible']
+      : ['openai', 'anthropic', 'deepseek', 'google', 'openrouter', 'xai', 'groq', 'mistral',
+          'cerebras', 'together', 'zai', 'moonshot', 'minimax', 'fireworks', 'kimi',
+          'openai-compatible', 'anthropic-compatible'];
+  if (!allowed.includes(kind)) {
+    const name = runtime === 'codex' ? 'Codex' : runtime === 'claude' ? 'Claude Code' : 'Direct API';
+    throw new Error(`${name} 不支持 ${kind} Provider`);
+  }
 }
 
 function compatibleDefaultProvider(runtime: RuntimeType, preferred: string): string {
   if (runtime === 'codex') return preferred.startsWith('provider:') ? preferred : 'provider:chatgpt';
-  return ['provider:claude-native', 'provider:anthropic', 'provider:deepseek'].includes(preferred)
-    ? preferred
-    : 'provider:claude-native';
+  if (runtime === 'claude') return ['provider:claude-native', 'provider:anthropic', 'provider:deepseek'].includes(preferred)
+    ? preferred : 'provider:claude-native';
+  return !['provider:chatgpt', 'provider:claude-native'].includes(preferred) ? preferred : 'provider:openai';
 }
 
 function codexConfigArgs(provider: ProviderConfig): string[] {
@@ -2494,7 +2576,7 @@ function transcriptEvent(type: string): boolean {
     'user.message', 'assistant.message.started', 'assistant.thinking.started', 'assistant.thinking.delta',
     'assistant.thinking.completed', 'assistant.delta', 'assistant.message.completed', 'tool.event',
     'assistant.usage', 'context.compacted', 'context.compaction.updated',
-    'turn.completed', 'runtime.error', 'native.event', 'attachment.added', 'subagent.event', 'checkpoint.created', 'checkpoint.rewound',
+    'api.assistant.message', 'turn.completed', 'runtime.error', 'native.event', 'attachment.added', 'subagent.event', 'checkpoint.created', 'checkpoint.rewound',
   ].includes(type);
 }
 

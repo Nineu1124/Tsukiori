@@ -91,6 +91,7 @@ test('workspace package dependency direction follows the architecture boundary',
     '@tsukiori/protocol': 'workspace:*',
   });
   assert.deepEqual(desktop.dependencies, {
+    '@earendil-works/pi-ai': '0.82.1',
     '@tsukiori/adapter-claude': 'workspace:*',
     '@tsukiori/adapter-fake': 'workspace:*',
     '@tsukiori/credential-broker': 'workspace:*',

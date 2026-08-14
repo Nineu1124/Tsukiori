@@ -11,7 +11,7 @@ const { ProviderVerificationAuditStore } = await import(
   new URL('../../apps/desktop/dist/electron-main/provider-verification-audit.js', import.meta.url)
 );
 
-test('Provider Registry tests a connection without exposing or persisting the secret', async (t) => {
+test('Provider Registry tests a connection without exposing or persisting the secret', async () => {
   const secrets = new Map();
   const persisted = [];
   const credentials = {
@@ -27,18 +27,17 @@ test('Provider Registry tests a connection without exposing or persisting the se
     },
     delete(reference) { return secrets.delete(reference); },
   };
-  const originalFetch = globalThis.fetch;
   const audits = [];
-  t.after(() => { globalThis.fetch = originalFetch; });
-  globalThis.fetch = async (url, options) => {
-    assert.equal(url, 'https://api.example.invalid/v1/models');
-    assert.equal(options.headers.Authorization, 'Bearer provider-fixture-secret');
-    return new Response('{"data":[]}', { status: 200, headers: { 'content-type': 'application/json' } });
-  };
   const registry = new ProviderRegistry({
     credentials,
     persist: (providers) => persisted.push(structuredClone(providers)),
     audit: (record) => audits.push(structuredClone(record)),
+    verify: async (provider, secret) => {
+      assert.equal(provider.baseUrl, 'https://api.example.invalid');
+      assert.equal(provider.apiFormat, 'openai-completions');
+      assert.equal(secret, 'provider-fixture-secret');
+      return { ok: true, category: 'connected' };
+    },
     now: () => 1_800_200_000_000,
     id: () => 'fixture-audit-id',
   });
@@ -150,47 +149,38 @@ test('Claude native login is a built-in secretless Provider mode', async () => {
   assert.doesNotMatch(JSON.stringify(persisted), /api.key|secretref:/i);
 });
 
-test('Anthropic-compatible connection test sends a bounded one-token probe and discards the body', async (t) => {
+test('Anthropic-compatible connection test routes through the unified direct API verifier', async () => {
   const secrets = new Map();
   const credentials = {
     store(input) { const reference = input.reference ?? 'secretref:00000000-0000-4000-8000-000000000004'; secrets.set(reference, { secret: input.secret, binding: input.binding }); return reference; },
     use(reference, binding, consumer) { const value = secrets.get(reference); assert.deepEqual(value.binding, binding); return consumer(value.secret); },
     delete(reference) { return secrets.delete(reference); },
   };
-  const originalFetch = globalThis.fetch;
-  t.after(() => { globalThis.fetch = originalFetch; });
-  let bodyCancelled = false;
-  globalThis.fetch = async (url, options) => {
-    assert.equal(url, 'https://anthropic.example.invalid/v1/messages');
-    assert.equal(options.method, 'POST');
-    assert.equal(options.headers['x-api-key'], 'anthropic-fixture-secret');
-    assert.deepEqual(JSON.parse(options.body), {
-      model: 'fixture-claude', max_tokens: 1, messages: [{ role: 'user', content: 'Reply OK.' }],
-    });
-    return { ok: true, status: 200, body: { async cancel() { bodyCancelled = true; } } };
-  };
-  const registry = new ProviderRegistry({ credentials, persist: () => undefined });
-  const provider = registry.save({ name: 'Fixture Anthropic', kind: 'anthropic-compatible', baseUrl: 'https://anthropic.example.invalid', models: ['fixture-claude'], apiKey: 'anthropic-fixture-secret' });
+  let verified = false;
+  const registry = new ProviderRegistry({
+    credentials,
+    persist: () => undefined,
+    verify: async (provider, secret) => {
+      assert.equal(provider.apiFormat, 'anthropic-messages');
+      assert.equal(provider.baseUrl, 'https://anthropic.example.invalid');
+      assert.deepEqual(provider.models, ['fixture-claude']);
+      assert.equal(secret, 'anthropic-fixture-secret');
+      verified = true;
+      return { ok: true, category: 'connected' };
+    },
+  });
+  const provider = registry.save({ name: 'Fixture Anthropic', kind: 'anthropic-compatible', apiFormat: 'anthropic-messages', baseUrl: 'https://anthropic.example.invalid', models: ['fixture-claude'], apiKey: 'anthropic-fixture-secret' });
   const result = await registry.test(provider.id);
   assert.equal(result.ok, true);
-  assert.equal(bodyCancelled, true);
+  assert.equal(verified, true);
 });
 
-test('DeepSeek injects the complete Claude Code model map and discovers remote models safely', async (t) => {
+test('DeepSeek injects the complete Claude Code model map and exposes the locked model catalog', async () => {
   const secrets = new Map();
   const credentials = {
     store(input) { const reference = input.reference ?? 'secretref:00000000-0000-4000-8000-000000000005'; secrets.set(reference, { secret: input.secret, binding: input.binding }); return reference; },
     use(reference, binding, consumer) { const value = secrets.get(reference); assert.deepEqual(value.binding, binding); return consumer(value.secret); },
     delete(reference) { return secrets.delete(reference); },
-  };
-  const originalFetch = globalThis.fetch;
-  t.after(() => { globalThis.fetch = originalFetch; });
-  globalThis.fetch = async (url, options) => {
-    assert.equal(url, 'https://api.deepseek.com/models');
-    assert.equal(options.headers.Authorization, 'Bearer deepseek-fixture-secret');
-    return new Response(JSON.stringify({ data: [
-      { id: 'deepseek-v4-pro' }, { id: 'deepseek-v4-flash' },
-    ] }), { status: 200, headers: { 'content-type': 'application/json' } });
   };
   const registry = new ProviderRegistry({ credentials, persist: () => undefined });
   registry.save({
@@ -206,7 +196,7 @@ test('DeepSeek injects the complete Claude Code model map and discovers remote m
     assert.equal(environment.CLAUDE_CODE_SUBAGENT_MODEL, 'deepseek-v4-flash');
     assert.equal(Object.hasOwn(environment, 'CLAUDE_CODE_EFFORT_LEVEL'), false);
   }, 'deepseek-v4-pro');
-  assert.deepEqual(await registry.listModels('provider:deepseek'), {
-    models: ['deepseek-v4-pro', 'deepseek-v4-flash'], source: 'remote',
-  });
+  const catalog = await registry.listModels('provider:deepseek');
+  assert.equal(catalog.source, 'catalog');
+  assert.deepEqual([...catalog.models].sort(), ['deepseek-v4-flash', 'deepseek-v4-pro']);
 });

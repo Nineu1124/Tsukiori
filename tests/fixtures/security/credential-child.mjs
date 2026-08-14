@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 const variable = process.argv[2];
 const expectedHash = process.argv[3];
-const forbiddenVariable = process.argv[4];
+const forbiddenVariables = process.argv.slice(4);
 const value = variable ? process.env[variable] : undefined;
 const actualHash = typeof value === 'string'
   ? createHash('sha256').update(value).digest('hex')
@@ -10,5 +10,5 @@ const actualHash = typeof value === 'string'
 process.stdout.write(JSON.stringify({
   match: actualHash === expectedHash,
   received: typeof value === 'string',
-  forbiddenReceived: forbiddenVariable ? typeof process.env[forbiddenVariable] === 'string' : false,
+  forbiddenReceived: forbiddenVariables.some((name) => typeof process.env[name] === 'string'),
 }));
