@@ -75,8 +75,7 @@ import {
   type ThinkingControlMatrix,
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
-import { writeFileAtomicSync } from './atomic-file.js';
-import { readWorkspaceStateFile } from './workspace-state-file.js';
+import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
 
 type RuntimeType = 'codex' | 'claude' | 'api';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -275,6 +274,7 @@ export class InteractiveWorkspace {
   #eventSequence = 0;
   #approvals = new Map<string, ApprovalResolver>();
   #schedulerTimer: NodeJS.Timeout | null = null;
+  #stateRecovery: WorkspaceStateRecovery | undefined;
 
   constructor(options: InteractiveWorkspaceOptions) {
     this.#statePath = join(options.userDataPath, 'workspace-state-v3.json');
@@ -318,6 +318,7 @@ export class InteractiveWorkspace {
   snapshot(): Record<string, unknown> {
     return {
       mode: 'interactive',
+      ...(this.#stateRecovery ? { stateRecovery: this.#stateRecovery } : {}),
       projects: this.#state.projects,
       sessions: this.#state.sessions,
       teams: this.#state.teams,
@@ -2198,8 +2199,9 @@ export class InteractiveWorkspace {
     const version2Path = join(userDataPath, 'workspace-state-v2.json');
     const version1Path = join(userDataPath, 'workspace-state-v1.json');
     for (const source of [this.#statePath, version2Path, version1Path]) {
-      const value = readWorkspaceStateFile(source);
+      const { value, recovery } = loadWorkspaceStateFile(source);
       if (!value) continue;
+      this.#stateRecovery = recovery;
       const projects = Array.isArray(value.projects) ? value.projects.map((raw) => migrateProject(object(raw))) : [];
       const sessions = Array.isArray(value.sessions) ? value.sessions.map((raw) => migrateSession(object(raw))) : [];
       const settings = Number(value.schemaVersion) >= 2 ? { ...defaultSettings, ...object(value.settings) } as WorkspaceSettings : { ...defaultSettings };
@@ -2222,7 +2224,7 @@ export class InteractiveWorkspace {
       providers: this.#state.providers,
       teams: this.#state.teams,
     };
-    writeFileAtomicSync(this.#statePath, JSON.stringify(safe, null, 2));
+    saveWorkspaceStateFile(this.#statePath, JSON.stringify(safe, null, 2));
   }
 
   #loadTranscripts(): void {

@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { constants, copyFileSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
+import { writeFileAtomicSync } from './atomic-file.js';
 
 type StateRecord = Record<string, unknown>;
 export type WorkspaceStateDocument = {
@@ -10,6 +12,46 @@ export type WorkspaceStateDocument = {
   providers?: StateRecord[];
   teams?: StateRecord[];
 };
+
+export type WorkspaceStateRecovery = { backupFile: string; preservedFile?: string };
+
+export function loadWorkspaceStateFile(path: string): { value?: WorkspaceStateDocument; recovery?: WorkspaceStateRecovery } {
+  let invalid: WorkspaceStateError | undefined;
+  try {
+    const value = readWorkspaceStateFile(path);
+    if (value) return { value };
+  } catch (error) {
+    if (!(error instanceof WorkspaceStateError) || error.reason !== 'invalid') throw error;
+    invalid = error;
+  }
+  const backupPath = `${path}.bak`;
+  const value = readWorkspaceStateFile(backupPath);
+  if (!value) {
+    if (invalid) throw invalid;
+    return {};
+  }
+  let preservedFile: string | undefined;
+  if (invalid) {
+    const preservedPath = `${path}.corrupt-${randomUUID()}`;
+    // 保留成功后才覆盖主文件；不能恢复时，坏文件和备份都留在原处。
+    copyFileSync(path, preservedPath, constants.COPYFILE_EXCL);
+    preservedFile = basename(preservedPath);
+  }
+  writeFileAtomicSync(path, JSON.stringify(value, null, 2));
+  return { value, recovery: { backupFile: basename(backupPath), ...(preservedFile ? { preservedFile } : {}) } };
+}
+
+export function saveWorkspaceStateFile(path: string, content: string): void {
+  parseWorkspaceState(content, path);
+  let previous: string | undefined;
+  try { previous = readFileSync(path, 'utf8'); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new WorkspaceStateError('unreadable', path);
+  }
+  if (previous !== undefined) parseWorkspaceState(previous, path);
+  // 先保留上一份有效状态；首次保存也先建立可恢复副本。
+  writeFileAtomicSync(`${path}.bak`, previous ?? content);
+  writeFileAtomicSync(path, content);
+}
 
 export class WorkspaceStateError extends Error {
   constructor(readonly reason: 'invalid' | 'unreadable' | 'unsupported_version', path: string) {

@@ -850,6 +850,12 @@ if (ownsSingleInstance) app.whenReady()
         userDataPath: app.getPath('userData'),
         emit: () => undefined,
       });
+      if (interactiveWorkspace.snapshot().stateRecovery) {
+        await dialog.showMessageBox({
+          type: 'warning', title: '工作区状态已恢复', message: '已从最近一次有效备份恢复工作区。',
+          detail: '备份之后的状态变更可能丢失。原有损坏文件会保留在用户数据目录中，请检查项目和会话是否完整。',
+        });
+      }
     }
     const window = createWindow();
     smokeProgress('window created');
