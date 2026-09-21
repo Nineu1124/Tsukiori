@@ -48,6 +48,67 @@ function temporaryFiles(directory) {
   return fs.readdirSync(directory).filter((name) => name.startsWith('workspace-state-v3.json.') && name.endsWith('.tmp'));
 }
 
+const minimalState = () => ({ schemaVersion: 3, projects: [], sessions: [], settings: {}, providers: [], teams: [] });
+
+for (const [label, content, reason] of [
+  ['truncated JSON', '{"privateMarker":', 'invalid'],
+  ['null', 'null', 'invalid'],
+  ['array root', '[]', 'invalid'],
+  ['unsupported version', JSON.stringify({ ...minimalState(), schemaVersion: 99 }), 'unsupported_version'],
+  ['missing collection', JSON.stringify({ ...minimalState(), projects: undefined }), 'invalid'],
+  ['invalid record', JSON.stringify({ ...minimalState(), sessions: [null] }), 'invalid'],
+  ['orphan session', JSON.stringify({ ...minimalState(), sessions: [{ id: 's1', projectId: 'missing', name: 'session', branch: 'main', worktreePath: 'unused' }] }), 'invalid'],
+  ['invalid settings', JSON.stringify({ ...minimalState(), settings: [] }), 'invalid'],
+]) {
+  test(`workspace refuses ${label} without overwriting the source`, (t) => {
+    const f = fixture(t);
+    fs.writeFileSync(f.path, content);
+    assert.throws(() => f.open(), (error) => {
+      assert.equal(error.name, 'WorkspaceStateError');
+      assert.equal(error.reason, reason);
+      assert.match(error.message, /原文件已保留/);
+      assert.doesNotMatch(error.message, /privateMarker/);
+      return true;
+    });
+    assert.equal(fs.readFileSync(f.path, 'utf8'), content);
+  });
+}
+
+test('an unreadable current state cannot fall back to an empty or older workspace', (t) => {
+  const f = fixture(t);
+  const saved = JSON.stringify(minimalState());
+  fs.writeFileSync(f.path, saved);
+  fs.writeFileSync(join(f.directory, 'workspace-state-v2.json'), JSON.stringify({ ...minimalState(), schemaVersion: 2 }));
+  const read = fs.readFileSync;
+  withFaults(t, { readFileSync: (path, ...args) => {
+    if (path === f.path) throw Object.assign(new Error('private filesystem details'), { code: 'EACCES' });
+    return read(path, ...args);
+  } }, () => assert.throws(() => f.open(), { name: 'WorkspaceStateError', reason: 'unreadable' }));
+  assert.equal(fs.readFileSync(f.path, 'utf8'), saved);
+});
+
+test('a corrupt current state is not silently replaced by a legacy state', (t) => {
+  const f = fixture(t);
+  fs.writeFileSync(f.path, '{broken');
+  fs.writeFileSync(join(f.directory, 'workspace-state-v2.json'), JSON.stringify({ ...minimalState(), schemaVersion: 2 }));
+  assert.throws(() => f.open(), { reason: 'invalid' });
+  assert.equal(fs.readFileSync(f.path, 'utf8'), '{broken');
+});
+
+for (const version of [1, 2]) {
+  test(`workspace still migrates valid version ${version} data`, (t) => {
+    const f = fixture(t);
+    const legacy = { schemaVersion: version, projects: [], sessions: [], ...(version === 2 ? { settings: { density: 'compact' }, providers: [] } : {}) };
+    const legacyPath = join(f.directory, `workspace-state-v${version}.json`);
+    const content = JSON.stringify(legacy);
+    fs.writeFileSync(legacyPath, content);
+    const workspace = f.open();
+    assert.equal(workspace.snapshot().settings.density, version === 2 ? 'compact' : 'comfortable');
+    assert.equal(JSON.parse(fs.readFileSync(f.path, 'utf8')).schemaVersion, 3);
+    assert.equal(fs.readFileSync(legacyPath, 'utf8'), content);
+  });
+}
+
 test('workspace state can be created, replaced and reopened without temporary files', async (t) => {
   const f = fixture(t);
   const workspace = f.open();

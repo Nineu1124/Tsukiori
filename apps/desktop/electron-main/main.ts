@@ -6,6 +6,7 @@ import { DAEMON_VERSION, HOST_PROTOCOL_VERSION } from '@tsukiori/protocol';
 import { FakeRuntimeAdapter } from '@tsukiori/adapter-fake';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import { InteractiveWorkspace } from './interactive-workspace.js';
+import { WorkspaceStateError } from './workspace-state-file.js';
 import { TerminalManager } from './terminal-manager.js';
 import { ComputerUseManager, type ComputerUseAction } from './computer-use-manager.js';
 
@@ -922,6 +923,7 @@ if (ownsSingleInstance) app.whenReady()
     }
   })
   .catch(async (error: unknown) => {
+    if (error instanceof WorkspaceStateError) dialog.showErrorBox('无法读取工作区状态', error.message);
     process.stderr.write(String(error) + '\n');
     await supervisor.stop(true).catch(() => undefined);
     app.exit(1);

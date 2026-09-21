@@ -76,6 +76,7 @@ import {
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
 import { writeFileAtomicSync } from './atomic-file.js';
+import { readWorkspaceStateFile } from './workspace-state-file.js';
 
 type RuntimeType = 'codex' | 'claude' | 'api';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -291,9 +292,9 @@ export class InteractiveWorkspace {
     mkdirSync(options.userDataPath, { recursive: true });
     mkdirSync(this.#worktreeRoot, { recursive: true });
     mkdirSync(this.#transcriptRoot, { recursive: true });
+    this.#load(options.userDataPath);
     this.#integrations = new InteractiveIntegrationManager(options.userDataPath);
     this.#subagents = new SubagentProjectionStore(options.userDataPath);
-    this.#load(options.userDataPath);
     this.#providerAudits = options.providerAuditStore ?? new ProviderVerificationAuditStore(options.userDataPath);
     this.#providers = new ProviderRegistry({
       providers: this.#state.providers,
@@ -2196,10 +2197,9 @@ export class InteractiveWorkspace {
   #load(userDataPath: string): void {
     const version2Path = join(userDataPath, 'workspace-state-v2.json');
     const version1Path = join(userDataPath, 'workspace-state-v1.json');
-    const source = existsSync(this.#statePath) ? this.#statePath : existsSync(version2Path) ? version2Path : version1Path;
-    if (!existsSync(source)) return;
-    try {
-      const value = JSON.parse(readFileSync(source, 'utf8')) as Record<string, unknown>;
+    for (const source of [this.#statePath, version2Path, version1Path]) {
+      const value = readWorkspaceStateFile(source);
+      if (!value) continue;
       const projects = Array.isArray(value.projects) ? value.projects.map((raw) => migrateProject(object(raw))) : [];
       const sessions = Array.isArray(value.sessions) ? value.sessions.map((raw) => migrateSession(object(raw))) : [];
       const settings = Number(value.schemaVersion) >= 2 ? { ...defaultSettings, ...object(value.settings) } as WorkspaceSettings : { ...defaultSettings };
@@ -2210,8 +2210,7 @@ export class InteractiveWorkspace {
       const teams = Number(value.schemaVersion) >= 3 && Array.isArray(value.teams)
         ? value.teams.map((raw) => migrateTeam(object(raw), sessions)) : [];
       this.#state = { schemaVersion: 3, projects, sessions, settings, providers, teams };
-    } catch {
-      this.#state = { schemaVersion: 3, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [], teams: [] };
+      return;
     }
   }
 
