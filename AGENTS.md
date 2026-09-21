@@ -19,6 +19,7 @@ These instructions apply to the entire repository.
 
 - Use one completion commit per top-level task or Gate.
 - Use the task identifier in the subject, for example: spike(T0.1): validate OpenCode protocol and provider.
+- 提交标题和正文使用简洁中文，直接说明实际改动，不添加生成声明、宣传语或无关署名。
 - Push main immediately after each completion commit.
 - If the push fails, stop before starting the next top-level task.
 

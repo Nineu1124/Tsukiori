@@ -75,6 +75,7 @@ import {
   type ThinkingControlMatrix,
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
+import { writeFileAtomicSync } from './atomic-file.js';
 
 type RuntimeType = 'codex' | 'claude' | 'api';
 type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
@@ -2222,7 +2223,7 @@ export class InteractiveWorkspace {
       providers: this.#state.providers,
       teams: this.#state.teams,
     };
-    writeFileSync(this.#statePath, JSON.stringify(safe, null, 2), { encoding: 'utf8', mode: 0o600 });
+    writeFileAtomicSync(this.#statePath, JSON.stringify(safe, null, 2));
   }
 
   #loadTranscripts(): void {

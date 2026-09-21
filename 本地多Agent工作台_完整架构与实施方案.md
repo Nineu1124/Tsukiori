@@ -5,6 +5,8 @@
 > 文档状态：架构候选 / 关键技术 Spike 验证后进入原型开发
 > 暂定代号：Local Agent Workspace（正式产品名后续确定）
 
+后续增量执行参见 [24 周每日提交计划](./docs/roadmap/long-term-commit-plan.md)和 [168 天每日任务日历](./docs/roadmap/daily-commit-calendar.md)，每天至少一个有实际内容的提交，包含周末。该计划以本方案为架构依据，对正式产品链路另设验收；历史 Checkpoint 的适用范围需结合 [2026-09-21 审查基线](./docs/spikes/2026-09-21-review-baseline.md)理解。
+
 ---
 
 ## 目录

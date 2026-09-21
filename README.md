@@ -6,6 +6,8 @@ Tsukiori 是一个本地优先的多 Agent 工作台。项目文件、会话数�
 
 完整架构与实施清单见 [本地多Agent工作台_完整架构与实施方案.md](./本地多Agent工作台_完整架构与实施方案.md)。
 
+后续可靠性修复、正式架构接入与发布安排见 [24 周每日提交计划](./docs/roadmap/long-term-commit-plan.md)和 [168 天每日任务日历](./docs/roadmap/daily-commit-calendar.md)：每天至少一个有实际内容的提交，包含周末。起点证据见 [2026-09-21 审查基线](./docs/spikes/2026-09-21-review-baseline.md)。
+
 完整的蔚蓝档案启发式 UI 设计系统、ImageGen 原创资产、31 张页面稿和可重复视觉捕获流程见 [Tsukiori UI/UX 设计稿 V1.1](./docs/design/v1.1/README.md)。
 
 ## 当前能力
