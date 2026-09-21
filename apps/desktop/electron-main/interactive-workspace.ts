@@ -75,6 +75,7 @@ import {
   type ThinkingControlMatrix,
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
+import { safeApiError } from './api-runtime-error.js';
 import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
 
 type RuntimeType = 'codex' | 'claude' | 'api';
@@ -1400,12 +1401,12 @@ export class InteractiveWorkspace {
         session.turnCount += 1;
         this.#save();
         void running.catch((error: unknown) => {
-          const detail = truncate(error instanceof Error ? error.message : String(error), 2_000);
           const interrupted = controller.signal.aborted || (error instanceof Error && error.name === 'AbortError');
-          this.#runtimeEvent(sessionId, 'runtime.error', { message: interrupted ? 'Direct API Turn 已中断' : detail });
+          const safe = safeApiError(error, interrupted);
+          this.#runtimeEvent(sessionId, 'runtime.error', { message: safe.message, category: safe.category });
           this.#runtimeEvent(sessionId, 'turn.completed', {
             turnId, status: interrupted ? 'interrupted' : 'failed',
-            ...(interrupted ? {} : { error: detail }),
+            ...(interrupted ? {} : { error: safe.message, category: safe.category }),
           });
         }).finally(() => this.#apiAborts.delete(sessionId));
         return { turnId };
@@ -1437,13 +1438,15 @@ export class InteractiveWorkspace {
       this.#save();
       return { turnId };
     } catch (error) {
-      const message = truncate(error instanceof Error ? error.message : String(error), 2_000);
+      const safe = session.runtimeType === 'api' ? safeApiError(error) : undefined;
+      const failure = safe ?? error;
+      const message = truncate(failure instanceof Error ? failure.message : String(failure), 2_000);
       session.status = 'error'; session.lastError = message; session.updatedAt = Date.now();
       this.#activeTurns.delete(sessionId);
-      this.#emit({ sessionId, type: 'runtime.error', payload: { message } });
+      this.#emit({ sessionId, type: 'runtime.error', payload: { message, ...(safe ? { category: safe.category } : {}) } });
       this.#refreshTeamsForSession(sessionId);
       this.#save();
-      throw error;
+      throw failure;
     }
   }
 

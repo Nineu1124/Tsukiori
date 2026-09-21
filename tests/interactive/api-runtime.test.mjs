@@ -140,3 +140,64 @@ test('Direct API Runtime exposes locked catalogs while custom models remain cons
   assert.equal(model.contextWindow, 32_000);
   assert.equal(model.maxTokens, 4_096);
 });
+
+const privateMarker = 'fixture-private-api-value/+';
+const errorBody = `401 rejected ${privateMarker} ${encodeURIComponent(privateMarker)} private-response-body`;
+
+for (const kind of ['factory', 'iterator', 'error event', 'failed completion']) {
+  test(`Direct API removes the error body from a ${kind} failure`, async () => {
+    const events = [];
+    const client = new ApiRuntimeClient({ stream() {
+      if (kind === 'factory') throw new Error(errorBody, { cause: { token: privateMarker } });
+      if (kind === 'iterator') return { async *[Symbol.asyncIterator]() { throw new Error(errorBody); } };
+      if (kind === 'error event') return streamOf([{ type: 'error', reason: 'error', error: { errorMessage: errorBody } }]);
+      return streamOf([{ type: 'done', reason: 'error', message: { ...assistantMessage(), stopReason: 'error', errorMessage: errorBody, content: [{ type: 'text', text: privateMarker }] } }]);
+    } });
+    await assert.rejects(() => client.runTurn({
+      turnId: 'turn:private-error', provider: provider(), modelId: 'fixture-model', apiKey: privateMarker,
+      history: [], signal: new AbortController().signal, callbacks: { onEvent: (type, payload) => events.push({ type, payload }) },
+    }), (error) => {
+      assert.equal(error.category, 'authentication_failed');
+      assert.equal(error.cause, undefined);
+      const output = JSON.stringify({ error, message: error.message, stack: error.stack, events });
+      for (const marker of [privateMarker, encodeURIComponent(privateMarker), 'private-response-body']) assert.equal(output.includes(marker), false);
+      return true;
+    });
+    assert.equal(events.some((event) => event.type === 'api.assistant.message' || event.type === 'turn.completed'), false);
+  });
+}
+
+test('Direct API retains useful error categories without returning raw errors', async () => {
+  const cyclic = { message: privateMarker };
+  cyclic.cause = cyclic;
+  const cases = [
+    [Object.assign(new Error(privateMarker), { status: 403 }), 'authentication_failed'],
+    [{ cause: { statusCode: 429, message: privateMarker } }, 'rate_limited'],
+    [new Error(`insufficient_quota ${privateMarker}`), 'quota_exhausted'],
+    [new Error(`maximum tokens ${privateMarker}`), 'context_window_exceeded'],
+    [{ error: { code: 'ETIMEDOUT', message: privateMarker } }, 'timeout'],
+    [Object.assign(new Error(`Authorization ${privateMarker}`), { name: 'AbortError' }), 'aborted'],
+    [{ cause: { code: 'ECONNRESET', message: privateMarker } }, 'network_error'],
+    [cyclic, 'provider_error'],
+    [{ get message() { throw new Error(privateMarker); } }, 'provider_error'],
+  ];
+  for (const [error, category] of cases) {
+    const result = await verifyApiProvider(provider(), privateMarker, { stream: () => { throw error; } });
+    assert.deepEqual(result, { ok: false, category });
+    assert.equal(JSON.stringify(result).includes(privateMarker), false);
+  }
+});
+
+test('successful API messages and history do not retain error metadata', async () => {
+  const seen = [];
+  const message = { ...assistantMessage(), errorMessage: errorBody };
+  const client = new ApiRuntimeClient({ stream: () => streamOf([{ type: 'done', reason: 'stop', message }]) });
+  const result = await client.runTurn({
+    turnId: 'turn:safe-message', provider: provider(), modelId: 'fixture-model', apiKey: privateMarker,
+    history: [], signal: new AbortController().signal, callbacks: { onEvent: (type, payload) => seen.push({ type, payload }) },
+  });
+  const history = readApiHistory([{ type: 'api.assistant.message', createdAt: 1, payload: { message } }]);
+  assert.equal(result.errorMessage, undefined);
+  assert.equal(history[0].errorMessage, undefined);
+  assert.equal(JSON.stringify({ seen, result, history }).includes(privateMarker), false);
+});

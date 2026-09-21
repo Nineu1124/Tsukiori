@@ -9,6 +9,7 @@ import {
 } from '@earendil-works/pi-ai/compat';
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all';
 import type { ProviderConfig, ProviderKind } from './provider-registry.js';
+import { ApiRuntimeError, safeApiError } from './api-runtime-error.js';
 
 export type ApiRuntimeCallbacks = {
   onEvent: (type: string, payload: Record<string, unknown>) => void;
@@ -54,6 +55,14 @@ export class ApiRuntimeClient {
   }
 
   async runTurn(input: ApiRuntimeTurn): Promise<AssistantMessage> {
+    try {
+      return await this.#runTurn(input);
+    } catch (error) {
+      throw safeApiError(error, input.signal.aborted);
+    }
+  }
+
+  async #runTurn(input: ApiRuntimeTurn): Promise<AssistantMessage> {
     const model = resolveApiModel(input.provider, input.modelId);
     const context: Context = { messages: input.history };
     input.callbacks.onEvent('turn.started', {
@@ -76,16 +85,22 @@ export class ApiRuntimeClient {
     let completed: AssistantMessage | undefined;
     for await (const event of stream) {
       this.#mapEvent(input, event);
-      if (event.type === 'done') completed = event.message;
+      if (event.type === 'done') {
+        if (event.message.stopReason === 'error' || event.message.stopReason === 'aborted') {
+          throw safeApiError(event.message.errorMessage, event.message.stopReason === 'aborted');
+        }
+        if (event.message.errorMessage !== undefined) {
+          const { errorMessage, ...message } = event.message;
+          completed = message;
+        } else completed = event.message;
+      }
       if (event.type === 'error') {
-        const error = new Error(safeError(event.error.errorMessage, event.reason));
-        error.name = event.reason === 'aborted' ? 'AbortError' : 'ApiRuntimeError';
-        throw error;
+        throw safeApiError(event.error, event.reason === 'aborted');
       }
     }
-    if (!completed) throw new Error('API Runtime 流未返回完成事件');
+    if (!completed) throw new ApiRuntimeError('incomplete_response');
     const toolCalls = completed.content.filter((item) => item.type === 'toolCall');
-    if (toolCalls.length) throw new Error('此 API Runtime 尚未启用工具执行，请改用 Codex 或 Claude Code Runtime');
+    if (toolCalls.length) throw new ApiRuntimeError('tools_unavailable');
     input.callbacks.onEvent('assistant.usage', {
       providerId: input.provider.id,
       model: completed.responseModel ?? completed.model,
@@ -147,7 +162,7 @@ export function providerCatalogId(kind: ProviderKind): string | undefined {
 
 export function resolveApiModel(provider: ProviderConfig, modelId: string): Model<Api> {
   const api = provider.apiFormat;
-  if (!isApiProtocol(api)) throw new Error('所选 Provider 不能用于直接 API Runtime');
+  if (!isApiProtocol(api)) throw new ApiRuntimeError('invalid_configuration');
   const source = providerCatalogModels(provider.kind).find((model) => model.id === modelId && model.api === api);
   if (source) {
     return {
@@ -191,7 +206,7 @@ export async function verifyApiProvider(
     });
     return { ok: true, category: 'connected' };
   } catch (error) {
-    return { ok: false, category: apiErrorCategory(error, controller.signal.aborted) };
+    return { ok: false, category: controller.signal.aborted ? 'timeout' : safeApiError(error).category };
   } finally {
     clearTimeout(timer);
   }
@@ -233,7 +248,6 @@ function parseAssistant(value: unknown): AssistantMessage | undefined {
     usage: parseUsage(raw.usage),
     stopReason: ['stop', 'length', 'error', 'aborted'].includes(String(raw.stopReason))
       ? raw.stopReason as AssistantMessage['stopReason'] : 'stop',
-    ...(typeof raw.errorMessage === 'string' ? { errorMessage: raw.errorMessage } : {}),
     timestamp: Number.isFinite(raw.timestamp) ? Number(raw.timestamp) : Date.now(),
   };
 }
@@ -257,7 +271,6 @@ function serializableAssistant(message: AssistantMessage): AssistantMessage {
     ...(message.responseId ? { responseId: message.responseId } : {}),
     usage: parseUsage(message.usage),
     stopReason: message.stopReason,
-    ...(message.errorMessage ? { errorMessage: safeError(message.errorMessage, 'provider_error') } : {}),
     timestamp: message.timestamp,
   };
 }
@@ -289,11 +302,6 @@ function effectiveBaseUrl(provider: ProviderConfig, catalogBaseUrl: string): str
   return base;
 }
 
-function safeError(value: unknown, fallback: string): string {
-  const text = typeof value === 'string' ? value.trim() : '';
-  return (text || fallback).slice(0, 2_000);
-}
-
 function safeCount(value: unknown): number {
   const number = Number(value);
   return Number.isSafeInteger(number) && number >= 0 ? number : 0;
@@ -306,15 +314,4 @@ function safeOptionalCount(value: unknown): number | undefined {
 function safeMoney(value: unknown): number {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.min(number, Number.MAX_SAFE_INTEGER) : 0;
-}
-
-function apiErrorCategory(error: unknown, timedOut: boolean): string {
-  if (timedOut) return 'timeout';
-  const text = (error instanceof Error ? error.message : String(error)).toLowerCase();
-  if (/401|403|auth|api key|unauthorized|forbidden/.test(text)) return 'authentication_failed';
-  if (/429|rate.?limit/.test(text)) return 'rate_limited';
-  if (/quota|credit|balance/.test(text)) return 'quota_exhausted';
-  if (/context|too many tokens|maximum token/.test(text)) return 'context_window_exceeded';
-  if (/abort/.test(text)) return 'aborted';
-  return /fetch|network|connect|dns|socket|tls/.test(text) ? 'network_error' : 'provider_error';
 }

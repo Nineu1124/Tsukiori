@@ -963,3 +963,74 @@ test('scheduled task launches an isolated Runtime Session and records activity',
   assert.equal(f.emitted.some((event) => event.type === 'scheduled.task.started'), true);
   assert.equal(f.workspace.listScheduledTasks(project.id)[0].enabled, true);
 });
+
+test('API failures never expose provider error bodies in workspace output or persisted data', async (t) => {
+  const { ApiRuntimeClient } = await import(new URL('../../apps/desktop/dist/electron-main/api-runtime.js', import.meta.url));
+  const secret = 'fixture-error-private-value/+';
+  const body = `401 ${secret} ${encodeURIComponent(secret)} private-provider-response`;
+  let fault = 'factory';
+  const client = new ApiRuntimeClient({ stream() {
+    if (fault === 'factory') throw new Error(body);
+    return { async *[Symbol.asyncIterator]() {
+      if (fault === 'iterator') throw new Error(body, { cause: { message: secret } });
+      if (fault === 'event') {
+        yield { type: 'error', reason: 'error', error: { errorMessage: body } };
+      } else {
+        yield { type: 'done', reason: 'error', message: { stopReason: 'error', errorMessage: body, content: [{ type: 'text', text: secret }] } };
+      }
+    } };
+  } });
+  const credentials = {
+    store: () => 'secretref:00000000-0000-4000-8000-000000000010',
+    use: (_reference, _binding, consumer) => consumer(secret),
+    delete: () => true,
+  };
+  const f = fixture(t, {
+    credentials,
+    discoverClaude: () => { throw new Error('offline fixture'); },
+    apiRuntime: { runTurn(input) {
+      if (fault === 'synchronous') throw new Error(body);
+      return client.runTurn(input);
+    } },
+  });
+  const provider = f.workspace.saveProvider({
+    name: 'Error fixture', kind: 'openai-compatible', apiKey: secret,
+    baseUrl: 'https://api.example.invalid/v1', models: ['fixture-model'],
+  });
+  const project = f.workspace.addProject(f.repository);
+  const session = await f.workspace.createSession(project.id, { runtimeType: 'api', providerId: provider.id, model: 'fixture-model' });
+  const transcriptName = (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl';
+  for (fault of ['factory', 'iterator', 'event', 'completion', 'synchronous']) {
+    if (fault === 'synchronous') {
+      await assert.rejects(() => f.workspace.sendPrompt(session.id, 'exercise error handling'), (error) => {
+        assert.equal(error.category, 'authentication_failed');
+        assert.equal(error.message.includes(secret), false);
+        assert.equal(error.cause, undefined);
+        return true;
+      });
+    } else {
+      await f.workspace.sendPrompt(session.id, 'exercise error handling');
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(f.workspace.snapshot().sessions.find((item) => item.id === session.id).status, 'error');
+    const output = JSON.stringify({
+      emitted: f.emitted, polled: f.workspace.pollEvents(0), snapshot: f.workspace.snapshot(), diagnostics: f.workspace.diagnosticSummary(),
+    }) + readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8')
+      + readFileSync(join(f.userData, 'workspace-state-v3.json.bak'), 'utf8')
+      + readFileSync(join(f.userData, 'transcripts', transcriptName), 'utf8');
+    for (const marker of [secret, encodeURIComponent(secret), 'private-provider-response']) assert.equal(output.includes(marker), false, fault);
+  }
+  assert.equal(f.emitted.filter((event) => event.type === 'runtime.error').length, 5);
+  assert.equal(f.emitted.filter((event) => event.type === 'runtime.error').every((event) => event.payload.category === 'authentication_failed'), true);
+  await f.workspace.shutdown();
+  const reopened = new InteractiveWorkspace({
+    userDataPath: f.userData, emit: () => {}, credentials,
+    discoverCodex: () => { throw new Error('offline fixture'); },
+    discoverClaude: () => { throw new Error('offline fixture'); },
+  });
+  try {
+    const restored = JSON.stringify({ snapshot: reopened.snapshot(), polled: reopened.pollEvents(0) });
+    assert.equal(restored.includes(secret), false);
+    assert.equal(restored.includes('private-provider-response'), false);
+  } finally { await reopened.shutdown(); }
+});
