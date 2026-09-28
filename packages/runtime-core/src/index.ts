@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { JsonValue, SessionEventRecord } from '@tsukiori/domain';
 export * from './runtime-environment.js';
+export * from './runtime-error.js';
 export * from './recovery-projection.js';
 export * from './thinking-block.js';
 export * from './codex-compaction.js';

@@ -16,6 +16,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 import { WindowsCredentialBroker } from '@tsukiori/credential-broker';
 import {
   CodexCompactionTracker,
+  runtimeFailure,
   ThinkingBlockProjector,
   type CodexCompactionEventType,
   type CodexCompactionMethod,
@@ -1426,6 +1427,7 @@ export class InteractiveWorkspace {
         onEvent: (type, payload) => this.#runtimeEvent(sessionId, type, payload),
         onExit: (error) => {
           if (!error) return;
+          error = runtimeFailure(error).message;
           session.status = 'error'; session.lastError = error; session.updatedAt = Date.now();
           this.#activeTurns.delete(sessionId);
           this.#emit({ sessionId, type: 'runtime.error', payload: { message: error } });
@@ -1439,7 +1441,7 @@ export class InteractiveWorkspace {
       return { turnId };
     } catch (error) {
       const safe = session.runtimeType === 'api' ? safeApiError(error) : undefined;
-      const failure = safe ?? error;
+      const failure = safe ?? new Error(runtimeFailure(error).message);
       const message = truncate(failure instanceof Error ? failure.message : String(failure), 2_000);
       session.status = 'error'; session.lastError = message; session.updatedAt = Date.now();
       this.#activeTurns.delete(sessionId);
@@ -1753,6 +1755,7 @@ export class InteractiveWorkspace {
         onExit: (error) => {
           this.#clients.delete(sessionId);
           if (!error) return;
+          error = runtimeFailure(error).message;
           session.status = 'error'; session.lastError = error; session.updatedAt = Date.now();
           this.#activeTurns.delete(sessionId);
           this.#emit({ sessionId, type: 'runtime.error', payload: { message: error } });
@@ -1847,7 +1850,7 @@ export class InteractiveWorkspace {
       this.#runtimeEvent(sessionId, 'turn.completed', {
         turnId: String(turn.id ?? params.turnId ?? ''),
         status: String(turn.status ?? 'completed'),
-        error: truncate(String(object(turn.error).message ?? ''), 2_000),
+        ...(turn.error ? { error: runtimeFailure(turn.error).message } : {}),
       });
     } else if (method === 'item/started' || method === 'item/completed') {
       const item = object(params.item);
@@ -1884,7 +1887,7 @@ export class InteractiveWorkspace {
         toolUseId: String(item.id ?? ''),
         summary: truncate(String(item.command ?? item.path ?? item.name ?? itemType), 2_000),
       } });
-    } else if (method === 'error') this.#emit({ sessionId, type: 'runtime.error', payload: { message: truncate(String(params.message ?? 'Codex Runtime error'), 2_000) } });
+    } else if (method === 'error') this.#emit({ sessionId, type: 'runtime.error', payload: runtimeFailure(params) });
     else {
       const serialized = JSON.stringify(params);
       this.#emit({ sessionId, type: 'native.event', payload: {
@@ -1900,6 +1903,13 @@ export class InteractiveWorkspace {
 
   #runtimeEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
     const session = this.#session(sessionId);
+    if (session.runtimeType !== 'api') {
+      if (type === 'runtime.error') payload = runtimeFailure(payload);
+      else if (type === 'turn.completed' && payload.error) {
+        const safe = runtimeFailure(payload.error);
+        payload = { ...payload, error: safe.message, category: safe.category };
+      }
+    }
     if (session.importedReadOnly) throw new Error('导入历史为只读；请先显式 Fork，再在新 Session 中继续');
     if (isThinkingEvent(type)) {
       const projector = this.#thinking.get(sessionId) ?? new ThinkingBlockProjector();

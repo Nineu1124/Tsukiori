@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import {
   isolateRuntimeEnvironment,
+  runtimeFailure,
   type RuntimeProviderEnvironmentKey,
 } from '@tsukiori/runtime-core';
 
@@ -245,7 +246,8 @@ export class CodexAppServerClient {
   }
 
   #fail(error: Error): void {
-    const detail = this.#stderr ? `${error.message}: ${this.#stderr}` : error.message;
+    const detail = runtimeFailure({ error, stderr: this.#stderr }).message;
+    this.#stderr = '';
     for (const pending of this.#pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error(detail));

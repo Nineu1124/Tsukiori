@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { runtimeFailure } from '@tsukiori/runtime-core';
 
 export type ClaudeClientEvent = {
   type: string;
@@ -75,7 +76,7 @@ export class ClaudeStreamJsonMapper {
           durationMs: finite(message.duration_ms),
           durationApiMs: finite(message.duration_api_ms),
           turns: finite(message.num_turns),
-          error: failed ? boundedText(message.result ?? message.error, 2_000) : undefined,
+          error: failed ? runtimeFailure(message.result ?? message.error).message : undefined,
           usage: sanitize(object(message.usage)),
         }),
       }];

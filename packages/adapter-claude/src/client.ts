@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   isolateRuntimeEnvironment,
+  runtimeFailure,
   type RuntimeProviderEnvironmentKey,
 } from '@tsukiori/runtime-core';
 import { existsSync } from 'node:fs';
@@ -581,8 +582,5 @@ function safeMetadata(value: unknown): string {
 }
 
 function safeError(value: string): string {
-  return value
-    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gi, '[REDACTED]')
-    .replace(/\bBearer\s+\S+|\bsk-[A-Za-z0-9_-]+/gi, '[REDACTED]')
-    .slice(0, 2_000);
+  return runtimeFailure(value).message;
 }

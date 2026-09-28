@@ -275,7 +275,7 @@ test('interrupt and process failure always close the Turn and redact stderr secr
     onEvent: (type, payload) => failedEvents.push({ type, payload }),
     onExit: (error) => { failure = error; resolveExit(); },
   }));
-  assert.match(failure, /REDACTED/);
+  assert.match(failure, /Runtime 执行失败/);
   assert.doesNotMatch(failure, /fixture-super-secret-value/);
   assert.equal(failedEvents.some((event) => event.type === 'turn.completed' && event.payload.status === 'failed'), true);
   await client.stop();
