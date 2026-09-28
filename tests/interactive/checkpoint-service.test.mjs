@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { appendTranscriptLine, readTranscriptLines } from '../../apps/desktop/dist/electron-main/transcript-store.js';
 
 const { CheckpointService, CheckpointServiceError } = await import(
   new URL('../../apps/desktop/dist/electron-main/checkpoint-service.js', import.meta.url)
@@ -94,6 +95,23 @@ test('Checkpoint preserves HEAD, index, worktree, untracked files, transcript, a
   assert.equal(readFileSync(join(f.repository, 'extra.txt'), 'utf8').replaceAll('\r\n', '\n'), 'future untracked state\n');
   assert.equal(readFileSync(f.transcriptPath, 'utf8').includes('future response'), true);
   assert.equal(f.service.list(sessionId).length, 3);
+});
+
+test('Checkpoint rewind switches the whole segmented conversation and preserves an undo snapshot', (t) => {
+  const f = fixture(t);
+  const sessionId = 'session:segmented-fixture';
+  const first = transcriptLine(sessionId, 'event-1', 'user.message', { text: 'before checkpoint' });
+  const second = transcriptLine(sessionId, 'event-2', 'turn.completed', { turnId: 'turn-1', status: 'completed' });
+  appendTranscriptLine(f.transcriptPath, first, 100);
+  appendTranscriptLine(f.transcriptPath, second, 100);
+  const input = { sessionId, worktreePath: f.repository, transcriptPath: f.transcriptPath,
+    label: 'fixture', runtimeSessionId: 'thread-fixture', runtimeTurnId: 'turn-1', turnCount: 1 };
+  const checkpoint = f.service.create(input);
+  appendTranscriptLine(f.transcriptPath, transcriptLine(sessionId, 'event-3', 'user.message', { text: 'future' }), 100);
+  const result = f.service.rewind({ ...input, checkpointId: checkpoint.id });
+  assert.deepEqual([...readTranscriptLines(f.transcriptPath)].map((line) => JSON.parse(line).id), ['event-1', 'event-2']);
+  f.service.rewind({ ...input, checkpointId: result.recoveryCheckpoint.id });
+  assert.deepEqual([...readTranscriptLines(f.transcriptPath)].map((line) => JSON.parse(line).id), ['event-1', 'event-2', 'event-3']);
 });
 
 test('Checkpoint fails closed when changed files exceed the configured byte limit', (t) => {

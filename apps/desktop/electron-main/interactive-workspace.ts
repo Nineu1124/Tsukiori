@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
-  appendFileSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -13,6 +12,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
+import { appendTranscriptLine, readTranscriptLines, removeTranscript, TranscriptStoreError } from './transcript-store.js';
 import { WindowsCredentialBroker } from '@tsukiori/credential-broker';
 import {
   CodexCompactionTracker,
@@ -115,6 +115,7 @@ type SessionState = {
   turnCount: number;
   status: 'starting' | 'ready' | 'running' | 'waiting_permission' | 'error' | 'stopped';
   lastError?: string;
+  transcriptIncomplete?: true;
   createdAt: number;
   updatedAt: number;
   pinned?: boolean;
@@ -808,7 +809,7 @@ export class InteractiveWorkspace {
       for (const session of [...createdSessions].reverse()) {
         this.#events.delete(session.id);
         this.#apiHistory.delete(session.id);
-        rmSync(this.#transcriptPath(session.id), { force: true });
+        removeTranscript(this.#transcriptPath(session.id));
         try {
           if (existsSync(session.worktreePath)) this.#git(this.#project(session.projectId).gitRoot, ['worktree', 'remove', '--force', session.worktreePath]);
         } catch { /* Best-effort cleanup remains scoped to the generated Worktree. */ }
@@ -1368,6 +1369,7 @@ export class InteractiveWorkspace {
     if (!prompt || prompt.length > 64_000) throw new Error('Prompt 必须为 1–64000 个字符');
     const session = this.#session(sessionId);
     this.#assertSessionWritable(session);
+    if (session.transcriptIncomplete) throw new Error('会话记录不完整，请恢复有效检查点或新建会话。');
     if (session.status === 'running' || session.status === 'waiting_permission') {
       throw new Error('当前 Turn 尚未结束；请等待、处理中断或完成权限确认');
     }
@@ -1375,6 +1377,10 @@ export class InteractiveWorkspace {
     session.updatedAt = Date.now();
     delete session.lastError;
     this.#emit({ sessionId, type: 'user.message', payload: { text: prompt } });
+    if (session.transcriptIncomplete) {
+      session.status = 'error';
+      throw new TranscriptStoreError();
+    }
     try {
       if (session.runtimeType === 'codex') {
         const client = await this.#ensureCodexClient(sessionId);
@@ -2014,31 +2020,44 @@ export class InteractiveWorkspace {
 
   #reloadSessionTranscript(sessionId: string): void {
     const session = this.#session(sessionId);
-    const path = this.#transcriptPath(sessionId);
-    if (!existsSync(path) || statSync(path).size > 8 * 1024 * 1024) {
-      this.#events.set(sessionId, []);
-      this.#apiHistory.delete(sessionId);
-      this.#compactions.delete(sessionId);
-      return;
-    }
+    if (this.#restoreTranscript(session)) delete session.transcriptIncomplete;
+  }
+
+  #restoreTranscript(session: SessionState): boolean {
+    const sessionId = session.id;
     const events: WorkspaceEvent[] = [];
-    for (const line of readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean)) {
-      try {
+    const history: ReturnType<typeof readApiHistory> = [];
+    let complete = true;
+    try {
+      for (const line of readTranscriptLines(this.#transcriptPath(sessionId))) {
         const raw = JSON.parse(line) as Record<string, unknown>;
-        if (raw.sessionId !== sessionId || typeof raw.type !== 'string' || !transcriptEvent(raw.type)) continue;
-        events.push({
+        if (!raw || raw.sessionId !== sessionId || typeof raw.type !== 'string') throw new TranscriptStoreError();
+        if (!transcriptEvent(raw.type)) continue;
+        const event: WorkspaceEvent = {
           id: typeof raw.id === 'string' ? raw.id : randomUUID(),
           sequence: ++this.#eventSequence,
           sessionId,
           type: raw.type,
           createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : session.createdAt,
           payload: object(raw.payload),
-        });
-      } catch { /* Invalid rows were already rejected by CheckpointService. */ }
+        };
+        history.push(...readApiHistory([event]));
+        events.push(event);
+        if (events.length > 500) events.shift();
+      }
+    } catch {
+      complete = false;
+      session.transcriptIncomplete = true;
+      session.lastError = new TranscriptStoreError().message;
+      session.status = 'error';
+      history.length = 0;
+      events.length = 0;
     }
-    this.#apiHistory.set(sessionId, readApiHistory(events));
-    this.#events.set(sessionId, events.slice(-500));
+    this.#apiHistory.set(sessionId, history);
+    this.#events.set(sessionId, events);
+    this.#eventLog = [...this.#eventLog.filter((event) => event.sessionId !== sessionId), ...events].slice(-1_000);
     this.#compactions.delete(sessionId);
+    return complete;
   }
 
   #compactionTracker(sessionId: string): CodexCompactionTracker {
@@ -2250,40 +2269,28 @@ export class InteractiveWorkspace {
   }
 
   #loadTranscripts(): void {
-    for (const session of this.#state.sessions) {
-      const path = join(this.#transcriptRoot, safeTranscriptName(session.id));
-      if (!existsSync(path) || statSync(path).size > 8 * 1024 * 1024) continue;
-      const lines = readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean);
-      const events: WorkspaceEvent[] = [];
-      for (const line of lines) {
-        try {
-          const raw = JSON.parse(line) as Record<string, unknown>;
-          if (raw.sessionId !== session.id || typeof raw.type !== 'string' || !transcriptEvent(raw.type)) continue;
-          const event: WorkspaceEvent = {
-            id: typeof raw.id === 'string' ? raw.id : randomUUID(),
-            sequence: ++this.#eventSequence,
-            sessionId: session.id,
-            type: raw.type,
-            createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : session.createdAt,
-            payload: object(raw.payload),
-          };
-          events.push(event); this.#eventLog.push(event);
-        } catch { /* Invalid local transcript rows are ignored. */ }
-      }
-      this.#apiHistory.set(session.id, readApiHistory(events));
-      if (events.length) this.#events.set(session.id, events.slice(-500));
-    }
-    this.#eventLog = this.#eventLog.slice(-1_000);
+    for (const session of this.#state.sessions) this.#restoreTranscript(session);
   }
 
   #persistTranscript(event: WorkspaceEvent): void {
     if (!this.#state.settings.persistConversation || !event.sessionId || !transcriptEvent(event.type)) return;
     const path = join(this.#transcriptRoot, safeTranscriptName(event.sessionId));
-    if (existsSync(path) && statSync(path).size >= 5 * 1024 * 1024) return;
-    appendFileSync(path, JSON.stringify({
-      id: event.id, sessionId: event.sessionId, type: event.type,
-      createdAt: event.createdAt, payload: event.payload,
-    }) + '\n', { encoding: 'utf8', mode: 0o600 });
+    try {
+      appendTranscriptLine(path, JSON.stringify({
+        id: event.id, sessionId: event.sessionId, type: event.type,
+        createdAt: event.createdAt, payload: event.payload,
+      }) + '\n');
+    } catch {
+      const session = this.#state.sessions.find((item) => item.id === event.sessionId);
+      if (session && !session.transcriptIncomplete) {
+        session.transcriptIncomplete = true;
+        session.lastError = new TranscriptStoreError().message;
+        this.#emit({ sessionId: session.id, type: 'runtime.warning', payload: {
+          category: 'transcript_write_failed', message: session.lastError,
+        } });
+        try { this.#save(); } catch { /* The warning remains visible if the state disk also fails. */ }
+      }
+    }
   }
 
   #usage(): Record<string, unknown> {
@@ -2342,6 +2349,7 @@ function migrateSession(value: Record<string, unknown>): SessionState {
     turnCount: typeof value.turnCount === 'number' ? value.turnCount : 0,
     status: value.status === 'running' || value.status === 'waiting_permission' ? 'ready' : String(value.status ?? 'ready') as SessionState['status'],
     ...(typeof value.lastError === 'string' ? { lastError: value.lastError } : {}),
+    ...(value.transcriptIncomplete === true ? { transcriptIncomplete: true } : {}),
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     ...(value.pinned === true ? { pinned: true } : {}),

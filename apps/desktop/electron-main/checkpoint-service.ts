@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, resolve, sep, win32 } from 'node:path';
+import { readTranscriptLines, replaceTranscript } from './transcript-store.js';
 
 const DEFAULT_CHANGED_BYTES_LIMIT = 256 * 1024 * 1024;
 const TRANSCRIPT_BYTES_LIMIT = 8 * 1024 * 1024;
@@ -199,7 +200,7 @@ export class CheckpointService {
       if (sha256(conversation.content) !== checkpoint.conversationHash) {
         throw new CheckpointServiceError('Checkpoint conversation hash does not match its manifest');
       }
-      atomicWrite(input.transcriptPath, conversation.content);
+      replaceTranscript(input.transcriptPath, conversation.content);
       const restoredIndex = this.#tree(this.#git(worktreePath, ['write-tree']).trim());
       const restoredWorktree = this.#worktreeTree(worktreePath, `verify-${checkpoint.id}`);
       if (restoredIndex !== checkpoint.indexTree || restoredWorktree !== checkpoint.worktreeTree) {
@@ -370,10 +371,19 @@ export class CheckpointService {
 }
 
 function readConversation(path: string, sessionId: string): { content: string; eventCount: number } {
-  if (!existsSync(path)) return { content: '', eventCount: 0 };
-  const size = statSync(path).size;
-  if (size > TRANSCRIPT_BYTES_LIMIT) throw new CheckpointServiceError('Transcript 超过 Checkpoint 的 8 MiB 上限');
-  const content = readFileSync(path, 'utf8');
+  let content = '';
+  if (existsSync(`${path}.index.json`)) {
+    let bytes = 0;
+    for (const line of readTranscriptLines(path)) {
+      bytes += Buffer.byteLength(line) + 1;
+      if (bytes > TRANSCRIPT_BYTES_LIMIT) throw new CheckpointServiceError('Transcript 超过 Checkpoint 的 8 MiB 上限');
+      content += `${line}\n`;
+    }
+  } else if (existsSync(path)) {
+    if (statSync(path).size > TRANSCRIPT_BYTES_LIMIT) throw new CheckpointServiceError('Transcript 超过 Checkpoint 的 8 MiB 上限');
+    // Existing checkpoint hashes include original line endings and blank rows.
+    content = readFileSync(path, 'utf8');
+  }
   const lines = content.split(/\r?\n/).filter(Boolean);
   for (const line of lines) {
     let value: unknown;
