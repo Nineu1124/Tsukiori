@@ -223,7 +223,7 @@ export function readApiHistory(events: readonly { type: string; createdAt: numbe
     const message = parseAssistant(event.payload.message);
     if (message) messages.push(message);
   }
-  return messages.slice(-100);
+  return messages;
 }
 
 function parseAssistant(value: unknown): AssistantMessage | undefined {

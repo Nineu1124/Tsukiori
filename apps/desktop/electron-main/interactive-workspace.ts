@@ -266,6 +266,7 @@ export class InteractiveWorkspace {
   #claudeLaunch: ClaudeLaunch | null = null;
   #claudeClient: ClaudeCodeClient | null = null;
   #clients = new Map<string, CodexAppServerClient>();
+  #apiHistory = new Map<string, ReturnType<typeof readApiHistory>>();
   #activeTurns = new Map<string, string>();
   #apiAborts = new Map<string, AbortController>();
   #thinking = new Map<string, ThinkingBlockProjector>();
@@ -806,6 +807,7 @@ export class InteractiveWorkspace {
       this.#eventLog = this.#eventLog.filter((event) => !event.sessionId || !createdIds.has(event.sessionId));
       for (const session of [...createdSessions].reverse()) {
         this.#events.delete(session.id);
+        this.#apiHistory.delete(session.id);
         rmSync(this.#transcriptPath(session.id), { force: true });
         try {
           if (existsSync(session.worktreePath)) this.#git(this.#project(session.projectId).gitRoot, ['worktree', 'remove', '--force', session.worktreePath]);
@@ -1387,7 +1389,7 @@ export class InteractiveWorkspace {
         const provider = this.#providers.get(session.providerId);
         const turnId = `api-turn:${randomUUID()}`;
         const controller = new AbortController();
-        const history = readApiHistory(this.#events.get(sessionId) ?? []);
+        const history = structuredClone(this.#apiHistory.get(sessionId) ?? []);
         const running = this.#providers.withSecret(provider.id, (apiKey) => this.#apiRuntime.runTurn({
           turnId,
           provider: { ...provider, models: [...provider.models] },
@@ -2015,11 +2017,12 @@ export class InteractiveWorkspace {
     const path = this.#transcriptPath(sessionId);
     if (!existsSync(path) || statSync(path).size > 8 * 1024 * 1024) {
       this.#events.set(sessionId, []);
+      this.#apiHistory.delete(sessionId);
       this.#compactions.delete(sessionId);
       return;
     }
     const events: WorkspaceEvent[] = [];
-    for (const line of readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean).slice(-1_000)) {
+    for (const line of readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean)) {
       try {
         const raw = JSON.parse(line) as Record<string, unknown>;
         if (raw.sessionId !== sessionId || typeof raw.type !== 'string' || !transcriptEvent(raw.type)) continue;
@@ -2033,7 +2036,8 @@ export class InteractiveWorkspace {
         });
       } catch { /* Invalid rows were already rejected by CheckpointService. */ }
     }
-    this.#events.set(sessionId, events);
+    this.#apiHistory.set(sessionId, readApiHistory(events));
+    this.#events.set(sessionId, events.slice(-500));
     this.#compactions.delete(sessionId);
   }
 
@@ -2100,6 +2104,11 @@ export class InteractiveWorkspace {
     this.#eventLog.push(event);
     if (this.#eventLog.length > 1_000) this.#eventLog.splice(0, this.#eventLog.length - 1_000);
     if (event.sessionId) {
+      if (event.type === 'user.message' || event.type === 'api.assistant.message') {
+        const history = this.#apiHistory.get(event.sessionId) ?? [];
+        history.push(...readApiHistory([event]));
+        this.#apiHistory.set(event.sessionId, history);
+      }
       const events = this.#events.get(event.sessionId) ?? [];
       events.push(event);
       if (events.length > 500) events.splice(0, events.length - 500);
@@ -2244,7 +2253,7 @@ export class InteractiveWorkspace {
     for (const session of this.#state.sessions) {
       const path = join(this.#transcriptRoot, safeTranscriptName(session.id));
       if (!existsSync(path) || statSync(path).size > 8 * 1024 * 1024) continue;
-      const lines = readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean).slice(-1_000);
+      const lines = readFileSync(path, 'utf8').split(/\r?\n/).filter(Boolean);
       const events: WorkspaceEvent[] = [];
       for (const line of lines) {
         try {
@@ -2261,8 +2270,10 @@ export class InteractiveWorkspace {
           events.push(event); this.#eventLog.push(event);
         } catch { /* Invalid local transcript rows are ignored. */ }
       }
-      if (events.length) this.#events.set(session.id, events);
+      this.#apiHistory.set(session.id, readApiHistory(events));
+      if (events.length) this.#events.set(session.id, events.slice(-500));
     }
+    this.#eventLog = this.#eventLog.slice(-1_000);
   }
 
   #persistTranscript(event: WorkspaceEvent): void {
