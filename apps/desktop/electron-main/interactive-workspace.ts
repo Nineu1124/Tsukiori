@@ -924,6 +924,7 @@ export class InteractiveWorkspace {
 
   async forkSession(sessionId: string): Promise<SessionState> {
     const source = this.#session(sessionId);
+    if (source.transcriptIncomplete) throw new Error('会话记录不完整，请恢复有效检查点或新建会话。');
     if (!['claude', 'api'].includes(source.runtimeType) || !source.threadId || source.turnCount < 1) {
       throw new Error('当前支持 Fork 已运行过的 Claude 或 Direct API Session');
     }
@@ -957,9 +958,27 @@ export class InteractiveWorkspace {
       name: session.name, projectId: session.projectId, worktreePath, branch,
       runtimeType: session.runtimeType, providerId: session.providerId, model: session.model,
     } });
-    for (const event of this.#events.get(source.id) ?? []) {
-      if (!transcriptEvent(event.type)) continue;
-      this.#emit({ sessionId: session.id, type: event.type, payload: { ...event.payload, forkedFromEventId: event.id } });
+    if (source.runtimeType === 'api') {
+      // A branch inherits model messages even when their UI events were evicted.
+      for (const message of this.#apiHistory.get(source.id) ?? []) {
+        if (message.role === 'user' && typeof message.content === 'string') {
+          this.#emit({ sessionId: session.id, type: 'user.message', createdAt: message.timestamp, payload: { text: message.content } });
+        } else if (message.role === 'assistant') {
+          const messageId = `api-fork:${randomUUID()}`;
+          this.#emit({ sessionId: session.id, type: 'assistant.message.started', payload: { messageId } });
+          for (const block of message.content) {
+            if (block.type === 'text') this.#emit({ sessionId: session.id, type: 'assistant.delta', payload: { text: block.text } });
+          }
+          this.#emit({ sessionId: session.id, type: 'api.assistant.message', createdAt: message.timestamp,
+            payload: { schemaVersion: 1, providerId: source.providerId, message: structuredClone(message) } });
+          this.#emit({ sessionId: session.id, type: 'assistant.message.completed', payload: { messageId, stopReason: message.stopReason } });
+        }
+      }
+    } else {
+      for (const event of this.#events.get(source.id) ?? []) {
+        if (!transcriptEvent(event.type)) continue;
+        this.#emit({ sessionId: session.id, type: event.type, payload: { ...event.payload, forkedFromEventId: event.id } });
+      }
     }
     this.#emit({ sessionId: session.id, type: 'session.forked', payload: {
       sourceSessionId: source.id, sourceBranch: source.branch, baseCommit,

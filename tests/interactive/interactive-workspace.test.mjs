@@ -844,11 +844,13 @@ test('session lifecycle, persisted transcript, files, attachments, and native ca
 test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recovery, and stop', async (t) => {
   const prompts = [];
   const clients = [];
+  const resumedThreads = [];
   let interrupts = 0;
   class TeamClient {
     constructor(options) { this.options = options; clients.push(options); }
     async start() { return { authenticated: true, authSource: 'chatgpt' }; }
     async startThread(cwd) { return 'thread:' + cwd; }
+    async resumeThread(threadId) { resumedThreads.push(threadId); return threadId; }
     async startTurn(_threadId, prompt) { prompts.push({ cwd: this.options.cwd, prompt }); return 'turn:' + prompts.length; }
     async interrupt() { interrupts += 1; }
     async stop() { this.options.onExit(null); }
@@ -899,6 +901,7 @@ test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recove
   failingOptions.onExit('fixture member crash');
   assert.equal(f.workspace.snapshot().teams[0].status, 'partial_failure');
   await f.workspace.retryTeamMember(team.id, sessions[2].id);
+  assert.deepEqual(resumedThreads, ['thread:' + sessions[2].worktreePath]);
   assert.match(prompts.at(-1).prompt, /避免重复已经完成的副作用/);
   const stop = await f.workspace.stopTeam(team.id);
   assert.deepEqual(stop.requestedSessionIds, [sessions[2].id]);
