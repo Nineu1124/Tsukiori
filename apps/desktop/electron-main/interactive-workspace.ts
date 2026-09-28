@@ -2601,7 +2601,7 @@ function transcriptEvent(type: string): boolean {
   return [
     'user.message', 'assistant.message.started', 'assistant.thinking.started', 'assistant.thinking.delta',
     'assistant.thinking.completed', 'assistant.delta', 'assistant.message.completed', 'tool.event',
-    'assistant.usage', 'context.compacted', 'context.compaction.updated',
+    'assistant.usage', 'context.compacted', 'context.compaction.updated', 'context.budget',
     'api.assistant.message', 'turn.completed', 'runtime.error', 'native.event', 'attachment.added', 'subagent.event', 'checkpoint.created', 'checkpoint.rewound',
   ].includes(type);
 }

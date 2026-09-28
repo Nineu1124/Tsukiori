@@ -10,6 +10,7 @@ import {
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all';
 import type { ProviderConfig, ProviderKind } from './provider-registry.js';
 import { ApiRuntimeError, safeApiError } from './api-runtime-error.js';
+import { selectApiContext } from './api-context-budget.js';
 
 export type ApiRuntimeCallbacks = {
   onEvent: (type: string, payload: Record<string, unknown>) => void;
@@ -64,7 +65,10 @@ export class ApiRuntimeClient {
 
   async #runTurn(input: ApiRuntimeTurn): Promise<AssistantMessage> {
     const model = resolveApiModel(input.provider, input.modelId);
-    const context: Context = { messages: input.history };
+    const budget = selectApiContext(input.history, model.contextWindow, model.maxTokens);
+    input.callbacks.onEvent('context.budget', { turnId: input.turnId, ...budget.summary });
+    if (budget.summary.status === 'rejected') throw new ApiRuntimeError('context_window_exceeded');
+    const context: Context = { messages: budget.messages };
     input.callbacks.onEvent('turn.started', {
       turnId: input.turnId,
       api: model.api,
