@@ -267,6 +267,7 @@ export class InteractiveWorkspace {
   #claudeLaunch: ClaudeLaunch | null = null;
   #claudeClient: ClaudeCodeClient | null = null;
   #clients = new Map<string, CodexAppServerClient>();
+  #clientStarts = new Map<string, Promise<CodexAppServerClient>>();
   #apiHistory = new Map<string, ReturnType<typeof readApiHistory>>();
   #activeTurns = new Map<string, string>();
   #apiAborts = new Map<string, AbortController>();
@@ -1748,19 +1749,32 @@ export class InteractiveWorkspace {
   }
 
   async #ensureCodexClient(sessionId: string): Promise<CodexAppServerClient> {
+    const starting = this.#clientStarts.get(sessionId);
+    if (starting) return starting;
     const existing = this.#clients.get(sessionId);
     if (existing) return existing;
+    const pending = this.#startCodexClient(sessionId);
+    this.#clientStarts.set(sessionId, pending);
+    try { return await pending; }
+    finally { if (this.#clientStarts.get(sessionId) === pending) this.#clientStarts.delete(sessionId); }
+  }
+
+  async #startCodexClient(sessionId: string): Promise<CodexAppServerClient> {
     if (!this.#codexLaunch) throw new Error('Codex Runtime 不可用');
     const session = this.#session(sessionId);
     const provider = this.#providers.get(session.providerId);
     return await this.#providers.withEnvironment(provider.id, async (environment) => {
+      let client: CodexAppServerClient;
       const options: ConstructorParameters<typeof CodexAppServerClient>[0] = {
         cwd: session.worktreePath, launch: this.#codexLaunch as CodexLaunch,
         environment, configArgs: codexConfigArgs(provider),
         ...(session.model !== 'auto' ? { model: session.model } : {}),
-        onNotification: (method, params) => this.#notification(sessionId, method, params),
+        onNotification: (method, params) => {
+          if (this.#clients.get(sessionId) === client) this.#notification(sessionId, method, params);
+        },
         onApproval: (approval) => this.#approval(sessionId, approval),
         onExit: (error) => {
+          if (this.#clients.get(sessionId) !== client) return;
           this.#clients.delete(sessionId);
           if (!error) return;
           error = runtimeFailure(error).message;
@@ -1771,15 +1785,20 @@ export class InteractiveWorkspace {
           this.#save();
         },
       };
-      const client = this.#createClient ? this.#createClient(options) : new CodexAppServerClient(options);
+      client = this.#createClient ? this.#createClient(options) : new CodexAppServerClient(options);
       this.#clients.set(sessionId, client);
       try {
         const auth = await client.start();
+        if (session.threadId) {
+          const restoredThreadId = await client.resumeThread(session.threadId);
+          if (restoredThreadId !== session.threadId) throw new Error('Codex 恢复的 Thread 与当前会话不一致');
+        }
+        if (this.#clients.get(sessionId) !== client) throw new Error('Codex 在恢复会话时已退出');
         const runtime = this.#runtimes.find((item) => item.type === 'codex');
         if (runtime) { runtime.authenticated = auth.authenticated || Boolean(provider.secretRef); runtime.authSource = provider.kind === 'chatgpt' ? auth.authSource : 'api-key'; }
         return client;
       } catch (error) {
-        this.#clients.delete(sessionId);
+        if (this.#clients.get(sessionId) === client) this.#clients.delete(sessionId);
         await client.stop().catch(() => undefined);
         throw error;
       }
