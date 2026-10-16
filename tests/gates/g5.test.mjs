@@ -95,6 +95,6 @@ test('the G5 completion push requires clean Windows regression and installer suc
   assert.equal(evidence.continuousIntegration.credentialFreeRegression, 'required');
   assert.equal(evidence.continuousIntegration.installerLifecycle, 'required');
   const workflow = readFileSync(join(root, '.github/workflows/windows-ci.yml'), 'utf8');
-  assert.match(workflow, /npm run test:gate5/);
+  assert.match(workflow, /node scripts\/run-ci-tests\.mjs gates/);
   assert.match(workflow, /verify-windows-release-candidate\.ps1/);
 });

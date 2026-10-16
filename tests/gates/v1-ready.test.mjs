@@ -87,9 +87,13 @@ test('B1 through B3 stay unchecked and outside Local V1 completion', () => {
   assert.equal(ready.containsUserSource, false);
 });
 
-test('Windows CI runs the final readiness test after G5', () => {
+test('Windows CI runs the final readiness test after G5', async () => {
   const workflow = readFileSync(join(root, '.github/workflows/windows-ci.yml'), 'utf8');
-  const g5Index = workflow.indexOf('npm run test:gate5');
-  const readyIndex = workflow.indexOf('npm run test:v1-ready');
-  assert.ok(g5Index > 0 && readyIndex > g5Index);
+  const gateIndex = workflow.indexOf('node scripts/run-ci-tests.mjs gates');
+  assert.ok(gateIndex > 0 && gateIndex < workflow.indexOf('verify-windows-release-candidate.ps1'));
+  const { ciSteps } = await import('../../scripts/run-ci-tests.mjs');
+  const steps = ciSteps('gates');
+  const g5Index = steps.findIndex((step) => step.args.includes('tests/gates/g5.test.mjs'));
+  const readyIndex = steps.findIndex((step) => step.args.includes('tests/gates/v1-ready.test.mjs'));
+  assert.ok(g5Index >= 0 && readyIndex > g5Index);
 });

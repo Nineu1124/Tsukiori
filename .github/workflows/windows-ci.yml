@@ -14,7 +14,7 @@ permissions:
 jobs:
   repository-checks:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -35,46 +35,35 @@ jobs:
       - name: Verify checkpoints and secrets
         run: npm run check
 
-      - name: Run Claude Adapter contracts
-        run: npm run test:claude-adapter
+      - name: Build workspace once
+        run: npm run build
 
-      - name: Run credential-free contract tests
-        run: |
-          npm run test:contract
-          npm run test:gate0
-          npm run typecheck
-          npm run test:host
-          npm run test:ipc
-          npm run test:database
-          npm run test:runtime
-          npm run test:snapshot
-          npm run test:permission
-          npm run test:ui
-          npm run probe:ui-interactions
-          npm run test:interactive
-          npm run test:gate1
-          npm run test:project
-          npm run test:worktree
-          npm run test:workspace
-          npm run test:git
-          npm run test:gate2
-          npm run test:codex
-          npm run test:codex-adapter
-          npm run test:windows
-          npm run test:computer-use
-          npm run test:opencode
-          npm run test:opencode-adapter
-          npm run test:alpha
-          npm run test:dual-runtime
-          npm run test:gate3
-          npm run test:gate4
-          npm run test:recovery
-          npm run test:security
-          npm run test:observability
-          npm run test:release
-          npm run test:release-candidate
-          npm run test:gate5
-          npm run test:v1-ready
+      - name: Typecheck workspace
+        run: npm run typecheck
+
+      - name: Run core contracts and snapshots
+        run: node scripts/run-ci-tests.mjs core
+
+      - name: Run Windows host and credential fixture contracts
+        run: node scripts/run-ci-tests.mjs host
+
+      - name: Run Runtime and crash contracts
+        run: node scripts/run-ci-tests.mjs adapters
+
+      - name: Run Claude Adapter contracts
+        run: node scripts/run-ci-tests.mjs claude
+
+      - name: Run workspace and Git contracts
+        run: node scripts/run-ci-tests.mjs workspace
+
+      - name: Run desktop contracts and UI probe
+        run: node scripts/run-ci-tests.mjs desktop
+
+      - name: Run release contracts
+        run: node scripts/run-ci-tests.mjs release
+
+      - name: Run Gates in dependency order
+        run: node scripts/run-ci-tests.mjs gates
 
       - name: Build and verify Windows release candidate installer
         run: .\scripts\verify-windows-release-candidate.ps1

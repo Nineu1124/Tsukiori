@@ -138,9 +138,10 @@ test('every mapped V1 acceptance item in sections 37.1-37.10 has existing audita
 test('Windows x64 CI runs the required V1 regression and clean installer lifecycle', () => {
   const workflow = readFileSync(join(root, '.github', 'workflows', 'windows-ci.yml'), 'utf8');
   for (const command of [
-    'npm run test:contract', 'npm run test:git', 'npm run test:recovery',
-    'npm run test:security', 'npm run test:alpha', 'npm run test:dual-runtime',
-    'npm run test:release', 'npm run test:release-candidate',
+    'node scripts/run-ci-tests.mjs core', 'node scripts/run-ci-tests.mjs host',
+    'node scripts/run-ci-tests.mjs workspace', 'node scripts/run-ci-tests.mjs adapters',
+    'node scripts/run-ci-tests.mjs claude', 'node scripts/run-ci-tests.mjs desktop',
+    'node scripts/run-ci-tests.mjs release', 'node scripts/run-ci-tests.mjs gates',
   ]) assert.match(workflow, new RegExp(command.replaceAll(':', '\\:')));
   assert.match(workflow, /verify-windows-release-candidate\.ps1/);
 });

@@ -1,0 +1,26 @@
+# T-LT-D026：CI 失败传播与分组
+
+实际完成：2026-10-16。Windows / Node 24.11.1；仓库固定 pnpm 11.9.0。
+
+把一个包含大量 npm 命令的 PowerShell 步骤拆成单命令步骤。完整构建一次，分组直接使用已构建产物。Node 执行器保留首个失败退出码、停止后续探测，日志记录各组耗时；G0–G5 和 v1-ready 保留依赖顺序。Claude 继续作为独立组。覆盖检查枚举所有 tests/spikes 测试，要求恰好落入一个组，防止重组遗漏。
+
+失败传播用真实子进程验证：首步 exit 17 时返回 17，后续写标记的步骤未执行；未知组返回 2。没有依赖 PowerShell 的 ErrorActionPreference 来推测原生命令是否失败。旧 CI 合同测试改为验证新入口及实际 Gate 步骤顺序，安装包验证仍在最后。
+
+完整本地验证：`npm run build` 21/21，约 8.9 秒；`npm run typecheck` 34/34，约 8.9 秒。按下表顺序运行 `node scripts/run-ci-tests.mjs <组名>`，全部 **395/395**，无跳过：
+
+| 组 | 用例 | 耗时 |
+| --- | --- | --- |
+| core | 46 | 3.0 秒，另有 4 个快照场景通过 |
+| host | 25 | 29.6 秒 |
+| adapters | 52 | 30.5 秒 |
+| claude | 16 | 5.6 秒 |
+| workspace | 44 | 55.7 秒 |
+| desktop | 163 | 81.9 秒，另有 UI 交互探测 9.3 秒通过 |
+| release | 13 | 0.8 秒 |
+| gates | 36 | 约 15.3 秒 |
+
+测试及附加探测合计约 3.9 分钟。CI 作业上限设为 20 分钟，为冷依赖安装、构建和安装包生命周期保留余量；后两项冷启动耗时未在本次测量，后续按 Actions 记录调整。没有增加双 Runtime 用例的 8 秒状态等待。
+
+初次沙箱运行因 Credential Manager 被限制而失败 3 项；正常权限下凭据测试通过，但宿主并行运行出现一次 pwsh spawn EPERM。将 Windows 宿主/IPC/凭据文件单独串行后 25/25 通过，其余分组并发上限 4。保留所有断言，没有跳过系统合同或自动重试。真实 UI 探测使用临时工作区，不请求 Provider。
+
+`npm run check`、`git diff --check` 通过后提交。未在本轮重新安装候选产品，也未将本地结果表述为远端 Actions 或安装包生命周期通过。操作入口见 [CI 回归说明](../operations/ci-regression.md)。
