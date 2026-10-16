@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { mergeMcpConfig, readMcpObject } from './mcp-config.js';
 
 export type McpScope = 'user' | 'project' | 'local';
 export type McpTransport = 'stdio' | 'http' | 'sse';
@@ -202,17 +203,19 @@ export class WorkspaceCapabilities {
   syncProjectMcp(projectRoot: string, projectId: string): void {
     const root = resolve(projectRoot);
     const configPath = join(root, '.mcp.json');
-    let existing: Record<string, unknown> = {};
-    if (existsSync(configPath) && isFile(configPath)) {
-      try { const parsed = JSON.parse(boundedRead(configPath, 512 * 1024)); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed as Record<string, unknown>; } catch { throw new Error('项目 .mcp.json 格式无效'); }
-    }
-    const servers: Record<string, unknown> = {};
+    const existing = readMcpObject(configPath);
+    const ownershipPath = join(this.#userDataPath, 'mcp-ownership', createHash('sha256').update(configPath).digest('hex') + '.json');
+    const owned = readMcpObject(ownershipPath);
+    const servers: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     for (const server of this.#mcp.filter((item) => (item.scope === 'project' || item.scope === 'local') && item.projectId === projectId && item.enabled)) {
       servers[server.name] = server.transport === 'stdio'
         ? { type: 'stdio', command: server.command, args: server.args, ...(server.envKeys.length ? { env: Object.fromEntries(server.envKeys.map((key) => [key, '${' + key + '}'])) } : {}) }
         : { type: server.transport, url: server.url };
     }
-    writeFileSync(configPath, JSON.stringify({ ...existing, mcpServers: servers }, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+    const merged = mergeMcpConfig(existing, servers, owned);
+    mkdirSync(dirname(ownershipPath), { recursive: true });
+    writeFileSync(configPath, JSON.stringify(merged.config, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+    writeFileSync(ownershipPath, JSON.stringify(merged.owned), { encoding: 'utf8', mode: 0o600 });
   }
 
   listSkills(projectRoot?: string, projectId?: string): SkillRecord[] {
