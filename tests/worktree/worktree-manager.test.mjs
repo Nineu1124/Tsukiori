@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
-  existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -74,7 +74,7 @@ test('published T2.2 fixture is sanitized and records all recovery terminal stat
 test('configured Worktree Root enforces lexical, Windows, and Junction boundaries', (t) => {
   const f = fixture(t);
   const manager = f.manager();
-  assert.ok(manager.worktreeRoot.startsWith(f.directory));
+  assert.equal(manager.worktreeRoot, realpathSync.native(f.worktreeRoot));
   assert.throws(() => new WorktreeManager(f.database, f.projects, f.environments, {
     worktreeRoot: '/mnt/c/escape', executionEnvironmentId: f.environment.id,
   }), /Windows Native absolute path/);
