@@ -113,7 +113,7 @@ export class WorkspaceCapabilities {
     if (!['user', 'project', 'local'].includes(scope)) throw new Error('MCP Scope 无效');
     const transport = input.transport;
     if (!['stdio', 'http', 'sse'].includes(transport)) throw new Error('MCP Transport 无效');
-    const projectId = input.projectId ? cleanText(input.projectId, 'Project ID', 160) : undefined;
+    const projectId = scope !== 'user' && input.projectId ? cleanText(input.projectId, 'Project ID', 160) : undefined;
     if (scope !== 'user' && !projectId) throw new Error('Project/Local Scope 必须绑定 Project');
     const args = normalizeList(input.args, 64, 512);
     const envKeys = normalizeList(input.envKeys, 64, 160).filter((key) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key));
@@ -123,6 +123,11 @@ export class WorkspaceCapabilities {
     if (transport !== 'stdio' && !url) throw new Error('HTTP/SSE MCP 必须填写安全 URL');
     const now = Date.now();
     const existing = input.id ? this.#mcp.find((server) => server.id === input.id) : undefined;
+    if (input.id && !existing) throw new Error('MCP Server 不存在');
+    if (input.enabled !== false && this.#mcp.some((server) => server.id !== existing?.id && server.enabled && server.name === name
+      && (server.scope === 'user' || scope === 'user' || server.projectId === projectId))) {
+      throw new Error('MCP 名称在相同作用域中重复');
+    }
     const record: McpServerRecord = {
       id: existing?.id ?? 'mcp:' + createHash('sha256').update(name + now).digest('hex').slice(0, 16),
       name, scope, ...(projectId ? { projectId } : {}), transport,

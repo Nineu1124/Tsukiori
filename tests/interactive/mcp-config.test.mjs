@@ -15,6 +15,46 @@ export function fixture(t) {
 }
 const input = { name: 'managed', scope: 'project', projectId: 'project:fixture', transport: 'stdio', command: 'node', args: [] };
 
+test('unmanaged same-name servers are not adopted or replaced', (t) => {
+  const f = fixture(t);
+  const original = JSON.stringify({ mcpServers: { managed: { command: 'independent' } } });
+  writeFileSync(f.config, original);
+  f.capabilities.saveMcp(input);
+  assert.throws(() => f.capabilities.syncProjectMcp(f.project, input.projectId), /冲突/);
+  assert.equal(readFileSync(f.config, 'utf8'), original);
+});
+
+test('external edits prevent update and deletion of a formerly managed entry', (t) => {
+  const f = fixture(t);
+  const record = f.capabilities.saveMcp(input);
+  f.capabilities.syncProjectMcp(f.project, input.projectId);
+  const changed = JSON.stringify({ mcpServers: { managed: { command: 'external-edit' } } });
+  writeFileSync(f.config, changed);
+  assert.throws(() => f.capabilities.syncProjectMcp(f.project, input.projectId), /外部修改/);
+  f.capabilities.deleteMcp(record.id);
+  assert.throws(() => f.capabilities.syncProjectMcp(f.project, input.projectId), /外部修改/);
+  assert.equal(readFileSync(f.config, 'utf8'), changed);
+});
+
+test('duplicate effective names and nonexistent update IDs are rejected', (t) => {
+  const f = fixture(t);
+  f.capabilities.saveMcp(input);
+  assert.throws(() => f.capabilities.saveMcp(input), /重复/);
+  assert.throws(() => f.capabilities.saveMcp({ ...input, scope: 'user' }), /重复/);
+  assert.throws(() => f.capabilities.saveMcp({ ...input, id: 'missing' }), /不存在/);
+  assert.doesNotThrow(() => f.capabilities.saveMcp({ ...input, projectId: 'other-project' }));
+});
+
+test('renaming a managed entry removes only its previous name', (t) => {
+  const f = fixture(t);
+  writeFileSync(f.config, '{"mcpServers":{"independent":{"command":"keep"}}}');
+  const record = f.capabilities.saveMcp(input);
+  f.capabilities.syncProjectMcp(f.project, input.projectId);
+  f.capabilities.saveMcp({ ...record, name: 'renamed' });
+  f.capabilities.syncProjectMcp(f.project, input.projectId);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(f.config)).mcpServers).sort(), ['independent', 'renamed']);
+});
+
 test('MCP additions and removal preserve independent servers and unrelated settings after restart', (t) => {
   const f = fixture(t);
   const independent = { type: 'http', url: 'https://example.invalid/mcp', custom: { fixture: true } };

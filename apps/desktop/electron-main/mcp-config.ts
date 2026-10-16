@@ -23,7 +23,15 @@ export function mergeMcpConfig(existing: Record<string, unknown>, desired: Recor
   if (existing.mcpServers !== undefined && !isObject(existing.mcpServers)) throw new Error('MCP 服务器配置必须是对象');
   const servers = { ...(existing.mcpServers as Record<string, unknown> | undefined) };
   for (const name of Object.keys(owned)) {
+    if (typeof owned[name] !== 'string' || !/^[a-f0-9]{64}$/.test(owned[name] as string)) throw new Error('MCP 管理记录格式无效');
+    if ((Object.hasOwn(servers, name) && mcpFingerprint(servers[name]) !== owned[name])
+      || (!Object.hasOwn(servers, name) && Object.hasOwn(desired, name))) {
+      throw new Error('MCP 管理条目已被外部修改，请先处理配置冲突');
+    }
     if (!Object.hasOwn(desired, name)) delete servers[name];
+  }
+  for (const name of Object.keys(desired)) {
+    if (Object.hasOwn(servers, name) && !Object.hasOwn(owned, name)) throw new Error('MCP 名称与用户已有配置冲突，请更换名称');
   }
   return {
     config: { ...existing, mcpServers: { ...servers, ...desired } },
