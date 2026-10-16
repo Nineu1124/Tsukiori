@@ -538,15 +538,13 @@ export class InteractiveWorkspace {
   listMcp(projectId?: string) { return this.#capabilities.listMcp(projectId); }
 
   saveMcp(input: McpServerInput) {
-    const record = this.#capabilities.saveMcp(input);
-    if (record.projectId) this.#capabilities.syncProjectMcp(this.#project(record.projectId).gitRoot, record.projectId);
+    if (input.scope !== 'user') this.#project(input.projectId ?? '');
+    const record = this.#capabilities.saveMcp(input, this.#state.projects.map((project) => ({ root: project.gitRoot, projectId: project.id })));
     return record;
   }
 
   deleteMcp(id: string): void {
-    const record = this.#capabilities.listMcp().find((item) => item.id === id);
-    this.#capabilities.deleteMcp(id);
-    if (record?.projectId) this.#capabilities.syncProjectMcp(this.#project(record.projectId).gitRoot, record.projectId);
+    this.#capabilities.deleteMcp(id, this.#state.projects.map((project) => ({ root: project.gitRoot, projectId: project.id })));
   }
 
   listSkills(projectId: string) {

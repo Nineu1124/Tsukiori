@@ -3,6 +3,9 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { createHash } from 'node:crypto';
 import { WorkspaceCapabilities } from '../../apps/desktop/dist/electron-main/workspace-capabilities.js';
 
 export function fixture(t) {
@@ -14,6 +17,53 @@ export function fixture(t) {
   return { root, project, data, config: join(project, '.mcp.json'), capabilities: new WorkspaceCapabilities(data) };
 }
 const input = { name: 'managed', scope: 'project', projectId: 'project:fixture', transport: 'stdio', command: 'node', args: [] };
+
+for (const operation of ['update', 'delete']) for (const failedFile of ['config', 'ownership', 'registry']) {
+  test(`MCP ${operation} rolls back files and memory when ${failedFile} replacement fails`, (t) => {
+    const f = fixture(t);
+    const targets = [{ root: f.project, projectId: input.projectId }];
+    const record = f.capabilities.saveMcp(input, targets);
+    const paths = { config: f.config, registry: join(f.data, 'mcp-servers-v1.json'),
+      ownership: join(f.data, 'mcp-ownership', createHash('sha256').update(f.config).digest('hex') + '.json') };
+    const before = Object.fromEntries(Object.entries(paths).map(([key, path]) => [key, readFileSync(path, 'utf8')]));
+    const records = f.capabilities.listMcp();
+    const rename = fs.renameSync;
+    let injected = false;
+    const fault = t.mock.method(fs, 'renameSync', (from, to) => {
+      if (to === paths[failedFile] && !injected) { injected = true; throw new Error('private-fixture-failure'); }
+      return rename(from, to);
+    });
+    syncBuiltinESMExports();
+    try {
+      assert.throws(() => operation === 'update' ? f.capabilities.saveMcp({ ...record, command: 'updated' }, targets)
+        : f.capabilities.deleteMcp(record.id, targets), /已恢复本次修改前/);
+    } finally { fault.mock.restore(); syncBuiltinESMExports(); }
+    assert.equal(injected, true);
+    for (const [key, path] of Object.entries(paths)) assert.equal(readFileSync(path, 'utf8'), before[key]);
+    assert.deepEqual(f.capabilities.listMcp(), records);
+    assert.deepEqual(new WorkspaceCapabilities(f.data).listMcp(), records);
+  });
+}
+
+test('MCP conflict does not leave a new registration behind', (t) => {
+  const f = fixture(t);
+  const original = '{"mcpServers":{"managed":{"command":"keep"}}}';
+  writeFileSync(f.config, original);
+  assert.throws(() => f.capabilities.saveMcp(input, [{ root: f.project, projectId: input.projectId }]), /冲突/);
+  assert.deepEqual(f.capabilities.listMcp(), []);
+  assert.deepEqual(new WorkspaceCapabilities(f.data).listMcp(), []);
+  assert.equal(readFileSync(f.config, 'utf8'), original);
+});
+
+test('invalid registration files cannot silently become empty configuration', (t) => {
+  const f = fixture(t);
+  const path = join(f.data, 'mcp-servers-v1.json');
+  for (const invalid of ['{', '{}', '[{"id":"incomplete"}]']) {
+    writeFileSync(path, invalid);
+    assert.throws(() => new WorkspaceCapabilities(f.data), /登记文件损坏/);
+    assert.equal(readFileSync(path, 'utf8'), invalid);
+  }
+});
 
 test('unmanaged same-name servers are not adopted or replaced', (t) => {
   const f = fixture(t);

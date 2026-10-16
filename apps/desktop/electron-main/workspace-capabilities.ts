@@ -12,6 +12,9 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { mergeMcpConfig, readMcpObject } from './mcp-config.js';
+import { writeMcpFiles } from './mcp-file-transaction.js';
+
+export type McpTarget = { root: string; projectId: string };
 
 export type McpScope = 'user' | 'project' | 'local';
 export type McpTransport = 'stdio' | 'http' | 'sse';
@@ -107,7 +110,7 @@ export class WorkspaceCapabilities {
       .map((server) => ({ ...server, args: [...server.args], envKeys: [...server.envKeys] }));
   }
 
-  saveMcp(input: McpServerInput): McpServerRecord {
+  saveMcp(input: McpServerInput, targets: readonly McpTarget[] = []): McpServerRecord {
     const name = cleanText(input.name, 'MCP Server 名称', 80);
     const scope = input.scope;
     if (!['user', 'project', 'local'].includes(scope)) throw new Error('MCP Scope 无效');
@@ -136,17 +139,15 @@ export class WorkspaceCapabilities {
       createdAt: existing?.createdAt ?? now, updatedAt: now,
       authStatus: envKeys.some((key) => SENSITIVE.test(key)) ? 'configured' : 'unknown',
     };
-    if (existing) this.#mcp = this.#mcp.map((item) => item.id === existing.id ? record : item);
-    else this.#mcp.push(record);
-    this.#persistMcp();
+    const next = existing ? this.#mcp.map((item) => item.id === existing.id ? record : item) : [...this.#mcp, record];
+    this.#commitMcp(next, targets);
     return { ...record, args: [...record.args], envKeys: [...record.envKeys] };
   }
 
-  deleteMcp(id: string): void {
-    const before = this.#mcp.length;
-    this.#mcp = this.#mcp.filter((server) => server.id !== id);
-    if (this.#mcp.length === before) throw new Error('MCP Server 不存在');
-    this.#persistMcp();
+  deleteMcp(id: string, targets: readonly McpTarget[] = []): void {
+    const next = this.#mcp.filter((server) => server.id !== id);
+    if (next.length === this.#mcp.length) throw new Error('MCP Server 不存在');
+    this.#commitMcp(next, targets);
   }
 
   listScheduledTasks(projectId?: string): ScheduledTask[] {
@@ -206,21 +207,25 @@ export class WorkspaceCapabilities {
   }
 
   syncProjectMcp(projectRoot: string, projectId: string): void {
+    writeMcpFiles(this.#mcpChanges(projectRoot, projectId, this.#mcp));
+  }
+
+  #mcpChanges(projectRoot: string, projectId: string, records: readonly McpServerRecord[]): Map<string, string> {
     const root = resolve(projectRoot);
     const configPath = join(root, '.mcp.json');
-    const existing = readMcpObject(configPath);
     const ownershipPath = join(this.#userDataPath, 'mcp-ownership', createHash('sha256').update(configPath).digest('hex') + '.json');
+    const selected = records.filter((item) => (item.scope === 'project' || item.scope === 'local') && item.projectId === projectId && item.enabled);
+    if (!selected.length && !existsSync(ownershipPath)) return new Map();
+    const existing = readMcpObject(configPath);
     const owned = readMcpObject(ownershipPath);
     const servers: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
-    for (const server of this.#mcp.filter((item) => (item.scope === 'project' || item.scope === 'local') && item.projectId === projectId && item.enabled)) {
+    for (const server of selected) {
       servers[server.name] = server.transport === 'stdio'
         ? { type: 'stdio', command: server.command, args: server.args, ...(server.envKeys.length ? { env: Object.fromEntries(server.envKeys.map((key) => [key, '${' + key + '}'])) } : {}) }
         : { type: server.transport, url: server.url };
     }
     const merged = mergeMcpConfig(existing, servers, owned);
-    mkdirSync(dirname(ownershipPath), { recursive: true });
-    writeFileSync(configPath, JSON.stringify(merged.config, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
-    writeFileSync(ownershipPath, JSON.stringify(merged.owned), { encoding: 'utf8', mode: 0o600 });
+    return new Map([[configPath, JSON.stringify(merged.config, null, 2) + '\n'], [ownershipPath, JSON.stringify(merged.owned)]]);
   }
 
   listSkills(projectRoot?: string, projectId?: string): SkillRecord[] {
@@ -327,13 +332,23 @@ export class WorkspaceCapabilities {
   #loadMcp(): void {
     if (!existsSync(this.#mcpPath)) return;
     try {
+      if (statSync(this.#mcpPath).size > 512 * 1024) throw new Error();
       const value = JSON.parse(readFileSync(this.#mcpPath, 'utf8')) as unknown;
-      if (Array.isArray(value)) this.#mcp = value.map((item) => normalizeMcp(item)).filter(Boolean) as McpServerRecord[];
-    } catch { this.#mcp = []; }
+      if (!Array.isArray(value)) throw new Error();
+      const records = value.map((item) => normalizeMcp(item));
+      if (records.some((record) => !record) || new Set(records.map((record) => record?.id)).size !== records.length) throw new Error();
+      this.#mcp = records as McpServerRecord[];
+    } catch { throw new Error('MCP 登记文件损坏或无法读取，原文件已保留'); }
   }
 
-  #persistMcp(): void {
-    writeFileSync(this.#mcpPath, JSON.stringify(this.#mcp, null, 2), { encoding: 'utf8', mode: 0o600 });
+  #commitMcp(next: McpServerRecord[], targets: readonly McpTarget[]): void {
+    const changes = new Map<string, string>();
+    for (const target of targets) {
+      for (const [path, content] of this.#mcpChanges(target.root, target.projectId, next)) changes.set(path, content);
+    }
+    changes.set(this.#mcpPath, JSON.stringify(next, null, 2));
+    writeMcpFiles(changes);
+    this.#mcp = next;
   }
 
   #loadScheduled(): void {
