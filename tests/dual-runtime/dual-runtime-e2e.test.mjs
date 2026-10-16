@@ -63,7 +63,7 @@ function fixture(t) {
   writeFileSync(openCodeConfig, JSON.stringify({
     version: '1.18.4', credentialCount: 1, docBody, docContentType: 'application/json',
     writeFixtureFile: true, crashOnPromptCount: 6,
-    lifecyclePath,
+    lifecyclePath, closeHttpConnections: true,
   }));
   writeFileSync(openCodeManifest, JSON.stringify({
     runtimeVersion: '1.18.4', contentType: 'application/json',

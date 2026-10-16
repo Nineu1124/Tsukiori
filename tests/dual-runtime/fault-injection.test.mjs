@@ -17,11 +17,12 @@ test('request diagnostics use fixed categories and never carry transport message
   assert.equal(openCodeRequestFailure(null), 'request_failed');
 });
 
-test('crash injection records its trigger and the actual child exit without recording input', { timeout: 10_000 }, async (t) => {
+test('crash injection remains reachable after the parent pauses beyond the fixture socket lifetime', { timeout: 10_000 }, async (t) => {
   const directory = mkdtempSync(join(tmpdir(), 'tsukiori-crash-evidence-'));
   const lifecyclePath = join(directory, 'lifecycle.jsonl');
   const config = join(directory, 'config.json');
-  writeFileSync(config, JSON.stringify({ version: '1.18.4', crashOnPromptCount: 2, lifecyclePath }));
+  writeFileSync(config, JSON.stringify({ version: '1.18.4', crashOnPromptCount: 2, lifecyclePath,
+    closeHttpConnections: true, idleCloseAfterMs: 25 }));
   const child = spawn(process.execPath, [join(process.cwd(), 'tests/fixtures/opencode/fake-opencode-cli.mjs'), config, 'serve'], {
     cwd: directory, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, OPENCODE_SERVER_USERNAME: 'fixture', OPENCODE_SERVER_PASSWORD: 'local-test-only' },
@@ -40,7 +41,11 @@ test('crash injection records its trigger and the actual child exit without reco
   const request = (path, body) => fetch(new URL(path, base), { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(3_000) });
   const session = await (await request('/session', { title: 'fixture' })).json();
   const promptPath = `/session/${session.id}/prompt_async`;
-  assert.equal((await request(promptPath, { parts: [{ type: 'text', text: 'private-input-canary' }] })).status, 204);
+  const first = await request(promptPath, { parts: [{ type: 'text', text: 'private-input-canary' }] });
+  assert.equal(first.status, 204);
+  assert.equal(first.headers.get('connection'), 'close');
+  // Model a synchronous Git call while the child is free to close idle sockets.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150);
   await assert.rejects(request(promptPath, { parts: [{ type: 'text', text: 'private-crash-canary' }] }));
   assert.deepEqual(await exited, [23, null]);
   const evidence = readFileSync(lifecyclePath, 'utf8');

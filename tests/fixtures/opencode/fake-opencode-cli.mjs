@@ -26,7 +26,16 @@ let eventSerial = 0;
 let disconnectedFirstEventStream = false;
 
 function send(response, status, value, contentType = 'application/json') {
-  response.writeHead(status, { 'content-type': contentType });
+  // Git fixture work blocks the parent's event loop; don't pool HTTP sockets
+  // whose idle-close notification it cannot process before the next request.
+  response.writeHead(status, {
+    'content-type': contentType,
+    ...(config.closeHttpConnections ? { connection: 'close' } : {}),
+  });
+  if (config.idleCloseAfterMs) {
+    const socket = response.socket;
+    response.once('finish', () => setTimeout(() => socket?.destroy(), config.idleCloseAfterMs));
+  }
   response.end(typeof value === 'string' ? value : JSON.stringify(value));
 }
 async function body(request) {
