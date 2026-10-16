@@ -9,7 +9,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "check": "npm run check:checkpoints && npm run check:secrets",
+    "check": "npm run check:checkpoints && npm run check:roadmap && npm run check:secrets",
+    "check:roadmap": "node scripts/verify-roadmap.mjs",
     "check:checkpoints": "node scripts/verify-checkpoints.mjs",
     "check:secrets": "node scripts/secret-scan.mjs",
     "test:snapshot:record": "pnpm --filter @tsukiori/runtime-core build && node scripts/session-fixture-snapshots.mjs --update",
