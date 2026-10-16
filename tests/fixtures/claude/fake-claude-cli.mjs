@@ -53,6 +53,8 @@ function start(message) {
     : '';
   appendFileSync(config.logPath, JSON.stringify({
     args,
+    mcpServerNames: args.includes('--mcp-config')
+      ? Object.keys(JSON.parse(readFileSync(valueAfter('--mcp-config'), 'utf8')).mcpServers ?? {}) : [],
     promptLength: prompt.length,
     inputType: message.type,
     parentToolUseId: message.parent_tool_use_id,

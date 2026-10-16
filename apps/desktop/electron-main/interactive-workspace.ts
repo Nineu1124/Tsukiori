@@ -77,6 +77,7 @@ import {
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
 import { safeApiError } from './api-runtime-error.js';
+import { codexMcpArgs, codexMcpName } from './mcp-runtime-config.js';
 import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
 
 type RuntimeType = 'codex' | 'claude' | 'api';
@@ -1119,8 +1120,9 @@ export class InteractiveWorkspace {
     const serverByName = new Map(nativeServers.map((item) => [normalizedCapabilityName(item.name), item]));
     const skillByName = new Map(nativeSkills.map((item) => [normalizedCapabilityName(item.name), item]));
     const mcp: Record<string, unknown>[] = configuredMcp.map((record) => {
-      const observed = serverByName.get(normalizedCapabilityName(record.name));
-      if (observed) serverByName.delete(normalizedCapabilityName(record.name));
+      const runtimeName = session.runtimeType === 'codex' ? codexMcpName(record) : record.name;
+      const observed = serverByName.get(normalizedCapabilityName(runtimeName));
+      if (observed) serverByName.delete(normalizedCapabilityName(runtimeName));
       const presence = session.runtimeType !== 'codex' || runtimeError
         ? 'unknown'
         : observed ? 'observed' : mcpComplete ? 'not_observed' : 'unknown';
@@ -1463,6 +1465,7 @@ export class InteractiveWorkspace {
       const provider = this.#providers.get(session.providerId);
       const turnId = this.#providers.withEnvironment(provider.id, (environment) => claude.startTurn({
         cwd: session.worktreePath, sessionId: session.threadId as string,
+        ...(existsSync(join(session.worktreePath, '.mcp.json')) ? { mcpConfigPath: join(session.worktreePath, '.mcp.json') } : {}),
         resume: session.turnCount > 0 && !session.forkSourceRuntimeSessionId,
         ...(session.forkSourceRuntimeSessionId ? { forkFromSessionId: session.forkSourceRuntimeSessionId } : {}),
         ...(session.forkSourceRuntimeMessageId ? { resumeSessionAt: session.forkSourceRuntimeMessageId } : {}),
@@ -1804,7 +1807,7 @@ export class InteractiveWorkspace {
       let client: CodexAppServerClient;
       const options: ConstructorParameters<typeof CodexAppServerClient>[0] = {
         cwd: session.worktreePath, launch: this.#codexLaunch as CodexLaunch,
-        environment, configArgs: codexConfigArgs(provider),
+        environment, configArgs: [...codexConfigArgs(provider), ...codexMcpArgs(this.#capabilities.listMcp(session.projectId))],
         ...(session.model !== 'auto' ? { model: session.model } : {}),
         onNotification: (method, params) => {
           if (this.#clients.get(sessionId) === client) this.#notification(sessionId, method, params);

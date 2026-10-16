@@ -47,6 +47,7 @@ export type ClaudeTurnOptions = {
   thinkingEffort?: ClaudeThinkingEffort;
   authMode?: 'native' | 'provider';
   environment?: Readonly<Record<string, string>>;
+  mcpConfigPath?: string;
   onEvent: (type: string, payload: Record<string, unknown>) => void;
   onExit: (error: string | null) => void;
 };
@@ -188,6 +189,9 @@ export class ClaudeCodeClient {
       throw new ClaudeAdapterError(`Claude Code ${this.#launch.version} 未验证 --effort 控制能力`);
     }
     const authMode = options.authMode ?? 'provider';
+    if (options.mcpConfigPath && !capabilities.has('mcp-config')) {
+      throw new ClaudeAdapterError('当前 Claude Code 未验证 --mcp-config 能力');
+    }
     const args = [
       ...(this.#launch.prefixArgs ?? []),
       '--print', '--verbose', '--input-format', 'stream-json', '--output-format', 'stream-json',
@@ -195,6 +199,7 @@ export class ClaudeCodeClient {
       ...(capabilities.has('hook-events') ? ['--include-hook-events'] : []),
       ...(capabilities.has('subagent-forwarding') ? ['--forward-subagent-text'] : []),
       ...(authMode === 'provider' ? ['--bare'] : []),
+      ...(options.mcpConfigPath ? ['--mcp-config', options.mcpConfigPath] : []),
       ...(thinkingEffort ? ['--effort', thinkingEffort] : []),
       '--permission-mode', options.permissionMode, '--model', safeModel(options.model),
       ...(options.forkFromSessionId

@@ -88,7 +88,10 @@ function fixture(t, options = {}) {
     async interrupt() {}
     async request(method) {
       if (method === 'skills/list') return { data: [{ skills: [{ name: 'fixture-skill', description: 'safe fixture', enabled: true, scope: 'repo' }] }] };
-      if (method === 'mcpServerStatus/list') return { data: [{ name: 'fixture-mcp', authStatus: 'notRequired', tools: { read: {} }, resources: [] }] };
+      if (method === 'mcpServerStatus/list') {
+        const override = clientOptions.configArgs.find((arg) => /^mcp_servers\.[^.]+\.command=/.test(arg));
+        return { data: [{ name: override?.split('.')[1] ?? 'fixture-mcp', authStatus: 'notRequired', tools: { read: {} }, resources: [] }] };
+      }
       return {};
     }
     async stop() { clientOptions.onExit(null); }
@@ -823,7 +826,7 @@ test('session lifecycle, persisted transcript, files, attachments, and native ca
   writeFileSync(join(skillRoot, 'SKILL.md'), '---\nname: fixture-skill\ndescription: effective fixture\n---\n# Fixture\n');
   const native = await f.workspace.codexNativeCapabilities(session.id);
   assert.deepEqual(native.skills.map((item) => item.name), ['fixture-skill']);
-  assert.deepEqual(native.servers.map((item) => item.name), ['fixture-mcp']);
+  assert.match(native.servers[0].name, /^tsukiori_[a-f0-9]{24}$/);
   const health = await f.workspace.extensionHealth(session.id);
   assert.equal(health.supportLevel, 'supported');
   assert.deepEqual(

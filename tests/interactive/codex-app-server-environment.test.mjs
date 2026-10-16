@@ -36,6 +36,7 @@ test('parallel Codex app-server children receive only their selected Provider en
         cwd: directory,
         launch: { executable: process.execPath, prefixArgs: [fakeCli, configPath], version: '0.146.0', source: 'path-executable' },
         environment: { OPENAI_API_KEY: expectedOpenaiKey },
+        configArgs: ['-c', 'mcp_servers.tsukiori_fixture.command="node"', '-c', 'mcp_servers.tsukiori_fixture.args=["with spaces"]'],
         onNotification: () => undefined,
         onApproval: async () => ({ decision: 'decline' }),
         onExit: () => undefined,
@@ -49,5 +50,6 @@ test('parallel Codex app-server children receive only their selected Provider en
     const invocation = JSON.parse(readFileSync(environmentLogPath, 'utf8').trim());
     assert.deepEqual(invocation.providerEnvironmentKeys, ['OPENAI_API_KEY']);
     assert.equal(invocation.selectedKeyMatches, true);
+    assert.deepEqual(invocation.args.slice(-4), ['-c', 'mcp_servers.tsukiori_fixture.command="node"', '-c', 'mcp_servers.tsukiori_fixture.args=["with spaces"]']);
   }
 });

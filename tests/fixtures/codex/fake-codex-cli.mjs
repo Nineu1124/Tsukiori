@@ -19,6 +19,7 @@ if (config.environmentLogPath) {
     'AWS_BEARER_TOKEN_BEDROCK', 'GOOGLE_APPLICATION_CREDENTIALS',
   ].filter((key) => Object.hasOwn(process.env, key));
   appendFileSync(config.environmentLogPath, JSON.stringify({
+    args: process.argv.slice(3),
     providerEnvironmentKeys: keys,
     selectedKeyMatches: process.env.OPENAI_API_KEY === config.expectedOpenaiKey,
   }) + '\n');

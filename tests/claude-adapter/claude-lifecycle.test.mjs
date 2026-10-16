@@ -27,6 +27,25 @@ function fixture(t, overrides = {}) {
   return { directory, logPath, candidate };
 }
 
+test('explicit MCP file reaches the Claude child even in bare provider mode', async (t) => {
+  const f = fixture(t);
+  const path = join(f.directory, 'mcp with spaces.json');
+  writeFileSync(path, JSON.stringify({ mcpServers: { managed: { type: 'stdio', command: 'node', args: [] } } }));
+  const launch = discoverClaudeLaunch({ candidates: [f.candidate] });
+  const options = {
+    cwd: f.directory, sessionId: randomUUID(), resume: false, prompt: 'fixture-mcp', model: 'sonnet',
+    permissionMode: 'plan', authMode: 'provider', mcpConfigPath: path, onEvent: () => undefined,
+  };
+  await new Promise((resolveExit, rejectExit) => new ClaudeCodeClient(launch).startTurn({
+    ...options, onExit: (error) => error ? rejectExit(new Error(error)) : resolveExit(),
+  }));
+  const invocation = JSON.parse(readFileSync(f.logPath, 'utf8').trim());
+  assert.equal(invocation.args.includes('--bare'), true);
+  assert.deepEqual(invocation.mcpServerNames, ['managed']);
+  assert.equal(invocation.args[invocation.args.indexOf('--mcp-config') + 1], path);
+  assert.throws(() => new ClaudeCodeClient({ ...launch, capabilities: [] }).startTurn({ ...options, onExit() {} }), /未验证 --mcp-config/);
+});
+
 test('discovery locks the tested version, capabilities, and sanitized native auth source', (t) => {
   const f = fixture(t);
   const launch = discoverClaudeLaunch({ candidates: [f.candidate] });
