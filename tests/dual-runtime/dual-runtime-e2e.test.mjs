@@ -58,10 +58,12 @@ function fixture(t) {
 
   const docBody = JSON.stringify({ openapi: '3.1.0', info: { title: 'OpenCode fixture', version: '1.18.4' } });
   const openCodeConfig = join(directory, 'fake-opencode.json');
+  const lifecyclePath = join(directory, 'opencode-lifecycle.jsonl');
   const openCodeManifest = join(directory, 'openapi-manifest.json');
   writeFileSync(openCodeConfig, JSON.stringify({
     version: '1.18.4', credentialCount: 1, docBody, docContentType: 'application/json',
     writeFixtureFile: true, crashOnPromptCount: 6,
+    lifecyclePath,
   }));
   writeFileSync(openCodeManifest, JSON.stringify({
     runtimeVersion: '1.18.4', contentType: 'application/json',
@@ -130,7 +132,7 @@ function fixture(t) {
   return {
     directory, git, repository, database, environment, project, permissions,
     openCodeAdapter, codexAdapter, openCodeProfile, codexProfile,
-    sessions, bindings, gitService, integrations, handles, now, id,
+    sessions, bindings, gitService, integrations, handles, now, id, lifecyclePath,
   };
 }
 
@@ -217,8 +219,21 @@ test('OpenCode and Codex run three isolated Sessions, merge two commits, and sur
 
   await assert.rejects(
     openCodeHandle.startTurn('dual-opencode', 'sanitized crash injection'),
-    /OpenCode Turn failed to start/,
+    (error) => {
+      assert.equal(error.message, 'OpenCode Turn failed to start');
+      t.diagnostic(JSON.stringify({ requestFailure: error.reason }));
+      return true;
+    },
   );
+  const evidence = () => ({
+    lifecycle: readFileSync(f.lifecyclePath, 'utf8').trim().split('\n').map((line) => JSON.parse(line)),
+    runtime: { state: f.database.readRuntimeHandle(openCodeHandle.id).state, exitCode: f.database.readRuntimeHandle(openCodeHandle.id).exitCode },
+    session: { activity: f.database.readSession('dual-opencode').activity, health: f.database.readSession('dual-opencode').health },
+  });
+  t.diagnostic(JSON.stringify(evidence()));
+  await waitFor(() => evidence().lifecycle.some((entry) => entry.event === 'exit' && entry.code === 23));
+  await waitFor(() => f.database.readRuntimeHandle(openCodeHandle.id).state === 'exited');
+  assert.equal(f.database.readRuntimeHandle(openCodeHandle.id).exitCode, 23);
   await waitFor(() => f.database.readSession('dual-opencode').health === 'interrupted_runtime');
   await codexBridgeB.startTurn(codexHandleB, 'dual-codex-b', [{ type: 'text', text: 'after peer crash' }]);
   await waitFor(() => f.database.readSession('dual-codex-b').activity === 'idle');

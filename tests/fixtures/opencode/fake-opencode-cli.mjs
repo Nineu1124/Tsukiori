@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 
 const configPath = process.argv[2];
 if (!configPath) process.exit(2);
@@ -14,6 +14,11 @@ if (process.argv.includes('auth') && process.argv.includes('list')) {
   process.exit(0);
 }
 if (!process.argv.includes('serve')) process.exit(3);
+
+function lifecycle(event, details = {}) {
+  if (config.lifecyclePath) appendFileSync(config.lifecyclePath, JSON.stringify({ event, ...details }) + '\n');
+}
+process.on('exit', (code) => lifecycle('exit', { code }));
 
 const sessions = new Map();
 const eventStreams = new Set();
@@ -244,10 +249,12 @@ const server = createServer(async (request, response) => {
       return;
     }
     session.promptCount += 1;
+    lifecycle('prompt_received', { count: session.promptCount });
     session.status = 'busy';
     publish(event('session.status', { sessionID: session.id, status: { type: 'busy' } }));
     if ((config.crashOnMarkedSession && String(session.title).includes('CRASH'))
       || (Number.isInteger(config.crashOnPromptCount) && session.promptCount === config.crashOnPromptCount)) {
+      lifecycle('crash_injected', { code: 23, count: session.promptCount });
       setImmediate(() => process.exit(23));
       return;
     }
@@ -350,6 +357,7 @@ server.listen(0, '127.0.0.1', () => {
 });
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
+    lifecycle('signal_received', { signal });
     for (const response of eventStreams) response.end();
     eventStreams.clear();
     server.close(() => process.exit(0));

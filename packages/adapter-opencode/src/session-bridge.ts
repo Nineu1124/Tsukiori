@@ -25,7 +25,7 @@ export type OpenCodeRecoveryResult = {
 };
 
 export class OpenCodeBridgeError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly reason?: 'request_timeout' | 'connection_closed' | 'connection_refused' | 'request_failed') {
     super(message);
     this.name = 'OpenCodeBridgeError';
   }
@@ -292,7 +292,7 @@ export class OpenCodeSessionBridge {
         model: { providerID: host.provider, modelID: host.model },
         parts: [{ type: 'text', text }],
       }));
-      if (response.error) throw new Error('prompt_async failed');
+      if (response.error) throw response.error;
       const observed = this.#readTurn(id);
       if (observed && (isTerminal(observed.status)
         || observed.status === 'waiting_permission'
@@ -301,7 +301,7 @@ export class OpenCodeSessionBridge {
       this.#database.saveTurn(running);
       this.#database.saveSession({ ...this.#session(host.id), activity: 'running', updatedAt: this.#now() });
       return running;
-    } catch {
+    } catch (error) {
       const failed: HostTurn = { ...turn, status: 'failed', completedAt: this.#now() };
       this.#database.saveTurn(failed);
       this.#activeTurns.delete(host.runtimeSessionId);
@@ -313,7 +313,7 @@ export class OpenCodeSessionBridge {
         health: unavailable ? 'interrupted_runtime' : 'error',
         updatedAt: this.#now(),
       });
-      throw new OpenCodeBridgeError('OpenCode Turn failed to start');
+      throw new OpenCodeBridgeError('OpenCode Turn failed to start', openCodeRequestFailure(error));
     }
   }
 
@@ -837,4 +837,13 @@ function isTerminal(status: HostTurn['status'] | undefined): boolean {
 
 export function openCodeEventFixtureHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+export function openCodeRequestFailure(error: unknown): NonNullable<OpenCodeBridgeError['reason']> {
+  const value = object(error);
+  const code = object(value.cause).code ?? value.code;
+  if (value.name === 'TimeoutError' || code === 'UND_ERR_CONNECT_TIMEOUT' || code === 'UND_ERR_HEADERS_TIMEOUT') return 'request_timeout';
+  if (code === 'UND_ERR_SOCKET' || code === 'ECONNRESET' || code === 'EPIPE') return 'connection_closed';
+  if (code === 'ECONNREFUSED') return 'connection_refused';
+  return 'request_failed';
 }
