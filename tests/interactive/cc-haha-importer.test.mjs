@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -53,7 +53,7 @@ test('cc-haha importer performs read-only discovery, safe conversion, and hash i
   const importer = new CcHahaImporter(f.userData);
   const scan = importer.scan(f.sourceRoot);
   assert.equal(scan.importableCount, 1);
-  assert.equal(scan.sessions[0].projectRoot.toLowerCase(), f.repository.toLowerCase());
+  assert.equal(scan.sessions[0].projectRoot.toLowerCase(), realpathSync.native(f.repository).toLowerCase());
   assert.match(scan.sessions[0].transcriptHash, /^sha256:[a-f0-9]{64}$/);
   const converted = importer.convert(scan.sessions[0]);
   const serialized = JSON.stringify(converted);
