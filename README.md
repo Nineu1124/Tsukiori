@@ -10,6 +10,7 @@ Tsukiori 是一个本地优先的多 Agent 工作台。项目文件、会话数�
 
 遇到工作区状态损坏或启动恢复提示时，按[工作区恢复说明](./docs/operations/workspace-recovery.md)保留原始数据并排查。
 长对话保存、模型上下文取舍、Runtime 续聊及分段容量见[续聊与历史容量](./docs/operations/conversation-history.md)。
+MCP 的作用域、配置文件、已有会话重载及冲突处理见[MCP 配置说明](./docs/operations/mcp-configuration.md)。
 
 完整的蔚蓝档案启发式 UI 设计系统、ImageGen 原创资产、31 张页面稿和可重复视觉捕获流程见 [Tsukiori UI/UX 设计稿 V1.1](./docs/design/v1.1/README.md)。
 
