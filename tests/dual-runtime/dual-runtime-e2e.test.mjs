@@ -235,10 +235,32 @@ test('OpenCode and Codex run three isolated Sessions, merge two commits, and sur
   await waitFor(() => f.database.readRuntimeHandle(openCodeHandle.id).state === 'exited');
   assert.equal(f.database.readRuntimeHandle(openCodeHandle.id).exitCode, 23);
   await waitFor(() => f.database.readSession('dual-opencode').health === 'interrupted_runtime');
-  await codexBridgeB.startTurn(codexHandleB, 'dual-codex-b', [{ type: 'text', text: 'after peer crash' }]);
-  await waitFor(() => f.database.readSession('dual-codex-b').activity === 'idle');
-  assert.equal(f.database.readRuntimeHandle(codexHandleB.id).state, 'ready');
-  assert.equal(f.database.readSession('dual-codex-b').health, 'healthy');
+  assert.equal(f.database.readSession('dual-opencode').activity, 'stopped');
+  const eventCount = (id) => f.database.sqlite.prepare('SELECT COUNT(*) AS count FROM session_events WHERE session_id=?').get(id).count;
+  const before = new Map(f.sessions.map(({ id }) => [id, eventCount(id)]));
+  const turns = await Promise.all([
+    codexBridgeA.startTurn(codexHandleA, 'dual-codex-a', [{ type: 'text', text: 'after peer crash' }]),
+    codexBridgeB.startTurn(codexHandleB, 'dual-codex-b', [{ type: 'text', text: 'after peer crash' }]),
+  ]);
+  for (const [sessionId, handle, turn] of [
+    ['dual-codex-a', codexHandleA, turns[0]], ['dual-codex-b', codexHandleB, turns[1]],
+  ]) {
+    await waitFor(() => f.database.sqlite.prepare('SELECT status FROM session_turns WHERE session_id=? AND runtime_turn_id=?').get(sessionId, turn)?.status === 'completed');
+    assert.equal(f.database.readRuntimeHandle(handle.id).state, 'ready');
+    assert.equal(f.database.readSession(sessionId).activity, 'idle');
+    assert.equal(f.database.readSession(sessionId).health, 'healthy');
+    assert.ok(eventCount(sessionId) > before.get(sessionId));
+  }
+  assert.equal(eventCount('dual-opencode'), before.get('dual-opencode'));
+  assert.equal(f.database.readSession('dual-opencode').health, 'interrupted_runtime');
+  const handlesBySession = new Map([
+    ['dual-opencode', openCodeHandle.id], ['dual-codex-a', codexHandleA.id], ['dual-codex-b', codexHandleB.id],
+  ]);
+  const routed = f.database.sqlite.prepare('SELECT session_id, runtime_handle_id FROM session_events WHERE session_id IS NOT NULL').all();
+  assert.ok(routed.length > 15);
+  for (const event of routed) assert.equal(event.runtime_handle_id, handlesBySession.get(event.session_id), 'event must retain its originating Runtime handle');
+  const failures = f.permissions.snapshot().attention.filter((item) => item.kind === 'failed');
+  assert.deepEqual([...new Set(failures.map((item) => item.sessionId))], ['dual-opencode']);
 
   const persisted = JSON.stringify({
     sessions: f.sessions.map((item) => f.database.readSession(item.id)),

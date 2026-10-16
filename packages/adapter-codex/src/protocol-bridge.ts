@@ -311,12 +311,9 @@ export class CodexSessionBridge {
   }
 
   #hostSessionId(runtimeThreadId: string): string | undefined {
-    const mapped = this.#threadToSession.get(runtimeThreadId);
-    if (mapped) return mapped;
-    const row = this.#database.sqlite.prepare('SELECT id FROM sessions WHERE runtime_session_id=?')
-      .get(runtimeThreadId) as { id: string } | undefined;
-    if (row) this.#threadToSession.set(runtimeThreadId, row.id);
-    return row?.id;
+    // Native IDs can repeat across processes; only an explicit bind/resume
+    // establishes ownership for this handle. Early notifications stay buffered.
+    return this.#threadToSession.get(runtimeThreadId);
   }
 
   #session(id: string): HostSession {

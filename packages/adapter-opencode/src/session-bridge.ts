@@ -740,13 +740,7 @@ export class OpenCodeSessionBridge {
   }
 
   #hostSessionId(runtimeSessionId: string): string | undefined {
-    const mapped = this.#runtimeToHost.get(runtimeSessionId);
-    if (mapped) return mapped;
-    const row = this.#database.sqlite.prepare(
-      'SELECT id FROM sessions WHERE runtime_type=? AND runtime_session_id=?',
-    ).get('opencode', runtimeSessionId) as { id: string } | undefined;
-    if (row) this.#runtimeToHost.set(runtimeSessionId, row.id);
-    return row?.id;
+    return this.#runtimeToHost.get(runtimeSessionId);
   }
 
   #resolveQuestionsForRuntime(runtimeSessionId: string): void {

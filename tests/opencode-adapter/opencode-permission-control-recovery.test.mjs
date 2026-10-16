@@ -230,4 +230,9 @@ test('one Runtime Server crash leaves another Handle healthy and never leaves fa
   assert.equal(new Set(processes.map((item) => item.pid)).size, 2);
   assert.equal(processes.some((item) => item.runtime_handle_id === crashed.id && item.status === 'exited'), true);
   assert.equal(processes.some((item) => item.runtime_handle_id === healthy.id && item.status === 'running'), true);
+  assert.equal(f.database.readSession('host-session-1').runtimeSessionId, f.database.readSession('host-session-2').runtimeSessionId);
+  const expectedHandle = new Map([['host-session-1', crashed.id], ['host-session-2', healthy.id]]);
+  const events = f.database.sqlite.prepare('SELECT session_id, runtime_handle_id FROM session_events WHERE session_id IS NOT NULL').all();
+  assert.ok(events.length > 0);
+  for (const event of events) assert.equal(event.runtime_handle_id, expectedHandle.get(event.session_id));
 });
