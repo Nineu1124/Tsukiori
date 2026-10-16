@@ -539,12 +539,30 @@ export class InteractiveWorkspace {
 
   saveMcp(input: McpServerInput) {
     if (input.scope !== 'user') this.#project(input.projectId ?? '');
-    const record = this.#capabilities.saveMcp(input, this.#state.projects.map((project) => ({ root: project.gitRoot, projectId: project.id })));
+    const record = this.#capabilities.saveMcp(input, this.#mcpTargets());
     return record;
   }
 
   deleteMcp(id: string): void {
-    this.#capabilities.deleteMcp(id, this.#state.projects.map((project) => ({ root: project.gitRoot, projectId: project.id })));
+    this.#capabilities.deleteMcp(id, this.#mcpTargets());
+  }
+
+  #mcpTargets() {
+    return [
+      ...this.#state.projects.map((project) => ({ root: project.gitRoot, projectId: project.id })),
+      ...this.#state.sessions.filter((session) => session.runtimeType !== 'api' && !session.importedReadOnly && existsSync(session.worktreePath))
+        .map((session) => ({ root: session.worktreePath, projectId: session.projectId })),
+    ];
+  }
+
+  #bindWorktreeMcp(project: ProjectState, worktreePath: string, branch: string, runtimeType: RuntimeType): void {
+    if (runtimeType === 'api') return;
+    try { this.#capabilities.syncProjectMcp(worktreePath, project.id, project.gitRoot); }
+    catch (error) {
+      this.#git(project.gitRoot, ['worktree', 'remove', '--force', worktreePath]);
+      this.#git(project.gitRoot, ['branch', '-D', branch]);
+      throw error;
+    }
   }
 
   listSkills(projectId: string) {
@@ -939,6 +957,7 @@ export class InteractiveWorkspace {
     const baseCommit = this.#git(source.worktreePath, ['rev-parse', 'HEAD']).trim();
     mkdirSync(dirname(worktreePath), { recursive: true });
     this.#git(project.gitRoot, ['worktree', 'add', '-b', branch, worktreePath, baseCommit]);
+    this.#bindWorktreeMcp(project, worktreePath, branch, source.runtimeType);
     const session: SessionState = {
       id: 'session:' + token, projectId: source.projectId,
       name: uniqueForkName(source.name, this.#state.sessions),
@@ -1338,6 +1357,7 @@ export class InteractiveWorkspace {
     const worktreePath = join(this.#worktreeRoot, project.id.replace(':', '-'), token.slice(0, 12));
     mkdirSync(dirname(worktreePath), { recursive: true });
     this.#git(project.gitRoot, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD']);
+    this.#bindWorktreeMcp(project, worktreePath, branch, runtimeType);
     const runtimeCount = this.#state.sessions.filter((item) => item.runtimeType === runtimeType).length + 1;
     const runtimeName = runtimeType === 'codex' ? 'Codex' : runtimeType === 'claude' ? 'Claude' : 'API';
     const session: SessionState = {

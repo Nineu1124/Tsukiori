@@ -206,18 +206,24 @@ export class WorkspaceCapabilities {
     return { ...task };
   }
 
-  syncProjectMcp(projectRoot: string, projectId: string): void {
-    writeMcpFiles(this.#mcpChanges(projectRoot, projectId, this.#mcp));
+  syncProjectMcp(projectRoot: string, projectId: string, sourceRoot?: string): void {
+    writeMcpFiles(this.#mcpChanges(projectRoot, projectId, this.#mcp, sourceRoot));
   }
 
-  #mcpChanges(projectRoot: string, projectId: string, records: readonly McpServerRecord[]): Map<string, string> {
+  #mcpChanges(projectRoot: string, projectId: string, records: readonly McpServerRecord[], sourceRoot?: string): Map<string, string> {
     const root = resolve(projectRoot);
     const configPath = join(root, '.mcp.json');
     const ownershipPath = join(this.#userDataPath, 'mcp-ownership', createHash('sha256').update(configPath).digest('hex') + '.json');
-    const selected = records.filter((item) => (item.scope === 'project' || item.scope === 'local') && item.projectId === projectId && item.enabled);
+    const selected = records.filter((item) => (item.scope === 'user' || item.projectId === projectId) && item.enabled);
     if (!selected.length && !existsSync(ownershipPath)) return new Map();
     const existing = readMcpObject(configPath);
-    const owned = readMcpObject(ownershipPath);
+    let owned = readMcpObject(ownershipPath);
+    if (sourceRoot && !existsSync(ownershipPath)) {
+      const sourceConfig = join(resolve(sourceRoot), '.mcp.json');
+      const sourceOwned = readMcpObject(join(this.#userDataPath, 'mcp-ownership', createHash('sha256').update(sourceConfig).digest('hex') + '.json'));
+      const present = existing.mcpServers && typeof existing.mcpServers === 'object' ? existing.mcpServers : {};
+      owned = Object.fromEntries(Object.entries(sourceOwned).filter(([name]) => Object.hasOwn(present, name)));
+    }
     const servers: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
     for (const server of selected) {
       servers[server.name] = server.transport === 'stdio'
