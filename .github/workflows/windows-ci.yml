@@ -35,6 +35,9 @@ jobs:
       - name: Verify checkpoints and secrets
         run: npm run check
 
+      - name: Run Claude Adapter contracts
+        run: npm run test:claude-adapter
+
       - name: Run credential-free contract tests
         run: |
           npm run test:contract
