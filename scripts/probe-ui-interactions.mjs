@@ -39,7 +39,13 @@ try {
   const target = await waitForTarget(port);
   const cdp = await connect(target.webSocketDebuggerUrl);
   await waitForRenderer(cdp);
+  // 拖拽与设置交互使用固定视口，避免 CI 显示器尺寸触发面板宽度上限。
+  await cdp.call('Emulation.setDeviceMetricsOverride', {
+    width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false,
+  });
   const expression = `(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (innerWidth !== 1600 || innerHeight !== 1000) throw new Error('interaction_viewport_mismatch');
     const handle = document.querySelector('#work-panel-resizer');
     if (!handle) throw new Error('resizer_missing');
     handle.setPointerCapture = () => {};
@@ -52,6 +58,8 @@ try {
     const after = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--work-panel-width'), 10);
     const snapshot = await window.tsukiori.workspace.snapshot();
     return {
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
       before,
       after,
       ariaValue: Number(handle.getAttribute('aria-valuenow')),
@@ -61,7 +69,7 @@ try {
   })()`;
   const response = await cdp.call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
   const result = response.result?.result?.value;
-  if (!result || result.after <= result.before || result.after !== result.persisted
+  if (!result || result.after !== result.before + 80 || result.after !== result.persisted
     || result.ariaValue !== result.after || result.resizingClassCleared !== true) {
     throw new Error('Resizable panel probe failed: ' + JSON.stringify({ result, response }));
   }
@@ -342,7 +350,7 @@ async function waitForRenderer(cdp) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     const response = await cdp.call('Runtime.evaluate', {
-      expression: "Boolean(document.querySelector('#work-panel-resizer') && window.tsukiori?.workspace)",
+      expression: `Boolean(document.querySelector('[data-project-pin="ui-probe-project"]') && window.tsukiori?.workspace)`,
       returnByValue: true,
     });
     if (response.result?.result?.value === true) return;
