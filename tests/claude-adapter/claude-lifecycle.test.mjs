@@ -59,6 +59,25 @@ test('discovery locks the tested version, capabilities, and sanitized native aut
   });
 });
 
+test('Claude resumes the same session and reads changed MCP configuration on each new turn', async (t) => {
+  const f = fixture(t);
+  const client = new ClaudeCodeClient(discoverClaudeLaunch({ candidates: [f.candidate] }));
+  const path = join(f.directory, '.mcp.json');
+  const sessionId = randomUUID();
+  for (const [index, name] of ['before', 'after'].entries()) {
+    writeFileSync(path, JSON.stringify({ mcpServers: { [name]: { type: 'http', url: 'https://example.test/mcp' } } }));
+    await new Promise((resolveExit, rejectExit) => client.startTurn({
+      cwd: f.directory, sessionId, resume: index > 0, prompt: 'fixture mcp reload', model: 'sonnet',
+      permissionMode: 'plan', authMode: 'provider', mcpConfigPath: path,
+      onEvent() {}, onExit: (error) => error ? rejectExit(new Error(error)) : resolveExit(),
+    }));
+  }
+  const invocations = readFileSync(f.logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(invocations.map((item) => item.mcpServerNames), [['before'], ['after']]);
+  assert.equal(invocations[1].args[invocations[1].args.indexOf('--resume') + 1], sessionId);
+  await client.stop();
+});
+
 test('verified Thinking effort is passed only through the exact Claude CLI argument', async (t) => {
   const f = fixture(t);
   const client = new ClaudeCodeClient(discoverClaudeLaunch({ candidates: [f.candidate] }));

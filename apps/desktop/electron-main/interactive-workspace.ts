@@ -77,7 +77,7 @@ import {
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
 import { safeApiError } from './api-runtime-error.js';
-import { codexMcpArgs, codexMcpName } from './mcp-runtime-config.js';
+import { codexMcpArgs, codexMcpName, mcpRevision } from './mcp-runtime-config.js';
 import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
 
 type RuntimeType = 'codex' | 'claude' | 'api';
@@ -269,6 +269,7 @@ export class InteractiveWorkspace {
   #claudeClient: ClaudeCodeClient | null = null;
   #clients = new Map<string, CodexAppServerClient>();
   #clientStarts = new Map<string, Promise<CodexAppServerClient>>();
+  #clientMcpRevisions = new Map<string, string>();
   #apiHistory = new Map<string, ReturnType<typeof readApiHistory>>();
   #activeTurns = new Map<string, string>();
   #apiAborts = new Map<string, AbortController>();
@@ -1112,7 +1113,7 @@ export class InteractiveWorkspace {
     let runtimeError = '';
     if (session.runtimeType === 'codex') {
       try { native = await this.codexNativeCapabilities(sessionId); }
-      catch (error) { runtimeError = truncate(error instanceof Error ? error.message : String(error), 500); }
+      catch (error) { runtimeError = runtimeFailure(error).message; }
     }
     const nativeServers = Array.isArray(native.servers) ? native.servers.map(object) : [];
     const nativeSkills = Array.isArray(native.skills) ? native.skills.map(object) : [];
@@ -1177,16 +1178,22 @@ export class InteractiveWorkspace {
     const claudeInit = session.runtimeType === 'claude'
       ? [...(this.#events.get(session.id) ?? [])].reverse().find((event) => event.type === 'session.started')
       : undefined;
+    const pendingMcp = session.runtimeType === 'codex' && this.#clients.has(sessionId)
+      && this.#clientMcpRevisions.get(sessionId) !== mcpRevision(configuredMcp);
     return {
       supportLevel: session.runtimeType === 'codex' && !runtimeError ? 'supported' : 'degraded',
       runtimeType: session.runtimeType, projectId: project.id, sessionId: session.id,
       mcp, skills,
+      mcpConfigState: session.runtimeType === 'codex'
+        ? runtimeError ? 'failed' : pendingMcp ? 'pending_next_turn' : 'loaded'
+        : session.runtimeType === 'claude' ? 'read_on_next_turn' : 'unsupported',
       observedMcpServerCount: session.runtimeType === 'codex'
         ? nativeServers.length
         : Number(claudeInit?.payload.mcpServerCount) || 0,
       ...(runtimeError ? { runtimeError } : {}),
       limitations: session.runtimeType === 'codex'
-        ? ['Codex 只报告 Runtime 已观察到的 MCP/Skills；MCP 原生响应不提供配置 Scope。']
+        ? ['Codex 只报告 Runtime 已观察到的 MCP/Skills；MCP 原生响应不提供配置 Scope。',
+            ...(pendingMcp ? ['MCP 配置已更新，当前 Turn 继续使用旧配置；下一轮开始前重启 Runtime 并恢复原会话。'] : [])]
         : ['Claude stream-json 只报告 MCP 数量，不提供名称、健康或 Skill 清单；本地配置的 Runtime 生效状态保持 unknown。'],
       refreshedAt: Date.now(),
     };
@@ -1777,6 +1784,7 @@ export class InteractiveWorkspace {
       this.#claudeClient?.stop() ?? Promise.resolve(),
     ]);
     this.#clients.clear();
+    this.#clientMcpRevisions.clear();
   }
 
   async #runScheduledTasks(): Promise<void> {
@@ -1792,8 +1800,16 @@ export class InteractiveWorkspace {
     const starting = this.#clientStarts.get(sessionId);
     if (starting) return starting;
     const existing = this.#clients.get(sessionId);
-    if (existing) return existing;
-    const pending = this.#startCodexClient(sessionId);
+    if (existing && (this.#activeTurns.has(sessionId)
+      || this.#clientMcpRevisions.get(sessionId) === mcpRevision(this.#capabilities.listMcp(this.#session(sessionId).projectId)))) return existing;
+    const pending = (async () => {
+      if (existing) {
+        this.#clients.delete(sessionId);
+        this.#clientMcpRevisions.delete(sessionId);
+        await existing.stop();
+      }
+      return this.#startCodexClient(sessionId);
+    })();
     this.#clientStarts.set(sessionId, pending);
     try { return await pending; }
     finally { if (this.#clientStarts.get(sessionId) === pending) this.#clientStarts.delete(sessionId); }
@@ -1804,10 +1820,11 @@ export class InteractiveWorkspace {
     const session = this.#session(sessionId);
     const provider = this.#providers.get(session.providerId);
     return await this.#providers.withEnvironment(provider.id, async (environment) => {
+      const mcp = this.#capabilities.listMcp(session.projectId);
       let client: CodexAppServerClient;
       const options: ConstructorParameters<typeof CodexAppServerClient>[0] = {
         cwd: session.worktreePath, launch: this.#codexLaunch as CodexLaunch,
-        environment, configArgs: [...codexConfigArgs(provider), ...codexMcpArgs(this.#capabilities.listMcp(session.projectId))],
+        environment, configArgs: [...codexConfigArgs(provider), ...codexMcpArgs(mcp)],
         ...(session.model !== 'auto' ? { model: session.model } : {}),
         onNotification: (method, params) => {
           if (this.#clients.get(sessionId) === client) this.#notification(sessionId, method, params);
@@ -1816,6 +1833,7 @@ export class InteractiveWorkspace {
         onExit: (error) => {
           if (this.#clients.get(sessionId) !== client) return;
           this.#clients.delete(sessionId);
+          this.#clientMcpRevisions.delete(sessionId);
           if (!error) return;
           error = runtimeFailure(error).message;
           session.status = 'error'; session.lastError = error; session.updatedAt = Date.now();
@@ -1827,6 +1845,7 @@ export class InteractiveWorkspace {
       };
       client = this.#createClient ? this.#createClient(options) : new CodexAppServerClient(options);
       this.#clients.set(sessionId, client);
+      this.#clientMcpRevisions.set(sessionId, mcpRevision(mcp));
       try {
         const auth = await client.start();
         if (session.threadId) {
@@ -1838,7 +1857,10 @@ export class InteractiveWorkspace {
         if (runtime) { runtime.authenticated = auth.authenticated || Boolean(provider.secretRef); runtime.authSource = provider.kind === 'chatgpt' ? auth.authSource : 'api-key'; }
         return client;
       } catch (error) {
-        if (this.#clients.get(sessionId) === client) this.#clients.delete(sessionId);
+        if (this.#clients.get(sessionId) === client) {
+          this.#clients.delete(sessionId);
+          this.#clientMcpRevisions.delete(sessionId);
+        }
         await client.stop().catch(() => undefined);
         throw error;
       }

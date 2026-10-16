@@ -6,6 +6,11 @@ export function codexMcpName(record: Pick<McpServerRecord, 'id'>): string {
   return 'tsukiori_' + createHash('sha256').update(record.id).digest('hex').slice(0, 24);
 }
 
+export function mcpRevision(records: readonly McpServerRecord[]): string {
+  return createHash('sha256').update(JSON.stringify(records.filter((item) => item.enabled)
+    .map(({ id, transport, command, args, envKeys, url }) => ({ id, transport, command, args, envKeys, url })))).digest('hex');
+}
+
 export function codexMcpArgs(records: readonly McpServerRecord[]): string[] {
   const args: string[] = [];
   for (const record of records.filter((item) => item.enabled)) {
