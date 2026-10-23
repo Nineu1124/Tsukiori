@@ -1,3 +1,5 @@
+import { createWorkspaceEvent, restoreWorkspaceEvent, convertCodexNotification, normalizeRuntimeEvent, type WorkspaceEventInput, type WorkspaceEvent } from './workspace-events.js';
+export type { WorkspaceEvent } from './workspace-events.js';
 import { WorkspaceTurnService } from './workspace-turn-service.js';
 import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
 import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
@@ -22,7 +24,6 @@ import {
   runtimeFailure,
   ThinkingBlockProjector,
   type CodexCompactionEventType,
-  type CodexCompactionMethod,
   type ThinkingBlockEventType,
 } from '@tsukiori/runtime-core';
 import {
@@ -82,15 +83,6 @@ import { codexMcpArgs, codexMcpName, mcpRevision } from './mcp-runtime-config.js
 import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
 
 import type { RuntimeType, PermissionMode, ProjectState, SessionState, TeamMemberState, TeamRunState, WorkspaceSettings, PersistedState, RuntimeState } from './workspace-types.js';
-
-export type WorkspaceEvent = {
-  id: string;
-  sequence: number;
-  sessionId?: string;
-  type: string;
-  createdAt: number;
-  payload: Record<string, unknown>;
-};
 
 type CodexApprovalResolver = {
   kind: 'codex';
@@ -1640,137 +1632,25 @@ export class InteractiveWorkspace {
   }
 
   #notification(sessionId: string, method: string, params: Record<string, unknown>): void {
-    if (method === 'thread/tokenUsage/updated' || method === 'thread/compacted') {
-      const session = this.#session(sessionId);
-      const activeTurnId = this.#activeTurns.get(sessionId);
-      const result = this.#compactionTracker(sessionId).ingest(method as CodexCompactionMethod, params, {
-        ...(session.threadId ? { expectedThreadId: session.threadId } : {}),
-        ...(activeTurnId ? { activeTurnId } : {}),
-      });
-      if (result.status === 'rejected') {
-        this.#emit({ sessionId, type: 'native.event', payload: {
-          nativeType: method,
-          reason: 'compaction_' + result.reason,
-          parameterKeys: Object.keys(params).slice(0, 32).map((key) => safeSettingText(key, 'unknown', 80)),
-          redacted: true,
-        } });
-      } else {
-        for (const event of result.events) this.#emit({ sessionId, type: event.type, payload: event.payload });
-      }
-      this.#save();
-      return;
+    const session = this.#session(sessionId);
+    const blocks = this.#codexThinkingBlocks.get(sessionId) ?? new Set<string>();
+    this.#codexThinkingBlocks.set(sessionId, blocks);
+    const activeTurnId = this.#activeTurns.get(sessionId);
+    const result = convertCodexNotification(method, params, {
+      ...(session.threadId ? { threadId: session.threadId } : {}),
+      ...(activeTurnId ? { activeTurnId } : {}),
+      thinkingBlocks: blocks, compactionTracker: () => this.#compactionTracker(sessionId),
+    });
+    for (const event of result.events) {
+      if (event.route === 'runtime') this.#runtimeEvent(sessionId, event.type, event.payload);
+      else this.#emit({ sessionId, type: event.type, payload: event.payload });
     }
-    if (method === 'item/agentMessage/delta') {
-      this.#emit({ sessionId, type: 'assistant.delta', payload: { text: truncate(String(params.delta ?? ''), 32_000) } });
-      return;
-    }
-    if (method === 'item/reasoning/textDelta' || method === 'item/reasoning/summaryTextDelta') {
-      const itemId = safeSettingText(params.itemId, '', 120);
-      const indexName = method.endsWith('summaryTextDelta') ? 'summaryIndex' : 'contentIndex';
-      const index = Number.isSafeInteger(params[indexName]) && Number(params[indexName]) >= 0
-        ? Number(params[indexName]) : null;
-      if (!itemId || index === null) {
-        this.#emit({ sessionId, type: 'native.event', payload: {
-          nativeType: method, reason: 'invalid_reasoning_delta_identity', redacted: true,
-        } });
-        return;
-      }
-      const kind = method.endsWith('summaryTextDelta') ? 'summary' : 'content';
-      const blockId = `codex:${itemId}:${kind}:${index}`;
-      const blocks = this.#codexThinkingBlocks.get(sessionId) ?? new Set<string>();
-      blocks.add(blockId); this.#codexThinkingBlocks.set(sessionId, blocks);
-      this.#runtimeEvent(sessionId, 'assistant.thinking.delta', {
-        blockId, index: blockId, source: `codex.reasoning.${kind}`,
-        text: truncate(String(params.delta ?? ''), 32_000),
-      });
-      return;
-    }
-    if (method === 'item/reasoning/summaryPartAdded') {
-      const itemId = safeSettingText(params.itemId, '', 120);
-      const index = Number.isSafeInteger(params.summaryIndex) && Number(params.summaryIndex) >= 0
-        ? Number(params.summaryIndex) : null;
-      if (!itemId || index === null) {
-        this.#emit({ sessionId, type: 'native.event', payload: {
-          nativeType: method, reason: 'invalid_reasoning_part_identity', redacted: true,
-        } });
-        return;
-      }
-      const blockId = `codex:${itemId}:summary:${index}`;
-      const blocks = this.#codexThinkingBlocks.get(sessionId) ?? new Set<string>();
-      blocks.add(blockId); this.#codexThinkingBlocks.set(sessionId, blocks);
-      this.#runtimeEvent(sessionId, 'assistant.thinking.started', {
-        blockId, index: blockId, source: 'codex.reasoning.summary',
-      });
-      return;
-    }
-    if (method === 'turn/started') {
-      const turnId = String(object(params.turn).id ?? params.turnId ?? '');
-      this.#runtimeEvent(sessionId, 'turn.started', { turnId });
-    } else if (method === 'turn/completed') {
-      const turn = object(params.turn);
-      this.#runtimeEvent(sessionId, 'turn.completed', {
-        turnId: String(turn.id ?? params.turnId ?? ''),
-        status: String(turn.status ?? 'completed'),
-        ...(turn.error ? { error: runtimeFailure(turn.error).message } : {}),
-      });
-    } else if (method === 'item/started' || method === 'item/completed') {
-      const item = object(params.item);
-      const itemType = String(item.type ?? 'tool');
-      if (itemType === 'reasoning' && method === 'item/completed') {
-        const prefix = `codex:${safeSettingText(item.id, '', 120)}:`;
-        const blocks = this.#codexThinkingBlocks.get(sessionId);
-        for (const blockId of [...(blocks ?? [])]) {
-          if (!blockId.startsWith(prefix)) continue;
-          this.#runtimeEvent(sessionId, 'assistant.thinking.completed', { blockId, index: blockId });
-          blocks?.delete(blockId);
-        }
-      }
-      if (itemType === 'collabAgentToolCall') {
-        const agents = Object.entries(object(item.agentsStates)).slice(0, 32).map(([threadId, value]) => ({
-          threadId: safeSettingText(threadId, 'unknown', 160),
-          status: safeSettingText(object(value).status, 'unknown', 80),
-        }));
-        this.#emit({ sessionId, type: 'subagent.event', payload: {
-          schemaVersion: 1,
-          runtimeEventType: method,
-          runtimeTaskId: safeSettingText(item.id, '', 160),
-          senderThreadId: safeSettingText(item.senderThreadId, '', 160),
-          receiverThreadIds: Array.isArray(item.receiverThreadIds)
-            ? item.receiverThreadIds.slice(0, 32).map((value) => safeSettingText(value, '', 160)).filter(Boolean)
-            : [],
-          tool: safeSettingText(item.tool, 'collabAgentToolCall', 80),
-          status: safeSettingText(item.status, method.endsWith('started') ? 'inProgress' : 'completed', 80),
-          agents,
-        } });
-      }
-      if (!['agentMessage', 'userMessage'].includes(itemType) && itemType !== 'reasoning') this.#emit({ sessionId, type: 'tool.event', payload: {
-        phase: method.endsWith('started') ? 'started' : 'completed', tool: itemType,
-        toolUseId: String(item.id ?? ''),
-        summary: truncate(String(item.command ?? item.path ?? item.name ?? itemType), 2_000),
-      } });
-    } else if (method === 'error') this.#emit({ sessionId, type: 'runtime.error', payload: runtimeFailure(params) });
-    else {
-      const serialized = JSON.stringify(params);
-      this.#emit({ sessionId, type: 'native.event', payload: {
-        nativeType: safeSettingText(method, 'unknown', 160),
-        parameterKeys: Object.keys(params).slice(0, 32).map((key) => safeSettingText(key, 'unknown', 80)),
-        contentHash: 'sha256:' + createHash('sha256').update(serialized).digest('hex'),
-        bytes: Buffer.byteLength(serialized, 'utf8'),
-        redacted: true,
-      } });
-    }
-    this.#save();
+    if (result.save) this.#save();
   }
 
   #runtimeEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
     const session = this.#session(sessionId);
-    if (session.runtimeType !== 'api') {
-      if (type === 'runtime.error') payload = runtimeFailure(payload);
-      else if (type === 'turn.completed' && payload.error) {
-        const safe = runtimeFailure(payload.error);
-        payload = { ...payload, error: safe.message, category: safe.category };
-      }
-    }
+    payload = normalizeRuntimeEvent(session.runtimeType, type, payload);
     if (session.importedReadOnly) throw new Error('导入历史为只读；请先显式 Fork，再在新 Session 中继续');
     if (isThinkingEvent(type)) {
       const projector = this.#thinking.get(sessionId) ?? new ThinkingBlockProjector();
@@ -1886,14 +1766,7 @@ export class InteractiveWorkspace {
         const raw = JSON.parse(line) as Record<string, unknown>;
         if (!raw || raw.sessionId !== sessionId || typeof raw.type !== 'string') throw new TranscriptStoreError();
         if (!transcriptEvent(raw.type)) continue;
-        const event: WorkspaceEvent = {
-          id: typeof raw.id === 'string' ? raw.id : randomUUID(),
-          sequence: ++this.#eventSequence,
-          sessionId,
-          type: raw.type,
-          createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : session.createdAt,
-          payload: object(raw.payload),
-        };
+        const event = restoreWorkspaceEvent(raw, sessionId, ++this.#eventSequence, session.createdAt);
         history.push(...readApiHistory([event]));
         events.push(event);
         if (events.length > 500) events.shift();
@@ -1966,13 +1839,10 @@ export class InteractiveWorkspace {
     return permissionId;
   }
 
-  #emit(input: Omit<WorkspaceEvent, 'id' | 'sequence' | 'createdAt'> & { createdAt?: number }): void {
+  #emit(input: WorkspaceEventInput): void {
     if (input.type === 'runtime.error' && input.sessionId) this.#finalizeThinking(input.sessionId, 'runtime_error');
     this.#eventSequence += 1;
-    const event: WorkspaceEvent = {
-      id: randomUUID(), sequence: this.#eventSequence,
-      createdAt: input.createdAt ?? Date.now(), ...input,
-    };
+    const event = createWorkspaceEvent(input, this.#eventSequence);
     this.#eventLog.push(event);
     if (this.#eventLog.length > 1_000) this.#eventLog.splice(0, this.#eventLog.length - 1_000);
     if (event.sessionId) {
@@ -2130,7 +2000,7 @@ export class InteractiveWorkspace {
     const path = join(this.#transcriptRoot, safeTranscriptName(event.sessionId));
     try {
       appendTranscriptLine(path, JSON.stringify({
-        id: event.id, sessionId: event.sessionId, type: event.type,
+        schemaVersion: event.schemaVersion, id: event.id, sessionId: event.sessionId, type: event.type,
         createdAt: event.createdAt, payload: event.payload,
       }) + '\n');
     } catch {
