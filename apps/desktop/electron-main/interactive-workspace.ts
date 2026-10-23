@@ -1,3 +1,4 @@
+import { WorkspaceTurnService } from './workspace-turn-service.js';
 import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
 import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -43,7 +44,6 @@ import {
   type ProviderConfig,
   type ProviderInput,
   type ProviderKind,
-  deepSeekClaudeModel,
 } from './provider-registry.js';
 import {
   ProviderVerificationAuditStore,
@@ -78,7 +78,6 @@ import {
   type ThinkingControlMatrix,
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
-import { safeApiError } from './api-runtime-error.js';
 import { codexMcpArgs, codexMcpName, mcpRevision } from './mcp-runtime-config.js';
 import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
 
@@ -140,6 +139,7 @@ const defaultSettings: WorkspaceSettings = {
 };
 
 export class InteractiveWorkspace {
+  readonly #turnService: WorkspaceTurnService;
   readonly #sessionCreation: SessionCreationService;
   readonly #statePath: string;
   readonly #worktreeRoot: string;
@@ -216,6 +216,15 @@ export class InteractiveWorkspace {
       sessions: () => this.#state.sessions, git: (cwd, args) => this.#git(cwd, args),
       bindMcp: (project, path, branch, runtime) => this.#bindWorktreeMcp(project, path, branch, runtime),
       save: () => this.#save(), emit: (event) => this.#emit(event),
+    });
+    this.#turnService = new WorkspaceTurnService({
+      session: (id) => this.#session(id), assertWritable: (session) => this.#assertSessionWritable(session),
+      ensureCodexClient: (id) => this.#ensureCodexClient(id),
+      codexClients: this.#clients, claudeClient: () => this.#claudeClient,
+      providers: this.#providers, apiRuntime: this.#apiRuntime,
+      apiHistory: this.#apiHistory, activeTurns: this.#activeTurns, apiAborts: this.#apiAborts,
+      emit: (event) => this.#emit(event), runtimeEvent: (id, type, payload) => this.#runtimeEvent(id, type, payload),
+      refreshTeams: (id) => this.#refreshTeamsForSession(id), save: () => this.#save(),
     });
     this.#state.providers = this.#providers.raw();
     this.#loadTranscripts();
@@ -1281,117 +1290,11 @@ export class InteractiveWorkspace {
   }
 
   async sendPrompt(sessionId: string, text: string): Promise<{ turnId: string }> {
-    const prompt = text.trim();
-    if (!prompt || prompt.length > 64_000) throw new Error('Prompt 必须为 1–64000 个字符');
-    const session = this.#session(sessionId);
-    this.#assertSessionWritable(session);
-    if (session.transcriptIncomplete) throw new Error('会话记录不完整，请恢复有效检查点或新建会话。');
-    if (session.status === 'running' || session.status === 'waiting_permission') {
-      throw new Error('当前 Turn 尚未结束；请等待、处理中断或完成权限确认');
-    }
-    session.status = 'running';
-    session.updatedAt = Date.now();
-    delete session.lastError;
-    this.#emit({ sessionId, type: 'user.message', payload: { text: prompt } });
-    if (session.transcriptIncomplete) {
-      session.status = 'error';
-      throw new TranscriptStoreError();
-    }
-    try {
-      if (session.runtimeType === 'codex') {
-        const client = await this.#ensureCodexClient(sessionId);
-        if (!session.threadId) session.threadId = await client.startThread(session.worktreePath);
-        const turnId = await client.startTurn(session.threadId, prompt);
-        this.#activeTurns.set(sessionId, turnId);
-        session.turnCount += 1;
-        this.#save();
-        return { turnId };
-      }
-      if (session.runtimeType === 'api') {
-        const provider = this.#providers.get(session.providerId);
-        const turnId = `api-turn:${randomUUID()}`;
-        const controller = new AbortController();
-        const history = structuredClone(this.#apiHistory.get(sessionId) ?? []);
-        const running = this.#providers.withSecret(provider.id, (apiKey) => this.#apiRuntime.runTurn({
-          turnId,
-          provider: { ...provider, models: [...provider.models] },
-          modelId: session.model,
-          apiKey,
-          history,
-          signal: controller.signal,
-          callbacks: { onEvent: (type, payload) => this.#runtimeEvent(sessionId, type, payload) },
-        }));
-        this.#apiAborts.set(sessionId, controller);
-        this.#activeTurns.set(sessionId, turnId);
-        session.turnCount += 1;
-        this.#save();
-        void running.catch((error: unknown) => {
-          const interrupted = controller.signal.aborted || (error instanceof Error && error.name === 'AbortError');
-          const safe = safeApiError(error, interrupted);
-          this.#runtimeEvent(sessionId, 'runtime.error', { message: safe.message, category: safe.category });
-          this.#runtimeEvent(sessionId, 'turn.completed', {
-            turnId, status: interrupted ? 'interrupted' : 'failed',
-            ...(interrupted ? {} : { error: safe.message, category: safe.category }),
-          });
-        }).finally(() => this.#apiAborts.delete(sessionId));
-        return { turnId };
-      }
-      const claude = this.#claudeClient;
-      if (!claude || !session.threadId) throw new Error('Claude Code Runtime 不可用');
-      const provider = this.#providers.get(session.providerId);
-      const turnId = this.#providers.withEnvironment(provider.id, (environment) => claude.startTurn({
-        cwd: session.worktreePath, sessionId: session.threadId as string,
-        ...(existsSync(join(session.worktreePath, '.mcp.json')) ? { mcpConfigPath: join(session.worktreePath, '.mcp.json') } : {}),
-        resume: session.turnCount > 0 && !session.forkSourceRuntimeSessionId,
-        ...(session.forkSourceRuntimeSessionId ? { forkFromSessionId: session.forkSourceRuntimeSessionId } : {}),
-        ...(session.forkSourceRuntimeMessageId ? { resumeSessionAt: session.forkSourceRuntimeMessageId } : {}),
-        prompt, model: provider.kind === 'deepseek' ? deepSeekClaudeModel(session.model) : session.model,
-        permissionMode: claudePermission(session.permissionMode),
-        ...(session.thinkingEffort ? { thinkingEffort: session.thinkingEffort } : {}),
-        authMode: provider.kind === 'claude-native' ? 'native' : 'provider', environment,
-        onEvent: (type, payload) => this.#runtimeEvent(sessionId, type, payload),
-        onExit: (error) => {
-          if (!error) return;
-          error = runtimeFailure(error).message;
-          session.status = 'error'; session.lastError = error; session.updatedAt = Date.now();
-          this.#activeTurns.delete(sessionId);
-          this.#emit({ sessionId, type: 'runtime.error', payload: { message: error } });
-          this.#refreshTeamsForSession(sessionId);
-          this.#save();
-        },
-      }), session.model);
-      this.#activeTurns.set(sessionId, turnId);
-      session.turnCount += 1;
-      this.#save();
-      return { turnId };
-    } catch (error) {
-      const safe = session.runtimeType === 'api' ? safeApiError(error) : undefined;
-      const failure = safe ?? new Error(runtimeFailure(error).message);
-      const message = truncate(failure instanceof Error ? failure.message : String(failure), 2_000);
-      session.status = 'error'; session.lastError = message; session.updatedAt = Date.now();
-      this.#activeTurns.delete(sessionId);
-      this.#emit({ sessionId, type: 'runtime.error', payload: { message, ...(safe ? { category: safe.category } : {}) } });
-      this.#refreshTeamsForSession(sessionId);
-      this.#save();
-      throw failure;
-    }
+    return this.#turnService.sendPrompt(sessionId, text);
   }
 
   async interrupt(sessionId: string): Promise<void> {
-    const session = this.#session(sessionId);
-    const turnId = this.#activeTurns.get(sessionId);
-    if (!turnId) throw new Error('当前没有可中断的 Turn');
-    if (session.runtimeType === 'api') {
-      const controller = this.#apiAborts.get(sessionId);
-      if (!controller) throw new Error('当前 Direct API Turn 不可中断');
-      controller.abort();
-    } else if (session.runtimeType === 'claude') this.#claudeClient?.interrupt(turnId);
-    else {
-      const client = this.#clients.get(sessionId);
-      if (!client || !session.threadId) throw new Error('当前 Codex Turn 不可中断');
-      await client.interrupt(session.threadId, turnId);
-    }
-    this.#emit({ sessionId, type: 'turn.interrupt_requested', payload: { turnId } });
+    return this.#turnService.interrupt(sessionId);
   }
 
   decidePermission(permissionId: string, decision: 'allow_once' | 'deny_once' | 'cancel_turn'): void {
@@ -2379,10 +2282,6 @@ function unavailableRuntime(type: RuntimeType, name: string, error: string): Run
 }
 
 
-
-function claudePermission(value: PermissionMode): 'manual' | 'plan' | 'acceptEdits' | 'dontAsk' {
-  return value;
-}
 
 
 
