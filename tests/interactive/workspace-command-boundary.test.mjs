@@ -99,7 +99,7 @@ test('formal file dispatch enforces real session existence and rejects a junctio
   assert.equal(f.histories.length, 0, 'file commands never start a model request');
 });
 
-test('production permission replies resolve only the addressed pending request and cannot be reused', async (t) => {
+test('production permission replies preserve the snapshot string epoch and resolve only the addressed pending request', async (t) => {
   const f = await codexHistoryFixture(t);
   await f.workspace.sendPrompt(f.session.id, 'offline fixture');
   const ipc = commandHarness(f.workspace);
@@ -109,14 +109,23 @@ test('production permission replies resolve only the addressed pending request a
   const requests = f.workspace.snapshot().permissions;
   assert.equal(requests.length, 2);
   assert.notEqual(requests[0].id, requests[1].id);
+  assert.equal(requests[0].connectionEpoch, 'interactive-codex');
+  assert.equal(typeof requests[1].connectionEpoch, 'string');
+  // This is the payload used by Renderer -> fixed Preload -> Main. The epoch
+  // remains a string; accepting its shape does not implement epoch ownership.
+  const reply = (request, decision) => ({ type: 'permission', requestId: request.id,
+    connectionEpoch: request.connectionEpoch, decision });
+  for (const connectionEpoch of [17, {}, 'bad\nepoch']) {
+    assert.equal((await ipc.invoke({ ...reply(requests[0], 'allow_once'), connectionEpoch })).code, 'invalid_command');
+  }
   const invalid = await ipc.invoke({ type: 'permission', requestId: 'approval:missing', decision: 'allow_once' });
   assert.equal(invalid.code, 'command_failed');
   assert.equal(f.workspace.snapshot().permissions.length, 2);
-  assert.equal((await ipc.invoke({ type: 'permission', requestId: requests[1].id, decision: 'deny_once' })).ok, true);
+  assert.equal((await ipc.invoke(reply(requests[1], 'deny_once'))).ok, true);
   assert.equal((await second).decision, 'decline');
   assert.equal(f.workspace.snapshot().permissions.length, 1);
-  assert.equal((await ipc.invoke({ type: 'permission', requestId: requests[0].id, decision: 'allow_once' })).ok, true);
+  assert.equal((await ipc.invoke(reply(requests[0], 'allow_once'))).ok, true);
   assert.equal((await first).decision, 'accept');
-  assert.equal((await ipc.invoke({ type: 'permission', requestId: requests[0].id, decision: 'allow_once' })).code, 'command_failed');
+  assert.equal((await ipc.invoke(reply(requests[0], 'allow_once'))).code, 'command_failed');
   assert.equal(f.workspace.snapshot().permissions.length, 0);
 });

@@ -5,3 +5,9 @@
 Windows / Node 24.11.1：命令边界和 Preload 合同 7/7 通过。验证当前窗口、主 Frame、固定文档 URL；省略版本/v1 兼容与错误版本拒绝；异步请求反序完成时结果仍归原调用；错误 ID、绝对路径和目录穿越在分派前拒绝；真实 Git Worktree 中不存在 Session 与指向另一 Worktree 的 Junction 无法读取；两个待审批请求按各自 ID 答复，已经消费的 ID 不可复用。
 
 检查不代表 Daemon 身份握手或 connection epoch 已实现。`workspace:snapshot` 也不属于本项新命令合同。`npm run check`、`git diff --check` 通过后提交。
+
+## 2026-10-23 审批连接标识回归
+
+复查发现命令合同把 `connectionEpoch` 写成数字，而正式快照和界面传递的是字符串，导致正常审批被拦截。已按现有 ID 合同接受字符串，并从真实快照取值经过 Main 回调验证；数字、对象及含换行的标识仍拒绝，且不会消费待审批请求。两个请求分别答复后不可重复使用。
+
+桌面 TypeScript 编译和命令合同、边界测试共 11 项通过。这里只修正现有传输类型，未增加跨连接身份校验能力。

@@ -125,7 +125,7 @@ const contracts: Readonly<Record<string, Fields>> = {
   terminal_resize: { ...session, columns: optional(integer(1, 1000)), rows: optional(integer(1, 1000)) }, terminal_stop: session,
   copy_text: { text: text(512000, true, true) }, open_url: { url: text(4096) },
   send_prompt: { ...session, text: text(64000, false, true) }, interrupt_turn: session,
-  permission: { requestId: id, connectionEpoch: optional(integer(0)), decision: oneOf('allow_once', 'deny_once', 'cancel_turn') },
+  permission: { requestId: id, connectionEpoch: optional(id), decision: oneOf('allow_once', 'deny_once', 'cancel_turn') },
   list_checkpoints: session, create_checkpoint: { ...session, label: optional(text(200, true)) },
   preview_checkpoint: { ...session, checkpointId: id }, rewind_checkpoint: { ...session, checkpointId: id },
   git_status: session, git_diff: { ...session, path: optional(path) },
