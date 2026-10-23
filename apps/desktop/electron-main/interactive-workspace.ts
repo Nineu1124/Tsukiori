@@ -1,3 +1,5 @@
+import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
+import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
@@ -80,112 +82,7 @@ import { safeApiError } from './api-runtime-error.js';
 import { codexMcpArgs, codexMcpName, mcpRevision } from './mcp-runtime-config.js';
 import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
 
-type RuntimeType = 'codex' | 'claude' | 'api';
-type PermissionMode = 'manual' | 'plan' | 'acceptEdits' | 'dontAsk';
-
-type ProjectState = {
-  id: string;
-  name: string;
-  rootPath: string;
-  gitRoot: string;
-  branch: string;
-  pinned?: boolean;
-  updatedAt?: number;
-};
-
-type SessionState = {
-  id: string;
-  projectId: string;
-  name: string;
-  runtimeType: RuntimeType;
-  providerId: string;
-  model: string;
-  environment: 'windows-native';
-  permissionMode: PermissionMode;
-  thinkingEffort?: ClaudeThinkingEffort;
-  worktreePath: string;
-  branch: string;
-  threadId?: string;
-  forkedFromSessionId?: string;
-  forkSourceRuntimeSessionId?: string;
-  forkSourceRuntimeMessageId?: string;
-  importSource?: 'cc-haha';
-  importSourceSessionId?: string;
-  importTranscriptHash?: string;
-  importedReadOnly?: boolean;
-  turnCount: number;
-  status: 'starting' | 'ready' | 'running' | 'waiting_permission' | 'error' | 'stopped';
-  lastError?: string;
-  transcriptIncomplete?: true;
-  createdAt: number;
-  updatedAt: number;
-  pinned?: boolean;
-  archivedAt?: number;
-};
-
-type TeamMemberState = {
-  sessionId: string;
-  role: string;
-  order: number;
-};
-
-type TeamRunState = {
-  id: string;
-  projectId: string;
-  name: string;
-  goal: string;
-  memberSessionIds: string[];
-  members: TeamMemberState[];
-  coordinatorSessionId?: string;
-  synthesisCount: number;
-  lastSynthesisAt?: number;
-  status: 'dispatching' | 'running' | 'synthesizing' | 'stopping' | 'stopped' | 'completed' | 'partial_failure';
-  createdAt: number;
-  updatedAt: number;
-};
-
-type WorkspaceSettings = {
-  language: 'zh-CN';
-  theme: 'light';
-  density: 'comfortable' | 'compact';
-  reduceMotion: boolean;
-  showThinking: boolean;
-  autoUpdate: boolean;
-  startMinimized: boolean;
-  defaultProjectDirectory: string;
-  defaultRuntime: RuntimeType;
-  defaultProviderId: string;
-  defaultModel: string;
-  defaultPermissionMode: PermissionMode;
-  persistConversation: boolean;
-  confirmHighRisk: boolean;
-  workPanelWidth: number;
-  terminalHeight: number;
-  terminalShell: 'powershell' | 'pwsh' | 'cmd';
-};
-
-type PersistedState = {
-  schemaVersion: 3;
-  projects: ProjectState[];
-  sessions: SessionState[];
-  settings: WorkspaceSettings;
-  providers: ProviderConfig[];
-  teams: TeamRunState[];
-};
-
-type RuntimeState = {
-  id: string;
-  type: RuntimeType | 'opencode' | 'acp';
-  name: string;
-  available: boolean;
-  version: string;
-  source: string;
-  authenticated: boolean;
-  authSource: string;
-  supportLevel: 'supported' | 'degraded' | 'unknown' | 'unsupported';
-  error?: string;
-  capabilities: string[];
-};
+import type { RuntimeType, PermissionMode, ProjectState, SessionState, TeamMemberState, TeamRunState, WorkspaceSettings, PersistedState, RuntimeState } from './workspace-types.js';
 
 export type WorkspaceEvent = {
   id: string;
@@ -243,6 +140,7 @@ const defaultSettings: WorkspaceSettings = {
 };
 
 export class InteractiveWorkspace {
+  readonly #sessionCreation: SessionCreationService;
   readonly #statePath: string;
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
@@ -310,6 +208,15 @@ export class InteractiveWorkspace {
       audit: (record) => this.#providerAudits.record(record),
     });
     this.#capabilities = new WorkspaceCapabilities(options.userDataPath);
+    this.#sessionCreation = new SessionCreationService({
+      worktreeRoot: this.#worktreeRoot,
+      project: (id) => this.#project(id), settings: () => this.#state.settings,
+      provider: (id) => this.#providers.get(id), runtime: (type) => this.#runtimes.find((item) => item.type === type),
+      thinkingControl: (type, providerId) => this.#thinkingControl(type, providerId),
+      sessions: () => this.#state.sessions, git: (cwd, args) => this.#git(cwd, args),
+      bindMcp: (project, path, branch, runtime) => this.#bindWorktreeMcp(project, path, branch, runtime),
+      save: () => this.#save(), emit: (event) => this.#emit(event),
+    });
     this.#state.providers = this.#providers.raw();
     this.#loadTranscripts();
     this.#subagents.reconcile(this.#eventLog.flatMap((event) => {
@@ -1344,46 +1251,8 @@ export class InteractiveWorkspace {
     }
   }
 
-  async createSession(projectId: string, selection?: Partial<Pick<SessionState, 'runtimeType' | 'providerId' | 'model' | 'permissionMode' | 'thinkingEffort'>>): Promise<SessionState> {
-    const project = this.#project(projectId);
-    const runtimeType = selection?.runtimeType ?? this.#state.settings.defaultRuntime;
-    const providerId = selection?.providerId ?? compatibleDefaultProvider(runtimeType, this.#state.settings.defaultProviderId);
-    const provider = this.#providers.get(providerId);
-    assertProviderCompatibility(runtimeType, provider.kind);
-    const runtime = this.#runtimes.find((item) => item.type === runtimeType);
-    if (!runtime?.available) throw new Error(runtime?.error ?? `${runtimeType} Runtime 不可用`);
-    if (providerNeedsSecret(provider) && !provider.secretRef) throw new Error('所选 Provider 尚未保存 API Key');
-    if (provider.kind === 'claude-native' && !runtime.authenticated) throw new Error('Claude Code 本机 Runtime 尚未登录');
-    const preferredModel = selection?.model ?? this.#state.settings.defaultModel;
-    const model = safeModel(provider.models.includes(preferredModel) ? preferredModel : provider.models[0] ?? 'auto');
-    const selectedPermission = permissionMode(selection?.permissionMode ?? defaultPermission(runtimeType));
-    const thinkingEffort = validatedThinkingEffort(
-      selection?.thinkingEffort,
-      this.#thinkingControl(runtimeType, provider.id),
-    );
-    const token = randomUUID();
-    const branch = 'tsukiori/session-' + token.slice(0, 8);
-    const worktreePath = join(this.#worktreeRoot, project.id.replace(':', '-'), token.slice(0, 12));
-    mkdirSync(dirname(worktreePath), { recursive: true });
-    this.#git(project.gitRoot, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD']);
-    this.#bindWorktreeMcp(project, worktreePath, branch, runtimeType);
-    const runtimeCount = this.#state.sessions.filter((item) => item.runtimeType === runtimeType).length + 1;
-    const runtimeName = runtimeType === 'codex' ? 'Codex' : runtimeType === 'claude' ? 'Claude' : 'API';
-    const session: SessionState = {
-      id: 'session:' + token, projectId,
-      name: `${runtimeName} ${runtimeCount}`,
-      runtimeType, providerId, model, environment: 'windows-native', permissionMode: selectedPermission,
-      ...(thinkingEffort ? { thinkingEffort } : {}),
-      worktreePath, branch, ...(runtimeType !== 'codex' ? { threadId: randomUUID() } : {}),
-      turnCount: 0, status: 'ready', createdAt: Date.now(), updatedAt: Date.now(),
-    };
-    this.#state.sessions.push(session);
-    this.#save();
-    this.#emit({ sessionId: session.id, type: 'session.created', payload: {
-      name: session.name, projectId, worktreePath, branch, runtimeType, providerId, model,
-    } });
-    this.#emit({ sessionId: session.id, type: 'session.ready', payload: { branch, worktreePath } });
-    return session;
+  async createSession(projectId: string, selection?: SessionSelection): Promise<SessionState> {
+    return this.#sessionCreation.create(projectId, selection);
   }
 
   async updateSessionOptions(sessionId: string, input: { providerId?: string; model?: string; permissionMode?: string; thinkingEffort?: string }): Promise<SessionState> {
@@ -2495,26 +2364,7 @@ function migrateProject(value: Record<string, unknown>): ProjectState {
   };
 }
 
-function assertProviderCompatibility(runtime: RuntimeType, kind: ProviderKind): void {
-  const allowed: ProviderKind[] = runtime === 'codex'
-    ? ['chatgpt', 'openai', 'openai-compatible']
-    : runtime === 'claude'
-      ? ['claude-native', 'anthropic', 'deepseek', 'anthropic-compatible']
-      : ['openai', 'anthropic', 'deepseek', 'google', 'openrouter', 'xai', 'groq', 'mistral',
-          'cerebras', 'together', 'zai', 'moonshot', 'minimax', 'fireworks', 'kimi',
-          'openai-compatible', 'anthropic-compatible'];
-  if (!allowed.includes(kind)) {
-    const name = runtime === 'codex' ? 'Codex' : runtime === 'claude' ? 'Claude Code' : 'Direct API';
-    throw new Error(`${name} 不支持 ${kind} Provider`);
-  }
-}
 
-function compatibleDefaultProvider(runtime: RuntimeType, preferred: string): string {
-  if (runtime === 'codex') return preferred.startsWith('provider:') ? preferred : 'provider:chatgpt';
-  if (runtime === 'claude') return ['provider:claude-native', 'provider:anthropic', 'provider:deepseek'].includes(preferred)
-    ? preferred : 'provider:claude-native';
-  return !['provider:chatgpt', 'provider:claude-native'].includes(preferred) ? preferred : 'provider:openai';
-}
 
 function codexConfigArgs(provider: ProviderConfig): string[] {
   if (provider.kind !== 'openai-compatible') return [];
@@ -2528,26 +2378,13 @@ function unavailableRuntime(type: RuntimeType, name: string, error: string): Run
   return { id: 'runtime:' + type, type, name, available: false, version: '—', source: 'unknown', authenticated: false, authSource: 'unknown', supportLevel: 'unsupported', error, capabilities: [] };
 }
 
-function defaultPermission(runtime: RuntimeType): PermissionMode { return runtime === 'claude' ? 'plan' : 'manual'; }
 
-function permissionMode(value: string): PermissionMode {
-  if (['manual', 'plan', 'acceptEdits', 'dontAsk'].includes(value)) return value as PermissionMode;
-  throw new Error('Permission Mode 无效');
-}
 
 function claudePermission(value: PermissionMode): 'manual' | 'plan' | 'acceptEdits' | 'dontAsk' {
   return value;
 }
 
-function providerNeedsSecret(provider: ProviderConfig): boolean {
-  return provider.kind !== 'chatgpt' && provider.kind !== 'claude-native';
-}
 
-function safeModel(value: string): string {
-  const model = String(value ?? '').trim();
-  if (!model || model.length > 128 || /[\r\n\0]/.test(model)) throw new Error('Model 无效');
-  return model;
-}
 
 function safeSettingText(value: unknown, fallback: string, max: number): string {
   if (typeof value !== 'string') return fallback;
