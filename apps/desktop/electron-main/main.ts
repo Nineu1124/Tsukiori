@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell, type OpenDialogOptions } from 'electron';
 import { existsSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DAEMON_VERSION, HOST_PROTOCOL_VERSION } from '@tsukiori/protocol';
 import { FakeRuntimeAdapter } from '@tsukiori/adapter-fake';
 import { DaemonSupervisor } from './daemon-supervisor.js';
@@ -9,6 +9,7 @@ import { InteractiveWorkspace } from './interactive-workspace.js';
 import { WorkspaceStateError } from './workspace-state-file.js';
 import { TerminalManager } from './terminal-manager.js';
 import { ComputerUseManager, type ComputerUseAction } from './computer-use-manager.js';
+import { createWorkspaceCommandHandler } from './workspace-command.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const daemonEntry = app.isPackaged
@@ -333,14 +334,11 @@ ipcMain.handle('host:window-state', () => ({
 }));
 
 ipcMain.handle('workspace:snapshot', () => smokeMode ? workspaceSnapshot : interactiveWorkspace?.snapshot());
-ipcMain.handle('workspace:command', async (event, value: unknown) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return { ok: false, code: 'invalid_command', message: '命令格式无效' };
-  }
-  const command = value as Record<string, unknown>;
-  if (typeof command.type !== 'string' || Buffer.byteLength(JSON.stringify(command)) > 128 * 1024) {
-    return { ok: false, code: 'invalid_command', message: '命令过大或缺少类型' };
-  }
+ipcMain.handle('workspace:command', createWorkspaceCommandHandler<Electron.IpcMainInvokeEvent>({
+  rendererUrl: pathToFileURL(rendererEntry).href,
+  source: () => mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null,
+  smoke: smokeMode,
+}, async (event, command) => {
   if (smokeMode) {
     const allowed = new Set([
       'stage', 'unstage', 'revert', 'commit', 'archive', 'permission', 'answer_input',
@@ -801,7 +799,7 @@ ipcMain.handle('workspace:command', async (event, value: unknown) => {
   } catch (error) {
     return { ok: false, code: 'command_failed', message: error instanceof Error ? error.message : String(error) };
   }
-});
+}));
 ipcMain.handle('daemon:status', async () => {
   const status = await supervisor.probe();
   const snapshot = supervisor.snapshot();
