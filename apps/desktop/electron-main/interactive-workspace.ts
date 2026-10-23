@@ -1,3 +1,5 @@
+import { JsonWorkspaceRepository, type WorkspaceStateRepository } from './workspace-state-repository.js';
+import { normalizeWorkspaceState } from './workspace-state-normalize.js';
 import { createWorkspaceEvent, restoreWorkspaceEvent, convertCodexNotification, normalizeRuntimeEvent, type WorkspaceEventInput, type WorkspaceEvent } from './workspace-events.js';
 export type { WorkspaceEvent } from './workspace-events.js';
 import { WorkspaceTurnService } from './workspace-turn-service.js';
@@ -80,7 +82,7 @@ import {
 } from './thinking-control.js';
 import { ApiRuntimeClient, readApiHistory } from './api-runtime.js';
 import { codexMcpArgs, codexMcpName, mcpRevision } from './mcp-runtime-config.js';
-import { loadWorkspaceStateFile, saveWorkspaceStateFile, type WorkspaceStateRecovery } from './workspace-state-file.js';
+import type { WorkspaceStateRecovery } from './workspace-state-file.js';
 
 import type { RuntimeType, PermissionMode, ProjectState, SessionState, TeamMemberState, TeamRunState, WorkspaceSettings, PersistedState, RuntimeState } from './workspace-types.js';
 
@@ -109,6 +111,7 @@ type ApprovalResolver = CodexApprovalResolver | ClaudeApprovalResolver;
 
 export type InteractiveWorkspaceOptions = {
   userDataPath: string;
+  stateRepository?: WorkspaceStateRepository;
   emit: (event: WorkspaceEvent) => void;
   discoverCodex?: () => CodexLaunch;
   discoverClaude?: () => ClaudeLaunch;
@@ -120,20 +123,12 @@ export type InteractiveWorkspaceOptions = {
   providerAuditStore?: Pick<ProviderVerificationAuditStore, 'record' | 'list'>;
 };
 
-const defaultSettings: WorkspaceSettings = {
-  language: 'zh-CN', theme: 'light', density: 'comfortable', reduceMotion: false, showThinking: true,
-  autoUpdate: true, startMinimized: false, defaultProjectDirectory: '',
-  defaultRuntime: 'codex', defaultProviderId: 'provider:chatgpt', defaultModel: 'auto',
-  defaultPermissionMode: 'manual',
-  persistConversation: true, confirmHighRisk: true,
-  workPanelWidth: 360, terminalHeight: 220,
-  terminalShell: 'powershell',
-};
+
 
 export class InteractiveWorkspace {
   readonly #turnService: WorkspaceTurnService;
   readonly #sessionCreation: SessionCreationService;
-  readonly #statePath: string;
+  readonly #stateRepository: WorkspaceStateRepository;
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
   readonly #emitExternal: (event: WorkspaceEvent) => void;
@@ -150,9 +145,7 @@ export class InteractiveWorkspace {
   readonly #capabilities: WorkspaceCapabilities;
   readonly #integrations: InteractiveIntegrationManager;
   readonly #subagents: SubagentProjectionStore;
-  #state: PersistedState = {
-    schemaVersion: 3, projects: [], sessions: [], settings: { ...defaultSettings }, providers: [], teams: [],
-  };
+  #state: PersistedState = normalizeWorkspaceState();
   #runtimes: RuntimeState[] = [];
   #codexLaunch: CodexLaunch | null = null;
   #claudeLaunch: ClaudeLaunch | null = null;
@@ -174,7 +167,7 @@ export class InteractiveWorkspace {
   #stateRecovery: WorkspaceStateRecovery | undefined;
 
   constructor(options: InteractiveWorkspaceOptions) {
-    this.#statePath = join(options.userDataPath, 'workspace-state-v3.json');
+    this.#stateRepository = options.stateRepository ?? new JsonWorkspaceRepository(options.userDataPath);
     this.#worktreeRoot = join(options.userDataPath, 'worktrees');
     this.#transcriptRoot = join(options.userDataPath, 'transcripts');
     this.#checkpoints = new CheckpointService(options.userDataPath);
@@ -189,7 +182,7 @@ export class InteractiveWorkspace {
     mkdirSync(options.userDataPath, { recursive: true });
     mkdirSync(this.#worktreeRoot, { recursive: true });
     mkdirSync(this.#transcriptRoot, { recursive: true });
-    this.#load(options.userDataPath);
+    this.#load();
     this.#integrations = new InteractiveIntegrationManager(options.userDataPath);
     this.#subagents = new SubagentProjectionStore(options.userDataPath);
     this.#providerAudits = options.providerAuditStore ?? new ProviderVerificationAuditStore(options.userDataPath);
@@ -1959,25 +1952,10 @@ export class InteractiveWorkspace {
     return result.stdout ?? '';
   }
 
-  #load(userDataPath: string): void {
-    const version2Path = join(userDataPath, 'workspace-state-v2.json');
-    const version1Path = join(userDataPath, 'workspace-state-v1.json');
-    for (const source of [this.#statePath, version2Path, version1Path]) {
-      const { value, recovery } = loadWorkspaceStateFile(source);
-      if (!value) continue;
-      this.#stateRecovery = recovery;
-      const projects = Array.isArray(value.projects) ? value.projects.map((raw) => migrateProject(object(raw))) : [];
-      const sessions = Array.isArray(value.sessions) ? value.sessions.map((raw) => migrateSession(object(raw))) : [];
-      const settings = Number(value.schemaVersion) >= 2 ? { ...defaultSettings, ...object(value.settings) } as WorkspaceSettings : { ...defaultSettings };
-      settings.language = 'zh-CN';
-      settings.theme = 'light';
-      settings.confirmHighRisk = true;
-      const providers = Number(value.schemaVersion) >= 2 && Array.isArray(value.providers) ? value.providers as ProviderConfig[] : [];
-      const teams = Number(value.schemaVersion) >= 3 && Array.isArray(value.teams)
-        ? value.teams.map((raw) => migrateTeam(object(raw), sessions)) : [];
-      this.#state = { schemaVersion: 3, projects, sessions, settings, providers, teams };
-      return;
-    }
+  #load(): void {
+    const { value, recovery } = this.#stateRepository.read();
+    this.#stateRecovery = recovery;
+    this.#state = normalizeWorkspaceState(value);
   }
 
   #save(): void {
@@ -1988,7 +1966,7 @@ export class InteractiveWorkspace {
       providers: this.#state.providers,
       teams: this.#state.teams,
     };
-    saveWorkspaceStateFile(this.#statePath, JSON.stringify(safe, null, 2));
+    this.#stateRepository.save(safe);
   }
 
   #loadTranscripts(): void {
@@ -2051,92 +2029,11 @@ export class InteractiveWorkspace {
   }
 }
 
-function migrateSession(value: Record<string, unknown>): SessionState {
-  const runtimeType: RuntimeType = value.runtimeType === 'claude' || value.runtimeType === 'api'
-    ? value.runtimeType : 'codex';
-  return {
-    id: String(value.id), projectId: String(value.projectId), name: String(value.name), runtimeType,
-    providerId: typeof value.providerId === 'string' ? value.providerId : 'provider:chatgpt',
-    model: typeof value.model === 'string' ? value.model : 'auto', environment: 'windows-native',
-    permissionMode: permissionMode(typeof value.permissionMode === 'string' ? value.permissionMode : defaultPermission(runtimeType)),
-    ...(isClaudeThinkingEffort(value.thinkingEffort) ? { thinkingEffort: value.thinkingEffort } : {}),
-    worktreePath: String(value.worktreePath), branch: String(value.branch),
-    ...(typeof value.threadId === 'string' ? { threadId: value.threadId } : {}),
-    ...(typeof value.forkedFromSessionId === 'string' ? { forkedFromSessionId: value.forkedFromSessionId } : {}),
-    ...(typeof value.forkSourceRuntimeSessionId === 'string' ? { forkSourceRuntimeSessionId: value.forkSourceRuntimeSessionId } : {}),
-    ...(typeof value.forkSourceRuntimeMessageId === 'string' ? { forkSourceRuntimeMessageId: value.forkSourceRuntimeMessageId } : {}),
-    ...(value.importSource === 'cc-haha' ? { importSource: 'cc-haha' as const } : {}),
-    ...(typeof value.importSourceSessionId === 'string' ? { importSourceSessionId: value.importSourceSessionId } : {}),
-    ...(typeof value.importTranscriptHash === 'string' ? { importTranscriptHash: value.importTranscriptHash } : {}),
-    ...(value.importedReadOnly === true ? { importedReadOnly: true } : {}),
-    turnCount: typeof value.turnCount === 'number' ? value.turnCount : 0,
-    status: value.status === 'running' || value.status === 'waiting_permission' ? 'ready' : String(value.status ?? 'ready') as SessionState['status'],
-    ...(typeof value.lastError === 'string' ? { lastError: value.lastError } : {}),
-    ...(value.transcriptIncomplete === true ? { transcriptIncomplete: true } : {}),
-    createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
-    updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
-    ...(value.pinned === true ? { pinned: true } : {}),
-    ...(typeof value.archivedAt === 'number' ? { archivedAt: value.archivedAt } : {}),
-  };
-}
 
-function migrateTeam(value: Record<string, unknown>, sessions: readonly SessionState[]): TeamRunState {
-  const sessionIds = Array.isArray(value.memberSessionIds)
-    ? [...new Set(value.memberSessionIds.filter((item): item is string => typeof item === 'string'))].slice(0, 4)
-    : [];
-  const rawMembers = Array.isArray(value.members) ? value.members.map(object) : [];
-  const members = sessionIds.map((sessionId, order) => {
-    const raw = rawMembers.find((item) => item.sessionId === sessionId);
-    const session = sessions.find((item) => item.id === sessionId);
-    return {
-      sessionId,
-      role: safeSettingText(raw?.role, session?.name ?? `Agent ${order + 1}`, 80),
-      order: typeof raw?.order === 'number' ? Math.max(0, Math.min(3, Math.trunc(raw.order))) : order,
-    };
-  }).sort((a, b) => a.order - b.order);
-  const allowedStatuses: TeamRunState['status'][] = [
-    'dispatching', 'running', 'synthesizing', 'stopping', 'stopped', 'completed', 'partial_failure',
-  ];
-  const persistedStatus = allowedStatuses.includes(value.status as TeamRunState['status'])
-    ? value.status as TeamRunState['status'] : 'completed';
-  const memberSessions = sessionIds.map((sessionId) => sessions.find((item) => item.id === sessionId));
-  const status: TeamRunState['status'] = ['dispatching', 'running', 'synthesizing', 'stopping'].includes(persistedStatus)
-    ? memberSessions.some((session) => !session || session.status === 'error') ? 'partial_failure' : 'stopped'
-    : persistedStatus;
-  const coordinator = typeof value.coordinatorSessionId === 'string' && sessionIds.includes(value.coordinatorSessionId)
-    ? value.coordinatorSessionId : sessionIds[0];
-  return {
-    id: safeSettingText(value.id, 'team:' + randomUUID(), 160),
-    projectId: safeSettingText(value.projectId, '', 160),
-    name: safeSettingText(value.name, 'Agent Team', 80),
-    goal: safeSettingText(value.goal, '', 8_000),
-    memberSessionIds: sessionIds,
-    members,
-    ...(coordinator ? { coordinatorSessionId: coordinator } : {}),
-    synthesisCount: typeof value.synthesisCount === 'number' ? Math.max(0, Math.trunc(value.synthesisCount)) : 0,
-    ...(typeof value.lastSynthesisAt === 'number' ? { lastSynthesisAt: value.lastSynthesisAt } : {}),
-    status,
-    createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
-    updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
-  };
-}
 
 function isClaudeThinkingEffort(value: unknown): value is ClaudeThinkingEffort {
   return value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh' || value === 'max';
 }
-
-function migrateProject(value: Record<string, unknown>): ProjectState {
-  return {
-    id: String(value.id),
-    name: String(value.name),
-    rootPath: String(value.rootPath),
-    gitRoot: String(value.gitRoot),
-    branch: typeof value.branch === 'string' ? value.branch : 'detached',
-    ...(value.pinned === true ? { pinned: true } : {}),
-    ...(typeof value.updatedAt === 'number' ? { updatedAt: value.updatedAt } : {}),
-  };
-}
-
 
 
 function codexConfigArgs(provider: ProviderConfig): string[] {
