@@ -108,7 +108,15 @@ test('Provider and Runtime selection includes multi-vendor APIs and three execut
 test('userMessage never becomes a Tool Card and tool colors retain READ/MODIFY/EXECUTE semantics', async () => {
   const [html, script, styles] = await rendererFiles();
   const workspace = await readFile(join(root, 'apps', 'desktop', 'electron-main', 'interactive-workspace.ts'), 'utf8');
-  assert.match(workspace, /\['agentMessage', 'userMessage'\]\.includes\(itemType\)/);
+  const { convertCodexNotification } = await import('../../apps/desktop/dist/electron-main/workspace-events.js');
+  for (const type of ['userMessage', 'agentMessage', 'reasoning']) {
+    for (const method of ['item/started', 'item/completed']) {
+      const projected = convertCodexNotification(method, { item: { type } }, {
+        thinkingBlocks: new Set(), compactionTracker() { throw new Error('unexpected compaction'); },
+      });
+      assert.equal(projected.events.some((event) => event.type === 'tool.event'), false);
+    }
+  }
   assert.match(script, /event\.type === 'user\.message'/);
   assert.match(script, /function classifyToolEvent/);
   assert.match(script, /return 'execute'/);

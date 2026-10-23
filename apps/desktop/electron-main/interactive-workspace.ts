@@ -19,7 +19,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
-import { appendTranscriptLine, readTranscriptLines, removeTranscript, TranscriptStoreError } from './transcript-store.js';
+import { TranscriptStoreError } from './transcript-store.js';
+import { JsonConversationRepository, type ConversationRepository } from './conversation-repository.js';
+import { ModelHistoryRepository } from './model-history-repository.js';
 import { WindowsCredentialBroker } from '@tsukiori/credential-broker';
 import {
   CodexCompactionTracker,
@@ -131,6 +133,7 @@ export class InteractiveWorkspace {
   readonly #stateRepository: WorkspaceStateRepository;
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
+  readonly #conversation: ConversationRepository;
   readonly #emitExternal: (event: WorkspaceEvent) => void;
   readonly #discoverCodex: () => CodexLaunch;
   readonly #discoverClaude: () => ClaudeLaunch;
@@ -153,7 +156,7 @@ export class InteractiveWorkspace {
   #clients = new Map<string, CodexAppServerClient>();
   #clientStarts = new Map<string, Promise<CodexAppServerClient>>();
   #clientMcpRevisions = new Map<string, string>();
-  #apiHistory = new Map<string, ReturnType<typeof readApiHistory>>();
+  #apiHistory = new ModelHistoryRepository();
   #activeTurns = new Map<string, string>();
   #apiAborts = new Map<string, AbortController>();
   #thinking = new Map<string, ThinkingBlockProjector>();
@@ -170,7 +173,8 @@ export class InteractiveWorkspace {
     this.#stateRepository = options.stateRepository ?? new JsonWorkspaceRepository(options.userDataPath);
     this.#worktreeRoot = join(options.userDataPath, 'worktrees');
     this.#transcriptRoot = join(options.userDataPath, 'transcripts');
-    this.#checkpoints = new CheckpointService(options.userDataPath);
+    this.#conversation = new JsonConversationRepository(this.#transcriptRoot);
+    this.#checkpoints = new CheckpointService(options.userDataPath, { conversation: this.#conversation });
     this.#ccHahaImporter = new CcHahaImporter(options.userDataPath);
     this.#emitExternal = options.emit;
     this.#discoverCodex = options.discoverCodex ?? discoverCodexLaunch;
@@ -729,7 +733,7 @@ export class InteractiveWorkspace {
       for (const session of [...createdSessions].reverse()) {
         this.#events.delete(session.id);
         this.#apiHistory.delete(session.id);
-        removeTranscript(this.#transcriptPath(session.id));
+        this.#conversation.remove(session.id);
         try {
           if (existsSync(session.worktreePath)) this.#git(this.#project(session.projectId).gitRoot, ['worktree', 'remove', '--force', session.worktreePath]);
         } catch { /* Best-effort cleanup remains scoped to the generated Worktree. */ }
@@ -1741,7 +1745,7 @@ export class InteractiveWorkspace {
   }
 
   #transcriptPath(sessionId: string): string {
-    return join(this.#transcriptRoot, safeTranscriptName(sessionId));
+    return this.#conversation.legacyPath(sessionId);
   }
 
   #reloadSessionTranscript(sessionId: string): void {
@@ -1755,7 +1759,7 @@ export class InteractiveWorkspace {
     const history: ReturnType<typeof readApiHistory> = [];
     let complete = true;
     try {
-      for (const line of readTranscriptLines(this.#transcriptPath(sessionId))) {
+      for (const line of this.#conversation.read(sessionId)) {
         const raw = JSON.parse(line) as Record<string, unknown>;
         if (!raw || raw.sessionId !== sessionId || typeof raw.type !== 'string') throw new TranscriptStoreError();
         if (!transcriptEvent(raw.type)) continue;
@@ -1839,11 +1843,7 @@ export class InteractiveWorkspace {
     this.#eventLog.push(event);
     if (this.#eventLog.length > 1_000) this.#eventLog.splice(0, this.#eventLog.length - 1_000);
     if (event.sessionId) {
-      if (event.type === 'user.message' || event.type === 'api.assistant.message') {
-        const history = this.#apiHistory.get(event.sessionId) ?? [];
-        history.push(...readApiHistory([event]));
-        this.#apiHistory.set(event.sessionId, history);
-      }
+      this.#apiHistory.appendEvent(event.sessionId, event);
       const events = this.#events.get(event.sessionId) ?? [];
       events.push(event);
       if (events.length > 500) events.splice(0, events.length - 500);
@@ -1975,9 +1975,8 @@ export class InteractiveWorkspace {
 
   #persistTranscript(event: WorkspaceEvent): void {
     if (!this.#state.settings.persistConversation || !event.sessionId || !transcriptEvent(event.type)) return;
-    const path = join(this.#transcriptRoot, safeTranscriptName(event.sessionId));
     try {
-      appendTranscriptLine(path, JSON.stringify({
+      this.#conversation.append(event.sessionId, JSON.stringify({
         schemaVersion: event.schemaVersion, id: event.id, sessionId: event.sessionId, type: event.type,
         createdAt: event.createdAt, payload: event.payload,
       }) + '\n');
@@ -2241,10 +2240,6 @@ function searchSnippet(value: string, needle: string, max: number): string {
   const start = Math.max(0, index - Math.floor((max - needle.length) / 2));
   const slice = normalized.slice(start, start + max);
   return `${start > 0 ? '…' : ''}${slice}${start + max < normalized.length ? '…' : ''}`;
-}
-
-function safeTranscriptName(sessionId: string): string {
-  return createHash('sha256').update(sessionId).digest('hex') + '.jsonl';
 }
 
 function truncate(value: string, max: number): string { return value.length <= max ? value : value.slice(0, max) + '\n…[truncated]'; }

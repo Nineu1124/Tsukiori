@@ -14,6 +14,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, resolve, sep, win32 } from 'node:path';
 import { readTranscriptLines, replaceTranscript } from './transcript-store.js';
+import type { ConversationRepository } from './conversation-repository.js';
 
 const DEFAULT_CHANGED_BYTES_LIMIT = 256 * 1024 * 1024;
 const TRANSCRIPT_BYTES_LIMIT = 8 * 1024 * 1024;
@@ -87,18 +88,21 @@ export class CheckpointService {
   readonly #now: () => number;
   readonly #id: () => string;
   readonly #maxChangedBytes: number;
+  readonly #conversation: Pick<ConversationRepository, 'read' | 'replace'> | undefined;
 
   constructor(userDataPath: string, options: {
     gitExecutable?: string;
     now?: () => number;
     id?: () => string;
     maxChangedBytes?: number;
+    conversation?: Pick<ConversationRepository, 'read' | 'replace'>;
   } = {}) {
     this.#root = join(userDataPath, 'checkpoints');
     this.#gitExecutable = options.gitExecutable ?? 'git.exe';
     this.#now = options.now ?? Date.now;
     this.#id = options.id ?? randomUUID;
     this.#maxChangedBytes = options.maxChangedBytes ?? DEFAULT_CHANGED_BYTES_LIMIT;
+    this.#conversation = options.conversation;
     if (!Number.isSafeInteger(this.#maxChangedBytes) || this.#maxChangedBytes < 1) {
       throw new CheckpointServiceError('Checkpoint changed-byte limit is invalid');
     }
@@ -126,7 +130,7 @@ export class CheckpointService {
     const id = safeCheckpointId(this.#id());
     const directory = this.#sessionDirectory(sessionId);
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    const conversation = readConversation(input.transcriptPath, sessionId);
+    const conversation = this.#readCurrentConversation(input.transcriptPath, sessionId);
     this.#assertChangedBytes(worktreePath);
     const snapshot = this.#snapshot(worktreePath, sessionId, id);
     const conversationFile = `${id}.conversation.jsonl`;
@@ -169,7 +173,7 @@ export class CheckpointService {
     const worktreePath = canonicalDirectory(worktreePathValue);
     this.#verifySnapshot(worktreePath, checkpoint);
     const changedPaths = this.#changedPathsAgainst(worktreePath, checkpoint.snapshotCommit);
-    const currentConversation = readConversation(transcriptPath, checkpoint.sessionId);
+    const currentConversation = this.#readCurrentConversation(transcriptPath, checkpoint.sessionId);
     return {
       checkpoint,
       currentHead: this.#commit(this.#git(worktreePath, ['rev-parse', '--verify', 'HEAD^{commit}']).trim()),
@@ -200,7 +204,8 @@ export class CheckpointService {
       if (sha256(conversation.content) !== checkpoint.conversationHash) {
         throw new CheckpointServiceError('Checkpoint conversation hash does not match its manifest');
       }
-      replaceTranscript(input.transcriptPath, conversation.content);
+      if (this.#conversation) this.#conversation.replace(sessionId, conversation.content.split(/\r?\n/).filter(Boolean));
+      else replaceTranscript(input.transcriptPath, conversation.content);
       const restoredIndex = this.#tree(this.#git(worktreePath, ['write-tree']).trim());
       const restoredWorktree = this.#worktreeTree(worktreePath, `verify-${checkpoint.id}`);
       if (restoredIndex !== checkpoint.indexTree || restoredWorktree !== checkpoint.worktreeTree) {
@@ -340,6 +345,18 @@ export class CheckpointService {
     return join(this.#sessionDirectory(checkpoint.sessionId), checkpoint.conversationFile);
   }
 
+  #readCurrentConversation(path: string, sessionId: string): { content: string; eventCount: number } {
+    if (!this.#conversation) return readConversation(path, sessionId);
+    let content = '';
+    let bytes = 0;
+    for (const line of this.#conversation.read(sessionId)) {
+      bytes += Buffer.byteLength(line, 'utf8') + 1;
+      if (bytes > TRANSCRIPT_BYTES_LIMIT) throw new CheckpointServiceError('Transcript 超过 Checkpoint 的 8 MiB 上限');
+      content += `${line}\n`;
+    }
+    return validateConversation(content, sessionId);
+  }
+
   #sessionDirectory(sessionId: string): string {
     return join(this.#root, createHash('sha256').update(safeSessionId(sessionId)).digest('hex'));
   }
@@ -384,6 +401,10 @@ function readConversation(path: string, sessionId: string): { content: string; e
     // Existing checkpoint hashes include original line endings and blank rows.
     content = readFileSync(path, 'utf8');
   }
+  return validateConversation(content, sessionId);
+}
+
+function validateConversation(content: string, sessionId: string): { content: string; eventCount: number } {
   const lines = content.split(/\r?\n/).filter(Boolean);
   for (const line of lines) {
     let value: unknown;

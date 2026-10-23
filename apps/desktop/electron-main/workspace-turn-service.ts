@@ -18,7 +18,7 @@ export type WorkspaceTurnDependencies = {
   claudeClient: () => ClaudeCodeClient | null;
   providers: Pick<ProviderRegistry, 'get' | 'withSecret' | 'withEnvironment'>;
   apiRuntime: Pick<ApiRuntimeClient, 'runTurn'>;
-  apiHistory: ReadonlyMap<string, ApiRuntimeTurn['history']>;
+  apiHistory: Pick<ReadonlyMap<string, ApiRuntimeTurn['history']>, 'get'>;
   activeTurns: Map<string, string>;
   apiAborts: Map<string, AbortController>;
   emit: (event: { sessionId: string; type: string; payload: Record<string, unknown> }) => void;
