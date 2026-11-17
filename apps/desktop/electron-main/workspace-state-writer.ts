@@ -6,6 +6,7 @@ export class WorkspaceStateWriter<T> {
   #dirty = false;
   #failed = false;
   #closed = false;
+  #draining = false;
 
   constructor(readonly options: {
     snapshot: () => T;
@@ -25,7 +26,7 @@ export class WorkspaceStateWriter<T> {
     if (this.#closed) throw new WorkspaceStorageError('unavailable');
     this.#dirty = true;
     // A fixed first-event deadline prevents starvation under a continuous stream.
-    if (this.#timer || this.#failed) return;
+    if (this.#timer || this.#failed || this.#draining) return;
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
       try { this.flush(); } catch { /* Failure is retained and projected once. */ }
@@ -60,6 +61,12 @@ export class WorkspaceStateWriter<T> {
       }
       throw error;
     }
+  }
+
+  /** Retain updates during Runtime cleanup for the final synchronous flush. */
+  beginShutdown(): void {
+    this.#draining = true;
+    this.#cancelTimer();
   }
 
   close(): void {

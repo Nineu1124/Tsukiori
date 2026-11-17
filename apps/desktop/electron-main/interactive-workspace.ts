@@ -1619,6 +1619,7 @@ export class InteractiveWorkspace {
 
   async #shutdown(): Promise<void> {
     this.#stopping = true;
+    this.#stateWriter.beginShutdown();
     if (this.#schedulerTimer) { clearInterval(this.#schedulerTimer); this.#schedulerTimer = null; }
     for (const controller of this.#apiAborts.values()) controller.abort();
     for (const run of this.#apiRuns.values()) run.controller.abort();

@@ -70,17 +70,39 @@ test('a rejected explicit candidate is never silently retried during close', () 
   assert.deepEqual(writes, []);
 });
 
+test('shutdown cancels an overdue timer and retains later updates for the final flush', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const writes = [];
+  let current = 'before exit';
+  const writer = new WorkspaceStateWriter({ delayMs: 10, snapshot: () => current, write: (value) => writes.push(value) });
+  writer.schedule();
+  writer.beginShutdown();
+  current = 'last Runtime callback';
+  writer.schedule();
+  t.mock.timers.tick(1000);
+  assert.deepEqual(writes, []);
+  assert.equal(writer.pending, true);
+  writer.close();
+  assert.deepEqual(writes, ['last Runtime callback']);
+  assert.equal(writer.pending, false);
+});
+
 test('formal API deltas commit their records immediately while aggregate state writes are coalesced through exit', async (t) => {
   const runtime = deferredRuntime();
   const f = await historyFixture(t, { apiRuntime: runtime.runtime, stateSaveDelayMs: 1000 });
   await f.workspace.sendPrompt(f.session.id, 'confirmed before exit');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const original = SqliteWorkspaceRepository.prototype.save;
   let writes = 0;
   t.mock.method(SqliteWorkspaceRepository.prototype, 'save', function (state) { writes++; return original.call(this, state); });
   for (let i = 0; i < 200; i++) runtime.calls[0].input.callbacks.onEvent('assistant.delta', { text: 'delta fixture' });
   assert.equal(writes, 0);
   assert.equal(readConversationLines(f.userDataPath, f.session.id).map(JSON.parse).filter((event) => event.type === 'assistant.delta').length, 200);
-  await f.workspace.shutdown();
+  const shutdown = f.workspace.shutdown();
+  // Simulate a slow CI runner advancing beyond the coalescing window while
+  // Runtime cancellation finishes. Only the final state may be flushed here.
+  t.mock.timers.tick(2000);
+  await shutdown;
   assert.equal(writes, 1);
   assert.equal(JSON.parse(readStateJSON(f.userDataPath)).sessions[0].status, 'stopped');
   assert.equal(readConversationLines(f.userDataPath, f.session.id).some((row) => row.includes('final exit fixture')), true);
