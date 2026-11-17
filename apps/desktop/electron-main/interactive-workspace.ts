@@ -5,6 +5,7 @@ export type { WorkspaceEvent } from './workspace-events.js';
 import { WorkspaceTurnService } from './workspace-turn-service.js';
 import { GitExecutor } from './git-executor.js';
 import { GitWorktreeQueue } from './git-worktree-queue.js';
+import { WorkspaceInstanceLock } from './workspace-instance-lock.js';
 import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
 import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -138,6 +139,8 @@ export class InteractiveWorkspace {
   readonly #ownsStateRepository: boolean;
   readonly #gitExecutor: GitExecutor;
   readonly #gitQueue = new GitWorktreeQueue();
+  readonly #instanceLock: WorkspaceInstanceLock;
+  #shutdownPromise: Promise<void> | undefined;
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
   readonly #conversation: ConversationRepository;
@@ -177,9 +180,12 @@ export class InteractiveWorkspace {
   #stateRecovery: WorkspaceStateRecovery | undefined;
 
   constructor(options: InteractiveWorkspaceOptions) {
+    this.#instanceLock = new WorkspaceInstanceLock(options.userDataPath);
     this.#ownsStateRepository = !options.stateRepository;
-    this.#stateRepository = options.stateRepository ?? new SqliteWorkspaceRepository(options.userDataPath);
+    let repository: WorkspaceStateRepository | undefined;
     try {
+      repository = options.stateRepository ?? new SqliteWorkspaceRepository(options.userDataPath);
+      this.#stateRepository = repository;
       this.#worktreeRoot = join(options.userDataPath, 'worktrees');
       this.#transcriptRoot = join(options.userDataPath, 'transcripts');
       this.#conversation = options.conversationRepository ?? (this.#stateRepository instanceof SqliteWorkspaceRepository
@@ -241,7 +247,8 @@ export class InteractiveWorkspace {
       this.#save();
       this.#schedulerTimer = setInterval(() => { void this.#runScheduledTasks(); }, 15_000);
     } catch (error) {
-      if (this.#ownsStateRepository) this.#stateRepository.close?.();
+      try { if (this.#ownsStateRepository) repository?.close?.(); }
+      finally { this.#instanceLock.close(); }
       throw error;
     }
   }
@@ -1572,7 +1579,11 @@ export class InteractiveWorkspace {
     return this.#integrations.openPath(integrationId);
   }
 
-  async shutdown(): Promise<void> {
+  shutdown(): Promise<void> {
+    return this.#shutdownPromise ??= this.#shutdown();
+  }
+
+  async #shutdown(): Promise<void> {
     if (this.#schedulerTimer) { clearInterval(this.#schedulerTimer); this.#schedulerTimer = null; }
     for (const controller of this.#apiAborts.values()) controller.abort();
     this.#apiAborts.clear();
@@ -1588,7 +1599,8 @@ export class InteractiveWorkspace {
     ]);
     this.#clients.clear();
     this.#clientMcpRevisions.clear();
-    if (this.#ownsStateRepository) this.#stateRepository.close?.();
+    try { if (this.#ownsStateRepository) this.#stateRepository.close?.(); }
+    finally { this.#instanceLock.close(); }
   }
 
   async #runScheduledTasks(): Promise<void> {
