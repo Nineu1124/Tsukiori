@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { createRequire } from 'node:module';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -133,6 +134,36 @@ try {
   const dialogs = dialogResponse.result?.result?.value;
   if (!dialogs || Object.values(dialogs).some((passed) => passed !== true)) {
     throw new Error('Dialog dismissal probe failed: ' + JSON.stringify({ dialogs, dialogResponse }));
+  }
+  const storageDatabase = new DatabaseSync(join(userData, 'workspace.sqlite'));
+  let storageFailureResult;
+  try {
+    storageDatabase.exec("CREATE TRIGGER fixture_storage_warning BEFORE UPDATE ON workspace_header BEGIN SELECT RAISE(ABORT, 'fixture storage failure'); END");
+    const response = await cdp.call('Runtime.evaluate', { expression: `(async () => {
+      const result = await window.tsukiori.workspace.updateSettings({ density: 'compact' });
+      const warning = document.querySelector('#storage-warning');
+      for(let i=0;i<60 && warning.hidden;i++) await new Promise(resolve=>setTimeout(resolve,50));
+      const box = warning.getBoundingClientRect();
+      return { rejected: result.ok === false, visible: !warning.hidden && box.height > 0,
+        accessible: warning.getAttribute('role') === 'alert', readable: warning.textContent.includes('保存失败'),
+        withinViewport: box.left >= 0 && box.right <= innerWidth };
+    })()`, awaitPromise: true, returnByValue: true });
+    storageFailureResult = response.result?.result?.value;
+  } finally {
+    storageDatabase.exec('DROP TRIGGER IF EXISTS fixture_storage_warning');
+    storageDatabase.close();
+  }
+  const storageRecoveryResponse = await cdp.call('Runtime.evaluate', { expression: `(async () => {
+    const result = await window.tsukiori.workspace.updateSettings({ density: 'comfortable' });
+    const warning = document.querySelector('#storage-warning');
+    for(let i=0;i<60 && !warning.hidden;i++) await new Promise(resolve=>setTimeout(resolve,50));
+    return { saved: result.ok === true, hidden: warning.hidden, cleared: warning.textContent === '' };
+  })()`, awaitPromise: true, returnByValue: true });
+  const storageRecoveryResult = storageRecoveryResponse.result?.result?.value;
+  if (!storageFailureResult || !storageRecoveryResult
+    || Object.values(storageFailureResult).some(value => value !== true)
+    || Object.values(storageRecoveryResult).some(value => value !== true)) {
+    throw new Error('Storage warning probe failed: ' + JSON.stringify({ storageFailureResult, storageRecoveryResult }));
   }
   const interactionExpression = `(async () => {
     const wait = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -280,7 +311,7 @@ try {
     || item.overlayPanel !== (item.width < 1180))) {
     throw new Error('Responsive layout matrix failed: ' + JSON.stringify(layoutMatrix));
   }
-  process.stdout.write(JSON.stringify({ schemaVersion: 6, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, layoutMatrix }) + '\n');
+  process.stdout.write(JSON.stringify({ schemaVersion: 6, resizableWorkPanel: 'passed', dialogs: 'passed', interactions: 'passed', responsiveLayout: 'passed', ...result, dialogResults: dialogs, interactionResults: interactions, storageFailureResult, storageRecoveryResult, layoutMatrix }) + '\n');
   await cdp.call('Runtime.evaluate', { expression: 'window.close()' }).catch(() => undefined);
   cdp.close();
   await waitForExit(child, 15_000);

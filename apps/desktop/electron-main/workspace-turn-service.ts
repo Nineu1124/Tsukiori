@@ -24,6 +24,7 @@ export type WorkspaceTurnDependencies = {
   bindTurn: (sessionId: string, turnId: string) => void;
   failTurn: (sessionId: string) => void;
   apiAborts: Map<string, AbortController>;
+  apiRuns: Map<string, { promise: Promise<unknown>; controller: AbortController }>;
   emit: (event: { sessionId: string; type: string; payload: Record<string, unknown> }) => void;
   runtimeEvent: (sessionId: string, type: string, payload: Record<string, unknown>) => void;
   refreshTeams: (sessionId: string) => void;
@@ -78,7 +79,7 @@ export class WorkspaceTurnService {
         }));
         session.turnCount += 1;
         d.save();
-        void running.catch((error: unknown) => {
+        const tracked = running.catch((error: unknown) => {
           const interrupted = controller.signal.aborted || (error instanceof Error && error.name === 'AbortError');
           const safe = safeApiError(error, interrupted);
           d.runtimeEvent(sessionId, 'runtime.error', { message: safe.message, category: safe.category, hostTurnId: turnId });
@@ -86,7 +87,12 @@ export class WorkspaceTurnService {
             turnId, hostTurnId: turnId, status: interrupted ? 'interrupted' : 'failed',
             ...(interrupted ? {} : { error: safe.message, category: safe.category }),
           });
-        }).finally(() => { if (d.apiAborts.get(sessionId) === controller) d.apiAborts.delete(sessionId); });
+        }).finally(() => {
+          if (d.apiAborts.get(sessionId) === controller) d.apiAborts.delete(sessionId);
+          if (d.apiRuns.get(turnId)?.promise === tracked) d.apiRuns.delete(turnId);
+        });
+        d.apiRuns.set(turnId, { promise: tracked, controller });
+        void tracked.catch(() => undefined);
         return { turnId };
       }
       const claude = d.claudeClient();

@@ -22,7 +22,7 @@ export function commandHarness(workspace = {}, dependencies = {}) {
   const context = {
     createWorkspaceCommandHandler, GitCommandError, pathToFileURL, rendererEntry,
     mainWindow: { isDestroyed: () => false, webContents: sender },
-    smokeMode: false, interactiveWorkspace: workspace,
+    smokeMode: false, quitting: false, interactiveWorkspace: workspace,
     ipcMain: { handle(channel, value) { assert.equal(channel, 'workspace:command'); handler = value; } },
     object: (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {},
     ...dependencies,

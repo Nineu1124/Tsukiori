@@ -386,6 +386,7 @@ ipcMain.handle('workspace:command', createWorkspaceCommandHandler<Electron.IpcMa
   }
   const workspace = interactiveWorkspace;
   if (!workspace) return { ok: false, code: 'workspace_unavailable', message: 'Workspace 尚未初始化' };
+  if (quitting) return { ok: false, code: 'workspace_closing', message: '工作区正在退出，请稍后重新打开。' };
   try {
     const ownerId = String(event.sender.id);
     if (command.type === 'computer_use_status') return {
@@ -828,7 +829,12 @@ app.on('before-quit', (event) => {
     interactiveWorkspace?.shutdown() ?? Promise.resolve(),
     terminalManager.shutdown(),
     Promise.resolve(computerUse.shutdown()),
-  ]).finally(() => app.quit());
+  ]).then((results) => {
+    if (results[1]?.status === 'rejected') {
+      dialog.showErrorBox('退出清理未完成', '部分运行状态未能保存或确认结束。已提交的设置和会话记录保留，请保留完整数据目录并检查磁盘或权限后再打开。');
+      app.exit(1);
+    } else app.quit();
+  });
 });
 
 app.on('second-instance', () => {

@@ -9,6 +9,7 @@ import { WorkspaceInstanceLock } from './workspace-instance-lock.js';
 import { WorkspaceTurnFence } from './workspace-turn-fence.js';
 import { stableJson } from './stable-json.js';
 import { WorkspaceStorageError } from './workspace-sqlite.js';
+import { WorkspaceStateWriter } from './workspace-state-writer.js';
 import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
 import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -122,6 +123,8 @@ export type InteractiveWorkspaceOptions = {
   stateRepository?: WorkspaceStateRepository;
   conversationRepository?: ConversationRepository;
   gitExecutor?: GitExecutor;
+  stateSaveDelayMs?: number;
+  shutdownTimeoutMs?: number;
   emit: (event: WorkspaceEvent) => void;
   discoverCodex?: () => CodexLaunch;
   discoverClaude?: () => ClaudeLaunch;
@@ -143,6 +146,11 @@ export class InteractiveWorkspace {
   readonly #gitExecutor: GitExecutor;
   readonly #gitQueue = new GitWorktreeQueue();
   readonly #instanceLock: WorkspaceInstanceLock;
+  readonly #stateWriter: WorkspaceStateWriter<PersistedState>;
+  readonly #shutdownTimeoutMs: number;
+  #storageFailure: { code: 'state_write_failed'; message: string } | undefined;
+  #closed = false;
+  #stopping = false;
   #shutdownPromise: Promise<void> | undefined;
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
@@ -174,6 +182,7 @@ export class InteractiveWorkspace {
   readonly #turnFence = new WorkspaceTurnFence(this.#activeTurns);
   readonly #eventIdentities = new Map<string, string>();
   #apiAborts = new Map<string, AbortController>();
+  #apiRuns = new Map<string, { promise: Promise<unknown>; controller: AbortController }>();
   #thinking = new Map<string, ThinkingBlockProjector>();
   #codexThinkingBlocks = new Map<string, Set<string>>();
   #compactions = new Map<string, CodexCompactionTracker>();
@@ -191,6 +200,21 @@ export class InteractiveWorkspace {
     try {
       repository = options.stateRepository ?? new SqliteWorkspaceRepository(options.userDataPath);
       this.#stateRepository = repository;
+      this.#shutdownTimeoutMs = options.shutdownTimeoutMs ?? 5_000;
+      if (!Number.isSafeInteger(this.#shutdownTimeoutMs) || this.#shutdownTimeoutMs < 1 || this.#shutdownTimeoutMs > 5000) throw new WorkspaceStorageError('invalid_data');
+      this.#stateWriter = new WorkspaceStateWriter({
+        snapshot: () => this.#stateDocument(), write: (state) => this.#stateRepository.save(state),
+        ...(options.stateSaveDelayMs !== undefined ? { delayMs: options.stateSaveDelayMs } : {}),
+        onFailure: () => {
+          this.#storageFailure = { code: 'state_write_failed', message: '运行状态保存失败。已保存的数据保留，请检查磁盘空间和目录权限后重试。' };
+          this.#emit({ type: 'workspace.storage_failed', payload: { ...this.#storageFailure } });
+        },
+        onSaved: () => {
+          if (!this.#storageFailure) return;
+          this.#storageFailure = undefined;
+          this.#emit({ type: 'workspace.storage_recovered', payload: { code: 'state_write_recovered' } });
+        },
+      });
       this.#worktreeRoot = join(options.userDataPath, 'worktrees');
       this.#transcriptRoot = join(options.userDataPath, 'transcripts');
       this.#conversation = options.conversationRepository ?? (this.#stateRepository instanceof SqliteWorkspaceRepository
@@ -238,6 +262,7 @@ export class InteractiveWorkspace {
         codexClients: this.#clients, claudeClient: () => this.#claudeClient,
         providers: this.#providers, apiRuntime: this.#apiRuntime,
         apiHistory: this.#apiHistory, activeTurns: this.#activeTurns, apiAborts: this.#apiAborts,
+        apiRuns: this.#apiRuns,
         beginTurn: (id) => this.#turnFence.begin(id), bindTurn: (id, turnId) => this.#turnFence.bind(id, turnId),
         failTurn: (id) => this.#turnFence.fail(id),
         emit: (event) => this.#emit(event), runtimeEvent: (id, type, payload) => this.#runtimeEvent(id, type, payload),
@@ -263,6 +288,7 @@ export class InteractiveWorkspace {
   snapshot(): Record<string, unknown> {
     return {
       mode: 'interactive',
+      ...(this.#storageFailure ? { storageFailure: this.#storageFailure } : {}),
       ...(this.#stateRecovery ? { stateRecovery: this.#stateRecovery } : {}),
       projects: this.#state.projects,
       sessions: this.#state.sessions,
@@ -1587,18 +1613,27 @@ export class InteractiveWorkspace {
   }
 
   shutdown(): Promise<void> {
+    if (this.#closed) return Promise.resolve();
     return this.#shutdownPromise ??= this.#shutdown();
   }
 
   async #shutdown(): Promise<void> {
+    this.#stopping = true;
     if (this.#schedulerTimer) { clearInterval(this.#schedulerTimer); this.#schedulerTimer = null; }
     for (const controller of this.#apiAborts.values()) controller.abort();
+    for (const run of this.#apiRuns.values()) run.controller.abort();
     this.#apiAborts.clear();
     for (const pending of this.#approvals.values()) {
       if (pending.kind === 'codex') pending.reject(new Error('Tsukiori 正在退出'));
     }
     this.#approvals.clear();
-    await Promise.allSettled([
+    let apiTimeout: NodeJS.Timeout | undefined;
+    const apiStopped = Promise.race([
+      Promise.allSettled([...this.#apiRuns.values()].map((run) => run.promise)),
+      new Promise<never>((_, reject) => { apiTimeout = setTimeout(() => reject(new Error('api_shutdown_unconfirmed')), this.#shutdownTimeoutMs); }),
+    ]).finally(() => { if (apiTimeout) clearTimeout(apiTimeout); });
+    const cleanup = await Promise.allSettled([
+      apiStopped,
       this.#gitQueue.shutdown(),
       this.#gitExecutor.shutdown(),
       ...[...this.#clients.values()].map((client) => client.stop()),
@@ -1606,8 +1641,20 @@ export class InteractiveWorkspace {
     ]);
     this.#clients.clear();
     this.#clientMcpRevisions.clear();
-    try { if (this.#ownsStateRepository) this.#stateRepository.close?.(); }
-    finally { this.#instanceLock.close(); }
+    for (const id of this.#activeTurns.keys()) {
+      const session = this.#state.sessions.find((item) => item.id === id);
+      if (session) { session.status = 'stopped'; session.updatedAt = Date.now(); }
+      this.#turnFence.fail(id);
+      this.#stateWriter.schedule();
+    }
+    this.#activeTurns.clear();
+    try {
+      this.#stateWriter.close();
+      if (cleanup[0]?.status === 'rejected') throw new Error('退出时部分运行结果未能确认，已提交的数据已保留。');
+    } finally {
+      try { if (this.#ownsStateRepository) this.#stateRepository.close?.(); }
+      finally { this.#closed = true; this.#instanceLock.close(); }
+    }
   }
 
   async #runScheduledTasks(): Promise<void> {
@@ -1691,6 +1738,7 @@ export class InteractiveWorkspace {
   }
 
   #notification(sessionId: string, method: string, params: Record<string, unknown>): void {
+    if (this.#closed) return;
     const session = this.#session(sessionId);
     const nativeTurnId = typeof params.turnId === 'string' ? params.turnId : object(params.turn).id;
     if (typeof nativeTurnId === 'string' && (method.startsWith('turn/') || method.startsWith('item/'))
@@ -1707,10 +1755,11 @@ export class InteractiveWorkspace {
       if (event.route === 'runtime') this.#runtimeEvent(sessionId, event.type, event.payload);
       else this.#emit({ sessionId, type: event.type, payload: event.payload });
     }
-    if (result.save) this.#save();
+    if (result.save) this.#stateWriter.schedule();
   }
 
   #runtimeEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
+    if (this.#closed) return;
     const session = this.#session(sessionId);
     const correlation = typeof payload.hostTurnId === 'string' ? payload.hostTurnId : undefined;
     payload = normalizeRuntimeEvent(session.runtimeType, type, payload);
@@ -1728,7 +1777,7 @@ export class InteractiveWorkspace {
       } else {
         for (const event of result.events) this.#emit({ sessionId, type: event.type, payload: event.payload });
       }
-      this.#save();
+      this.#stateWriter.schedule();
       return;
     }
     if (type === 'permission.requested') {
@@ -1775,7 +1824,8 @@ export class InteractiveWorkspace {
         ...(Number.isSafeInteger(modelTimestamp) && Number(modelTimestamp) >= 0 ? { createdAt: Number(modelTimestamp) } : {}),
       } : {}),
     });
-    this.#save();
+    if (['turn.started', 'turn.completed', 'session.started', 'runtime.error', 'permission.requested', 'permission.invalidated'].includes(type)) this.#save();
+    else this.#stateWriter.schedule();
   }
 
   #finalizeThinking(sessionId: string, reason: string): void {
@@ -1915,6 +1965,7 @@ export class InteractiveWorkspace {
   }
 
   #emit(input: WorkspaceEventInput): void {
+    if (this.#closed) return;
     const event = createWorkspaceEvent(input, this.#eventSequence + 1);
     const fingerprint = this.#eventFingerprint(event);
     const key = (event.sessionId ?? '') + '\0' + event.id;
@@ -2016,6 +2067,7 @@ export class InteractiveWorkspace {
   }
 
   #assertSessionWritable(session: SessionState): void {
+    if (this.#stopping) throw new Error('工作区正在退出，不能启动新的写入或任务。');
     if (session.importedReadOnly) throw new Error('导入历史为只读；请先显式 Fork，再修改代码或启动 Runtime');
   }
 
@@ -2080,15 +2132,18 @@ export class InteractiveWorkspace {
     this.#state = normalizeWorkspaceState(value);
   }
 
-  #save(state: PersistedState = this.#state): void {
-    const safe: PersistedState = {
+  #stateDocument(state: PersistedState = this.#state): PersistedState {
+    return {
       schemaVersion: 3, projects: state.projects,
       sessions: state.sessions.map(({ lastError, ...session }) => ({ ...session, ...(lastError ? { lastError: truncate(lastError, 2_000) } : {}) })),
       settings: state.settings,
       providers: state.providers,
       teams: state.teams,
     };
-    this.#stateRepository.save(safe);
+  }
+
+  #save(state: PersistedState = this.#state): void {
+    this.#stateWriter.write(this.#stateDocument(state));
   }
 
   #loadTranscripts(): void {

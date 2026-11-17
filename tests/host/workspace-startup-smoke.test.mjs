@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
+import { WorkspaceSqliteStore } from '../../apps/desktop/dist/electron-main/workspace-sqlite.js';
+import { WorkspaceInstanceLock } from '../../apps/desktop/dist/electron-main/workspace-instance-lock.js';
 
 test('real Electron Main routes invalid storage to recovery before opening a workbench', async (t) => {
   const directory = mkdtempSync(join(tmpdir(), 'tsukiori-startup-smoke-'));
@@ -55,4 +57,50 @@ test('real Electron Main routes invalid storage to recovery before opening a wor
   assert.doesNotMatch(stdout + stderr, /private damaged fixture/);
   assert.equal(readFileSync(statePath, 'utf8'), original);
   assert.equal(existsSync(join(directory, 'workspace.sqlite')), false);
+});
+
+test('real Electron Main reports failed shutdown with a nonzero exit and releases data ownership', async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), 'tsukiori-shutdown-smoke-'));
+  const bootstrap = join(directory, 'shutdown.mjs');
+  const main = pathToFileURL(join(process.cwd(), 'apps/desktop/dist/electron-main/main.js')).href;
+  const writer = pathToFileURL(join(process.cwd(), 'apps/desktop/dist/electron-main/workspace-state-writer.js')).href;
+  writeFileSync(bootstrap, `
+    import { app, dialog } from 'electron';
+    app.setPath('userData', ${JSON.stringify(directory)});
+    const { WorkspaceStateWriter } = await import(${JSON.stringify(writer)});
+    const close = WorkspaceStateWriter.prototype.close;
+    WorkspaceStateWriter.prototype.close = function () {
+      close.call(this);
+      throw new Error('private shutdown fixture details');
+    };
+    dialog.showErrorBox = (title, message) => process.stdout.write('TSUKIORI_SHUTDOWN_SMOKE ' + JSON.stringify({title,message}) + '\\n');
+    app.on('browser-window-created', (_event, window) => window.webContents.once('did-finish-load', () => app.quit()));
+    await import(${JSON.stringify(main)});
+  `);
+  const electron = createRequire(join(process.cwd(), 'apps/desktop/package.json'))('electron');
+  const child = spawn(electron, [bootstrap, `--user-data-dir=${directory}`], {
+    cwd: process.cwd(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, TSUKIORI_NODE_EXECUTABLE: process.execPath, TSUKIORI_DAEMON_EXIT_POLICY: 'stop' },
+  });
+  t.after(() => {
+    if (child.exitCode === null) child.kill();
+    rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (data) => { stdout += data; });
+  child.stderr.on('data', (data) => { stderr += data; });
+  const code = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { child.kill(); reject(new Error('shutdown smoke timed out')); }, 30_000);
+    child.once('error', (error) => { clearTimeout(timer); reject(error); });
+    child.once('exit', (value) => { clearTimeout(timer); resolve(value); });
+  });
+  assert.equal(code, 1, stderr.slice(-2000));
+  const line = stdout.split(/\r?\n/).find((value) => value.startsWith('TSUKIORI_SHUTDOWN_SMOKE '));
+  assert.ok(line, stderr.slice(-2000));
+  assert.equal(JSON.parse(line.slice('TSUKIORI_SHUTDOWN_SMOKE '.length)).title, '退出清理未完成');
+  assert.doesNotMatch(stdout + stderr, /private shutdown fixture details/);
+  const store = new WorkspaceSqliteStore(join(directory, 'workspace.sqlite'));
+  try { assert.equal(store.readState().schemaVersion, 3); } finally { store.close(); }
+  new WorkspaceInstanceLock(directory).close();
 });

@@ -207,12 +207,20 @@ function isCompatible(runtime, provider) { if(runtime==='codex')return ['chatgpt
 
 async function reloadSnapshot() {
   const snapshot = await window.tsukiori.workspace.snapshot();
+  if ((snapshot.eventCursor ?? 0) >= state.eventCursor) renderStorageStatus(snapshot.storageFailure);
   for (const key of ['projects','sessions','teams','integrations','runtimes','providers','thinkingControls','mcpServers','scheduledTasks','recentEvents','permissions','attention','settings','usage']) state[key] = snapshot[key] ?? state[key];
   state.eventCursor = Math.max(state.eventCursor, snapshot.eventCursor ?? 0);
   if (!state.projects.some((item) => item.id === state.activeProjectId)) state.activeProjectId = state.projects[0]?.id ?? null;
   if (state.activeSessionId && !state.sessions.some((item) => item.id === state.activeSessionId && !item.archivedAt)) state.activeSessionId = null;
   if (state.sideChatSessionId && !state.sessions.some((item) => item.id === state.sideChatSessionId && !item.archivedAt)) state.sideChatSessionId = null;
   applyAppearance(); renderAll();
+}
+
+function renderStorageStatus(failure) {
+  const warning = byId('storage-warning');
+  if (!warning) return;
+  warning.hidden = !failure;
+  warning.textContent = failure ? String(failure.message ?? '运行状态保存失败，请检查磁盘或权限。') : '';
 }
 
 function renderAll() {
@@ -337,7 +345,7 @@ function classifyToolEvent(tool,summary) {
 
 function syncTerminalPreview(){const preview=byId('side-terminal-preview'),output=byId('terminal-output');if(preview&&output)preview.textContent=output.textContent.slice(-12000)||'终端尚未启动';}
 function appendTerminalEvent(event) { const output=byId('terminal-output'); if(event.type==='terminal.output'){output.textContent+=stripAnsi(String(event.payload.data??''));if(output.textContent.length>500000)output.textContent=output.textContent.slice(-500000);output.scrollTop=output.scrollHeight;syncTerminalPreview();return;}if(event.type==='terminal.started'){output.textContent=`PowerShell · ${event.payload.cwd}\n`;syncTerminalPreview();return;}if(event.type==='terminal.exited'){output.textContent+=`\n[terminal exited ${event.payload.exitCode}]`;syncTerminalPreview();return;}if (!['turn.started','turn.completed','tool.event','runtime.error','permission.requested'].includes(event.type)) return; const kind=event.type==='tool.event'?classifyToolEvent(String(event.payload.tool??''),String(event.payload.summary??'')):event.type; output.textContent += '\n['+new Date(event.createdAt).toLocaleTimeString()+'] '+kind+' '+String(event.payload.summary??event.payload.message??event.payload.status??''); output.scrollTop=output.scrollHeight; syncTerminalPreview(); }
-function acceptEvent(event) { state.recentEvents.push(event); if (state.recentEvents.length>300) state.recentEvents.splice(0,state.recentEvents.length-300); appendTerminalEvent(event); if(event.type==='turn.started')setTurnActivity('running','模型正在思考并执行任务…');if(event.type==='assistant.delta')setTurnActivity('running','正在接收回复…');if (event.sessionId===state.activeSessionId&&!event.type.startsWith('terminal.')) appendEvent(byId('conversation'),event);if(event.sessionId===state.sideChatSessionId)renderSideChat(); if(event.type==='permission.requested'||event.type==='permission.resolved'||event.type==='subagent.event') void reloadSnapshot(); if (event.type==='turn.started'||event.type==='turn.completed'||event.type==='runtime.error'||event.type.startsWith('team.')||event.type.startsWith('integration.')||event.type==='checkpoint.created'||event.type==='checkpoint.rewound'||event.type==='context.compacted'||event.type==='context.compaction.updated') void reloadSnapshot();if(event.type==='checkpoint.created'||event.type==='checkpoint.rewound')void refreshCheckpoints();if(event.type.startsWith('integration.'))void refreshIntegrations(); }
+function acceptEvent(event) { if(event.type==='workspace.storage_failed')renderStorageStatus(event.payload);if(event.type==='workspace.storage_recovered')renderStorageStatus(null); state.recentEvents.push(event); if (state.recentEvents.length>300) state.recentEvents.splice(0,state.recentEvents.length-300); appendTerminalEvent(event); if(event.type==='turn.started')setTurnActivity('running','模型正在思考并执行任务…');if(event.type==='assistant.delta')setTurnActivity('running','正在接收回复…');if (event.sessionId===state.activeSessionId&&!event.type.startsWith('terminal.')) appendEvent(byId('conversation'),event);if(event.sessionId===state.sideChatSessionId)renderSideChat(); if(event.type==='permission.requested'||event.type==='permission.resolved'||event.type==='subagent.event') void reloadSnapshot(); if (event.type==='turn.started'||event.type==='turn.completed'||event.type==='runtime.error'||event.type.startsWith('team.')||event.type.startsWith('integration.')||event.type==='checkpoint.created'||event.type==='checkpoint.rewound'||event.type==='context.compacted'||event.type==='context.compaction.updated') void reloadSnapshot();if(event.type==='checkpoint.created'||event.type==='checkpoint.rewound')void refreshCheckpoints();if(event.type.startsWith('integration.'))void refreshIntegrations(); }
 
 function setTurnActivity(mode,label){const root=byId('turn-activity');if(!root)return;if(mode==='idle'||mode==='complete'){root.hidden=true;root.classList.remove('error');state.turnStartedAt=0;return;}root.hidden=false;root.classList.toggle('error',mode==='error');setText('turn-activity-label',label);byId('retry-turn').hidden=mode!=='error';if(mode==='running'&&!state.turnStartedAt)state.turnStartedAt=Date.now();if(mode==='error')state.turnStartedAt=0;}
 function refreshTurnElapsed(){if(!state.turnStartedAt)return;setText('turn-elapsed',Math.max(0,Math.floor((Date.now()-state.turnStartedAt)/1000))+' 秒');}
