@@ -6,7 +6,7 @@ import { DAEMON_VERSION, HOST_PROTOCOL_VERSION } from '@tsukiori/protocol';
 import { FakeRuntimeAdapter } from '@tsukiori/adapter-fake';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import { InteractiveWorkspace } from './interactive-workspace.js';
-import { WorkspaceStateError } from './workspace-state-file.js';
+import { openWorkspaceWithRecovery, workspaceStartupFailure } from './workspace-startup.js';
 import { TerminalManager } from './terminal-manager.js';
 import { ComputerUseManager, type ComputerUseAction } from './computer-use-manager.js';
 import { createWorkspaceCommandHandler } from './workspace-command.js';
@@ -844,10 +844,28 @@ if (ownsSingleInstance) app.whenReady()
     await supervisor.start();
     smokeProgress('daemon started');
     if (!smokeMode) {
-      interactiveWorkspace = new InteractiveWorkspace({
-        userDataPath: app.getPath('userData'),
-        emit: () => undefined,
+      const userDataPath = app.getPath('userData');
+      interactiveWorkspace = await openWorkspaceWithRecovery({
+        create: () => new InteractiveWorkspace({ userDataPath, emit: () => undefined }),
+        showRecovery: async (failure) => {
+          const result = await dialog.showMessageBox({
+            type: 'error', title: '工作区需要恢复', message: failure.message,
+            detail: [
+              `阶段：${failure.stage}；原因：${failure.code}`,
+              '没有创建替代的空工作区。原始文件、已有备份和已提交数据均保留。',
+              '请先备份完整数据目录；恢复有效数据或排除磁盘/权限问题后重试。不要删除数据库或修改版本号绕过检查。',
+              `数据目录：${userDataPath}`,
+              ...(failure.openDataFailed ? ['无法自动打开目录，请在文件管理器中手动访问。'] : []),
+            ].join('\n\n'),
+            buttons: ['重试', '打开数据目录', '退出'], defaultId: 0, cancelId: 2, noLink: true,
+          });
+          return result.response === 0 ? 'retry' : result.response === 1 ? 'open_data' : 'exit';
+        },
+        openData: async () => {
+          if (await shell.openPath(userDataPath)) throw new Error('open_data_failed');
+        },
       });
+      if (!interactiveWorkspace) { app.quit(); return; }
       if (interactiveWorkspace.snapshot().stateRecovery) {
         await dialog.showMessageBox({
           type: 'warning', title: '工作区状态已恢复', message: '已从最近一次有效备份恢复工作区。',
@@ -927,8 +945,9 @@ if (ownsSingleInstance) app.whenReady()
     }
   })
   .catch(async (error: unknown) => {
-    if (error instanceof WorkspaceStateError) dialog.showErrorBox('无法读取工作区状态', error.message);
-    process.stderr.write(String(error) + '\n');
+    const failure = workspaceStartupFailure(error);
+    dialog.showErrorBox('无法启动 Tsukiori', failure.message);
+    process.stderr.write(JSON.stringify({ type: 'startup.failed', stage: failure.stage, code: failure.code }) + '\n');
     await supervisor.stop(true).catch(() => undefined);
     app.exit(1);
   });
