@@ -11,7 +11,8 @@ import { planConversationMigration, applyConversationMigration } from './workspa
 /** 每个字符串是一条 JSON 事件；读取不带行尾，写入兼容有无末尾换行。 */
 export interface ConversationRepository {
   read(sessionId: string): Iterable<string>;
-  append(sessionId: string, event: string): void;
+  find?(sessionId: string, eventId: string): string | undefined;
+  append(sessionId: string, event: string): void | 'inserted' | 'duplicate';
   replace(sessionId: string, events: readonly string[]): void;
   remove(sessionId: string): void;
   legacyPath(sessionId: string): string;
@@ -28,7 +29,10 @@ export class SqliteConversationRepository implements ConversationRepository {
   }
 
   read(sessionId: string): Iterable<string> { return this.store.readEvents(sessionId); }
-  append(sessionId: string, event: string): void { this.store.appendEvent(sessionId, recordLine(event).trimEnd()); }
+  find(sessionId: string, eventId: string): string | undefined { return this.store.readEvent(sessionId, eventId); }
+  append(sessionId: string, event: string): 'inserted' | 'duplicate' {
+    return this.store.appendEvent(sessionId, recordLine(event).trimEnd());
+  }
   replace(sessionId: string, events: readonly string[]): void {
     this.store.replaceEvents(sessionId, events.map((event) => recordLine(event).trimEnd()));
   }

@@ -20,6 +20,9 @@ export type WorkspaceTurnDependencies = {
   apiRuntime: Pick<ApiRuntimeClient, 'runTurn'>;
   apiHistory: Pick<ReadonlyMap<string, ApiRuntimeTurn['history']>, 'get'>;
   activeTurns: Map<string, string>;
+  beginTurn: (sessionId: string) => void;
+  bindTurn: (sessionId: string, turnId: string) => void;
+  failTurn: (sessionId: string) => void;
   apiAborts: Map<string, AbortController>;
   emit: (event: { sessionId: string; type: string; payload: Record<string, unknown> }) => void;
   runtimeEvent: (sessionId: string, type: string, payload: Record<string, unknown>) => void;
@@ -41,11 +44,13 @@ export class WorkspaceTurnService {
     if (session.status === 'running' || session.status === 'waiting_permission') {
       throw new Error('当前 Turn 尚未结束；请等待、处理中断或完成权限确认');
     }
+    d.beginTurn(sessionId);
     session.status = 'running';
     session.updatedAt = Date.now();
     delete session.lastError;
     d.emit({ sessionId, type: 'user.message', payload: { text: prompt } });
     if (session.transcriptIncomplete) {
+      d.failTurn(sessionId);
       session.status = 'error';
       throw new TranscriptStoreError();
     }
@@ -54,7 +59,7 @@ export class WorkspaceTurnService {
         const client = await d.ensureCodexClient(sessionId);
         if (!session.threadId) session.threadId = await client.startThread(session.worktreePath);
         const turnId = await client.startTurn(session.threadId, prompt);
-        d.activeTurns.set(sessionId, turnId);
+        d.bindTurn(sessionId, turnId);
         session.turnCount += 1;
         d.save();
         return { turnId };
@@ -64,29 +69,30 @@ export class WorkspaceTurnService {
         const turnId = `api-turn:${randomUUID()}`;
         const controller = new AbortController();
         const history = structuredClone(d.apiHistory.get(sessionId) ?? []);
+        d.apiAborts.set(sessionId, controller);
+        d.bindTurn(sessionId, turnId);
         const running = d.providers.withSecret(provider.id, (apiKey) => d.apiRuntime.runTurn({
           turnId, provider: { ...provider, models: [...provider.models] }, modelId: session.model,
           apiKey, history, signal: controller.signal,
-          callbacks: { onEvent: (type, payload) => d.runtimeEvent(sessionId, type, payload) },
+          callbacks: { onEvent: (type, payload) => d.runtimeEvent(sessionId, type, { ...payload, hostTurnId: turnId }) },
         }));
-        d.apiAborts.set(sessionId, controller);
-        d.activeTurns.set(sessionId, turnId);
         session.turnCount += 1;
         d.save();
         void running.catch((error: unknown) => {
           const interrupted = controller.signal.aborted || (error instanceof Error && error.name === 'AbortError');
           const safe = safeApiError(error, interrupted);
-          d.runtimeEvent(sessionId, 'runtime.error', { message: safe.message, category: safe.category });
+          d.runtimeEvent(sessionId, 'runtime.error', { message: safe.message, category: safe.category, hostTurnId: turnId });
           d.runtimeEvent(sessionId, 'turn.completed', {
-            turnId, status: interrupted ? 'interrupted' : 'failed',
+            turnId, hostTurnId: turnId, status: interrupted ? 'interrupted' : 'failed',
             ...(interrupted ? {} : { error: safe.message, category: safe.category }),
           });
-        }).finally(() => d.apiAborts.delete(sessionId));
+        }).finally(() => { if (d.apiAborts.get(sessionId) === controller) d.apiAborts.delete(sessionId); });
         return { turnId };
       }
       const claude = d.claudeClient();
       if (!claude || !session.threadId) throw new Error('Claude Code Runtime 不可用');
       const provider = d.providers.get(session.providerId);
+      let boundTurnId: string | undefined;
       const turnId = d.providers.withEnvironment(provider.id, (environment) => claude.startTurn({
         cwd: session.worktreePath, sessionId: session.threadId as string,
         ...(existsSync(join(session.worktreePath, '.mcp.json')) ? { mcpConfigPath: join(session.worktreePath, '.mcp.json') } : {}),
@@ -97,9 +103,13 @@ export class WorkspaceTurnService {
         permissionMode: session.permissionMode,
         ...(session.thinkingEffort ? { thinkingEffort: session.thinkingEffort } : {}),
         authMode: provider.kind === 'claude-native' ? 'native' : 'provider', environment,
-        onEvent: (type, payload) => d.runtimeEvent(sessionId, type, payload),
+        onEvent: (type, payload) => {
+          if (!boundTurnId && type === 'turn.started' && typeof payload.turnId === 'string') boundTurnId = payload.turnId;
+          d.runtimeEvent(sessionId, type, { ...payload, ...(boundTurnId ? { hostTurnId: boundTurnId } : {}) });
+        },
         onExit: (error) => {
           if (!error) return;
+          if (boundTurnId && d.activeTurns.get(sessionId) !== boundTurnId) return;
           error = runtimeFailure(error).message;
           session.status = 'error'; session.lastError = error; session.updatedAt = Date.now();
           d.activeTurns.delete(sessionId);
@@ -108,11 +118,14 @@ export class WorkspaceTurnService {
           d.save();
         },
       }), session.model);
-      d.activeTurns.set(sessionId, turnId);
+      boundTurnId = turnId;
+      d.bindTurn(sessionId, turnId);
       session.turnCount += 1;
       d.save();
       return { turnId };
     } catch (error) {
+      d.failTurn(sessionId);
+      d.apiAborts.delete(sessionId);
       const safe = session.runtimeType === 'api' ? safeApiError(error) : undefined;
       const failure = safe ?? new Error(runtimeFailure(error).message);
       const message = truncate(failure instanceof Error ? failure.message : String(failure), 2_000);

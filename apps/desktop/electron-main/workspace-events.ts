@@ -13,7 +13,7 @@ export type WorkspaceEvent = {
   payload: Record<string, unknown>;
 };
 
-export type WorkspaceEventInput = Pick<WorkspaceEvent, 'sessionId' | 'type' | 'payload'> & { createdAt?: number };
+export type WorkspaceEventInput = Pick<WorkspaceEvent, 'sessionId' | 'type' | 'payload'> & { id?: string; createdAt?: number };
 
 export function createWorkspaceEvent(
   input: WorkspaceEventInput,
@@ -21,9 +21,11 @@ export function createWorkspaceEvent(
   identity: { id?: string; now?: number } = {},
 ): WorkspaceEvent {
   if (!Number.isSafeInteger(sequence) || sequence < 1) throw new Error('工作区事件序号无效');
+  if (input.id !== undefined && (typeof input.id !== 'string' || !input.id.trim() || input.id.length > 256 || /[\0\r\n]/.test(input.id))) throw new Error('工作区事件 ID 无效');
+  if (input.createdAt !== undefined && (!Number.isSafeInteger(input.createdAt) || input.createdAt < 0)) throw new Error('工作区事件时间无效');
   return {
     schemaVersion: WORKSPACE_EVENT_SCHEMA_VERSION,
-    id: identity.id ?? randomUUID(),
+    id: identity.id ?? input.id ?? randomUUID(),
     sequence,
     ...(input.sessionId !== undefined ? { sessionId: input.sessionId } : {}),
     type: input.type,

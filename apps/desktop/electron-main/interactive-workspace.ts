@@ -6,6 +6,9 @@ import { WorkspaceTurnService } from './workspace-turn-service.js';
 import { GitExecutor } from './git-executor.js';
 import { GitWorktreeQueue } from './git-worktree-queue.js';
 import { WorkspaceInstanceLock } from './workspace-instance-lock.js';
+import { WorkspaceTurnFence } from './workspace-turn-fence.js';
+import { stableJson } from './stable-json.js';
+import { WorkspaceStorageError } from './workspace-sqlite.js';
 import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
 import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -168,6 +171,8 @@ export class InteractiveWorkspace {
   #clientMcpRevisions = new Map<string, string>();
   #apiHistory = new ModelHistoryRepository();
   #activeTurns = new Map<string, string>();
+  readonly #turnFence = new WorkspaceTurnFence(this.#activeTurns);
+  readonly #eventIdentities = new Map<string, string>();
   #apiAborts = new Map<string, AbortController>();
   #thinking = new Map<string, ThinkingBlockProjector>();
   #codexThinkingBlocks = new Map<string, Set<string>>();
@@ -233,6 +238,8 @@ export class InteractiveWorkspace {
         codexClients: this.#clients, claudeClient: () => this.#claudeClient,
         providers: this.#providers, apiRuntime: this.#apiRuntime,
         apiHistory: this.#apiHistory, activeTurns: this.#activeTurns, apiAborts: this.#apiAborts,
+        beginTurn: (id) => this.#turnFence.begin(id), bindTurn: (id, turnId) => this.#turnFence.bind(id, turnId),
+        failTurn: (id) => this.#turnFence.fail(id),
         emit: (event) => this.#emit(event), runtimeEvent: (id, type, payload) => this.#runtimeEvent(id, type, payload),
         refreshTeams: (id) => this.#refreshTeamsForSession(id), save: () => this.#save(),
       });
@@ -298,9 +305,9 @@ export class InteractiveWorkspace {
     return { cursor: this.#eventSequence, events: this.#eventLog.filter((event) => event.sequence > safe) };
   }
 
-  publishLocalEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
+  publishLocalEvent(sessionId: string, type: string, payload: Record<string, unknown>, identity?: { id: string; createdAt: number }): void {
     this.#session(sessionId);
-    this.#emit({ sessionId, type, payload });
+    this.#emit({ sessionId, type, payload, ...identity });
   }
 
   refreshRuntimes(): RuntimeState[] {
@@ -1685,6 +1692,9 @@ export class InteractiveWorkspace {
 
   #notification(sessionId: string, method: string, params: Record<string, unknown>): void {
     const session = this.#session(sessionId);
+    const nativeTurnId = typeof params.turnId === 'string' ? params.turnId : object(params.turn).id;
+    if (typeof nativeTurnId === 'string' && (method.startsWith('turn/') || method.startsWith('item/'))
+      && !this.#turnFence.matches(sessionId, nativeTurnId)) return;
     const blocks = this.#codexThinkingBlocks.get(sessionId) ?? new Set<string>();
     this.#codexThinkingBlocks.set(sessionId, blocks);
     const activeTurnId = this.#activeTurns.get(sessionId);
@@ -1702,7 +1712,10 @@ export class InteractiveWorkspace {
 
   #runtimeEvent(sessionId: string, type: string, payload: Record<string, unknown>): void {
     const session = this.#session(sessionId);
+    const correlation = typeof payload.hostTurnId === 'string' ? payload.hostTurnId : undefined;
     payload = normalizeRuntimeEvent(session.runtimeType, type, payload);
+    if (correlation) payload = { ...payload, hostTurnId: correlation };
+    if (!this.#turnFence.accept(sessionId, type, payload)) return;
     if (session.importedReadOnly) throw new Error('导入历史为只读；请先显式 Fork，再在新 Session 中继续');
     if (isThinkingEvent(type)) {
       const projector = this.#thinking.get(sessionId) ?? new ThinkingBlockProjector();
@@ -1754,7 +1767,14 @@ export class InteractiveWorkspace {
       this.#emit({ sessionId, type: 'git.changed', payload: { action: 'refresh' } });
       this.#refreshTeamsForSession(sessionId);
     }
-    this.#emit({ sessionId, type, payload });
+    const hostTurnId = typeof payload.hostTurnId === 'string' ? payload.hostTurnId : undefined;
+    const modelTimestamp = object(payload.message).timestamp;
+    this.#emit({ sessionId, type, payload,
+      ...(type === 'api.assistant.message' && hostTurnId ? {
+        id: 'api-message:' + createHash('sha256').update(sessionId + '\0' + hostTurnId).digest('hex'),
+        ...(Number.isSafeInteger(modelTimestamp) && Number(modelTimestamp) >= 0 ? { createdAt: Number(modelTimestamp) } : {}),
+      } : {}),
+    });
     this.#save();
   }
 
@@ -1811,6 +1831,7 @@ export class InteractiveWorkspace {
 
   #restoreTranscript(session: SessionState): boolean {
     const sessionId = session.id;
+    for (const key of this.#eventIdentities.keys()) if (key.startsWith(sessionId + '\0')) this.#eventIdentities.delete(key);
     const events: WorkspaceEvent[] = [];
     const history: ReturnType<typeof readApiHistory> = [];
     let complete = true;
@@ -1820,6 +1841,7 @@ export class InteractiveWorkspace {
         if (!raw || raw.sessionId !== sessionId || typeof raw.type !== 'string') throw new TranscriptStoreError();
         if (!transcriptEvent(raw.type)) continue;
         const event = restoreWorkspaceEvent(raw, sessionId, ++this.#eventSequence, session.createdAt);
+        this.#rememberEvent(event);
         history.push(...readApiHistory([event]));
         events.push(event);
         if (events.length > 500) events.shift();
@@ -1893,9 +1915,29 @@ export class InteractiveWorkspace {
   }
 
   #emit(input: WorkspaceEventInput): void {
+    const event = createWorkspaceEvent(input, this.#eventSequence + 1);
+    const fingerprint = this.#eventFingerprint(event);
+    const key = (event.sessionId ?? '') + '\0' + event.id;
+    const known = this.#eventIdentities.get(key);
+    if (known) {
+      if (known !== fingerprint) throw new WorkspaceStorageError('invalid_data');
+      return;
+    }
+    if (input.id && event.sessionId && this.#state.settings.persistConversation && transcriptEvent(event.type)) {
+      const stored = this.#conversation.find?.(event.sessionId, event.id);
+      if (stored) {
+        const previous = restoreWorkspaceEvent(JSON.parse(stored) as Record<string, unknown>, event.sessionId, 1, event.createdAt);
+        if (this.#eventFingerprint(previous) !== fingerprint) throw new WorkspaceStorageError('invalid_data');
+        this.#rememberEvent(event, fingerprint);
+        return;
+      }
+    }
     if (input.type === 'runtime.error' && input.sessionId) this.#finalizeThinking(input.sessionId, 'runtime_error');
-    this.#eventSequence += 1;
-    const event = createWorkspaceEvent(input, this.#eventSequence);
+    event.sequence = this.#eventSequence + 1;
+    const persisted = this.#persistTranscript(event);
+    if (persisted === 'duplicate') { this.#rememberEvent(event, fingerprint); return; }
+    this.#eventSequence = event.sequence;
+    this.#rememberEvent(event, fingerprint);
     this.#eventLog.push(event);
     if (this.#eventLog.length > 1_000) this.#eventLog.splice(0, this.#eventLog.length - 1_000);
     if (event.sessionId) {
@@ -1909,8 +1951,18 @@ export class InteractiveWorkspace {
       const session = this.#state.sessions.find((item) => item.id === event.sessionId);
       if (session) this.#subagents.apply(subagentProjectionEvent(event, session.runtimeType));
     }
-    this.#persistTranscript(event);
     this.#emitExternal(event);
+    if (persisted === 'failed' && event.sessionId) this.#markTranscriptFailure(event.sessionId);
+  }
+
+  #eventFingerprint(event: WorkspaceEvent): string {
+    return createHash('sha256').update(stableJson({ schemaVersion: event.schemaVersion, id: event.id,
+      sessionId: event.sessionId, type: event.type, createdAt: event.createdAt, payload: event.payload })).digest('hex');
+  }
+
+  #rememberEvent(event: WorkspaceEvent, fingerprint = this.#eventFingerprint(event)): void {
+    this.#eventIdentities.set((event.sessionId ?? '') + '\0' + event.id, fingerprint);
+    if (this.#eventIdentities.size > 2048) this.#eventIdentities.delete(this.#eventIdentities.keys().next().value as string);
   }
 
   #emitImportedEvent(sessionId: string, event: ImportedConversationEvent): void {
@@ -2043,23 +2095,28 @@ export class InteractiveWorkspace {
     for (const session of this.#state.sessions) this.#restoreTranscript(session);
   }
 
-  #persistTranscript(event: WorkspaceEvent): void {
+  #persistTranscript(event: WorkspaceEvent): 'inserted' | 'duplicate' | 'failed' | undefined {
     if (!this.#state.settings.persistConversation || !event.sessionId || !transcriptEvent(event.type)) return;
     try {
-      this.#conversation.append(event.sessionId, JSON.stringify({
+      return this.#conversation.append(event.sessionId, JSON.stringify({
         schemaVersion: event.schemaVersion, id: event.id, sessionId: event.sessionId, type: event.type,
         createdAt: event.createdAt, payload: event.payload,
-      }) + '\n');
-    } catch {
-      const session = this.#state.sessions.find((item) => item.id === event.sessionId);
-      if (session && !session.transcriptIncomplete) {
-        session.transcriptIncomplete = true;
-        session.lastError = new TranscriptStoreError().message;
-        this.#emit({ sessionId: session.id, type: 'runtime.warning', payload: {
-          category: 'transcript_write_failed', message: session.lastError,
-        } });
-        try { this.#save(); } catch { /* The warning remains visible if the state disk also fails. */ }
-      }
+      }) + '\n') ?? 'inserted';
+    } catch (error) {
+      if (error instanceof WorkspaceStorageError && error.reason !== 'unavailable') throw error;
+      return 'failed';
+    }
+  }
+
+  #markTranscriptFailure(sessionId: string): void {
+    const session = this.#state.sessions.find((item) => item.id === sessionId);
+    if (session && !session.transcriptIncomplete) {
+      session.transcriptIncomplete = true;
+      session.lastError = new TranscriptStoreError().message;
+      this.#emit({ sessionId: session.id, type: 'runtime.warning', payload: {
+        category: 'transcript_write_failed', message: session.lastError,
+      } });
+      try { this.#save(); } catch { /* The warning remains visible if the state disk also fails. */ }
     }
   }
 

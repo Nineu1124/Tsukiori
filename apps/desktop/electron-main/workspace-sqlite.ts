@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { types } from 'node:util';
 import { parseWorkspaceState, type WorkspaceStateDocument } from './workspace-state-file.js';
+import { stableJson } from './stable-json.js';
 
 // This schema stores the formal desktop aggregate. The domain/prototype database
 // has a different session contract and is not silently adopted or populated here.
@@ -230,15 +231,27 @@ export class WorkspaceSqliteStore {
     });
   }
 
-  appendEvent(sessionId: string, eventJSON: string): void {
-    this.#safe(() => {
+  readEvent(sessionId: string, eventId: string): string | undefined {
+    return this.#safe(() => {
+      this.#assertSession(sessionId);
+      const row = this.#database.prepare('SELECT payload FROM workspace_events WHERE session_id = ? AND event_id = ?').get(sessionId, eventId);
+      return row ? parseEvent(sessionId, String(row.payload)).json : undefined;
+    });
+  }
+
+  appendEvent(sessionId: string, eventJSON: string): 'inserted' | 'duplicate' {
+    return this.#safe(() => {
       const event = parseEvent(sessionId, eventJSON);
-      this.transaction(() => {
+      return this.transaction(() => {
         this.#assertSession(sessionId);
         const existing = this.#database.prepare('SELECT payload FROM workspace_events WHERE session_id = ? AND event_id = ?').get(sessionId, event.id);
-        if (existing) { if (existing.payload !== event.json) invalid(); return; }
+        if (existing) {
+          if (stableJson(JSON.parse(String(existing.payload))) !== stableJson(JSON.parse(event.json))) invalid();
+          return 'duplicate' as const;
+        }
         const ordinal = Number(this.#database.prepare('SELECT coalesce(max(ordinal),0)+1 AS ordinal FROM workspace_events WHERE session_id = ?').get(sessionId)?.ordinal);
         this.#database.prepare('INSERT INTO workspace_events(session_id,event_id,ordinal,payload) VALUES (?,?,?,?)').run(sessionId, event.id, ordinal, event.json);
+        return 'inserted' as const;
       });
     });
   }

@@ -93,6 +93,10 @@ test('failed event replacement keeps previous records; replay is idempotent and 
   const f = fixture(t);
   const store = f.open();
   store.saveState(state()); store.appendEvent('s1', event()); store.appendEvent('s1', event());
+  const reordered = JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(event())).reverse()));
+  assert.equal(store.appendEvent('s1', reordered), 'duplicate');
+  assert.equal(store.appendEvent('s1', event('new-identity')), 'inserted');
+  store.replaceEvents('s1', [event()]);
   assert.equal(store.readEvents('s1').length, 1);
   assert.throws(() => store.appendEvent('s1', event('e1', 's1', 'different')), { reason: 'invalid_data' });
   assert.throws(() => store.replaceEvents('s1', [event('good'), event('bad', 's2')]), { reason: 'invalid_data' });

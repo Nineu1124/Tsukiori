@@ -855,7 +855,7 @@ test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recove
     async start() { return { authenticated: true, authSource: 'chatgpt' }; }
     async startThread(cwd) { return 'thread:' + cwd; }
     async resumeThread(threadId) { resumedThreads.push(threadId); return threadId; }
-    async startTurn(_threadId, prompt) { prompts.push({ cwd: this.options.cwd, prompt }); return 'turn:' + prompts.length; }
+    async startTurn(_threadId, prompt) { prompts.push({ cwd: this.options.cwd, prompt }); this.options.fixtureTurnId = 'turn:' + prompts.length; return this.options.fixtureTurnId; }
     async interrupt() { interrupts += 1; }
     async stop() { this.options.onExit(null); }
   }
@@ -877,7 +877,7 @@ test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recove
   for (const [index, session] of sessions.entries()) {
     const options = clients.find((item) => item.cwd === session.worktreePath);
     options.onNotification('item/agentMessage/delta', { delta: `member-result-${index + 1}` });
-    options.onNotification('turn/completed', { turn: { id: `initial-${index + 1}`, status: 'completed' } });
+    options.onNotification('turn/completed', { turn: { id: options.fixtureTurnId, status: 'completed' } });
   }
   assert.equal(f.workspace.snapshot().teams[0].status, 'completed');
 
@@ -887,7 +887,7 @@ test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recove
   const reviewer = sessions.find((session) => session.id === team.memberSessionIds[1]);
   const reviewerOptions = clients.find((item) => item.cwd === reviewer.worktreePath);
   reviewerOptions.onNotification('item/agentMessage/delta', { delta: 'review-follow-up-result' });
-  reviewerOptions.onNotification('turn/completed', { turn: { id: 'follow-up', status: 'completed' } });
+  reviewerOptions.onNotification('turn/completed', { turn: { id: reviewerOptions.fixtureTurnId, status: 'completed' } });
 
   const synthesis = await f.workspace.synthesizeTeam(team.id, team.memberSessionIds[0]);
   assert.equal(synthesis.coordinatorSessionId, team.memberSessionIds[0]);
@@ -897,7 +897,7 @@ test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recove
   const coordinator = sessions.find((session) => session.id === team.memberSessionIds[0]);
   const coordinatorOptions = clients.find((item) => item.cwd === coordinator.worktreePath);
   coordinatorOptions.onNotification('item/agentMessage/delta', { delta: 'verified-team-summary' });
-  coordinatorOptions.onNotification('turn/completed', { turn: { id: 'synthesis', status: 'completed' } });
+  coordinatorOptions.onNotification('turn/completed', { turn: { id: coordinatorOptions.fixtureTurnId, status: 'completed' } });
   assert.equal(f.workspace.snapshot().teams[0].synthesisCount, 1);
   assert.equal(f.workspace.snapshot().teams[0].status, 'completed');
 
@@ -911,7 +911,7 @@ test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recove
   assert.deepEqual(stop.requestedSessionIds, [sessions[2].id]);
   assert.equal(interrupts, 1);
   const replacementOptions = clients.filter((item) => item.cwd === sessions[2].worktreePath).at(-1);
-  replacementOptions.onNotification('turn/completed', { turn: { id: 'retry', status: 'interrupted' } });
+  replacementOptions.onNotification('turn/completed', { turn: { id: replacementOptions.fixtureTurnId, status: 'interrupted' } });
   assert.equal(f.workspace.snapshot().teams[0].status, 'stopped');
 
   await f.workspace.sendTeamMessage(team.id, 'Keep this harmless turn active for restart recovery', [sessions[0].id]);
