@@ -131,17 +131,17 @@ export class ProviderRegistry {
   }
 
   list(): ProviderView[] {
-    return this.#providers.map(({ secretRef, ...provider }) => ({ ...provider, hasSecret: Boolean(secretRef) }));
+    return this.#providers.map((provider) => this.view(provider));
   }
 
   raw(): ProviderConfig[] {
-    return this.#providers.map((provider) => ({ ...provider, models: [...provider.models] }));
+    return structuredClone(this.#providers);
   }
 
   get(id: string): ProviderConfig {
     const provider = this.#providers.find((item) => item.id === id);
     if (!provider) throw new Error('Provider 不存在');
-    return provider;
+    return structuredClone(provider);
   }
 
   save(input: ProviderInput): ProviderView {
@@ -160,12 +160,17 @@ export class ProviderRegistry {
     const maxTokens = capacity(input.maxTokens ?? existing?.maxTokens ?? preset.maxTokens, 'Max Tokens');
     if (maxTokens > contextWindow) throw new Error('Max Tokens 不能大于 Context Window');
     const at = this.#now();
-    let secretRef = existing?.secretRef;
+    const usesSecret = kind !== 'chatgpt' && kind !== 'claude-native';
+    let secretRef = usesSecret ? existing?.secretRef : undefined;
     const apiKey = input.apiKey?.trim();
-    if (kind !== 'chatgpt' && kind !== 'claude-native' && apiKey) {
+    if (usesSecret && existing?.secretRef && existing.kind !== kind && !apiKey) {
+      throw new Error('变更 Provider 类型时请重新提供 API Key');
+    }
+    if (usesSecret && apiKey) {
+      // Publish a fresh reference only after SQLite commits. Updating a live
+      // credential in place would make failed configuration saves irreversible.
       secretRef = this.#credentials.store({
         secret: apiKey,
-        ...(secretRef ? { reference: secretRef } : {}),
         binding: credentialBinding(id, kind),
       });
     }
@@ -177,23 +182,28 @@ export class ProviderRegistry {
       updatedAt: at,
       ...(existing?.lastTest ? { lastTest: existing.lastTest } : {}),
     };
-    if (existing) this.#providers = this.#providers.map((item) => item.id === id ? provider : item);
-    else this.#providers.push(provider);
-    this.#flush();
+    const next = existing ? this.#providers.map((item) => item.id === id ? provider : item) : [...this.#providers, provider];
+    try { this.#commit(next); }
+    catch (error) {
+      if (secretRef && secretRef !== existing?.secretRef) this.#discardSecret(secretRef);
+      throw error;
+    }
+    if (existing?.secretRef && existing.secretRef !== secretRef) this.#discardSecret(existing.secretRef);
     return this.view(provider);
   }
 
   delete(id: string): void {
     if (id === 'provider:chatgpt' || id === 'provider:claude-native') throw new Error('Runtime 登录项不能删除');
     const provider = this.get(id);
-    if (provider.secretRef) this.#credentials.delete(provider.secretRef);
+    let next: ProviderConfig[];
     if (id.startsWith('provider:') && ['provider:openai', 'provider:anthropic', 'provider:deepseek'].includes(id)) {
       const reset = createBuiltIn(id, provider.name, provider.kind, provider.createdAt);
-      this.#providers = this.#providers.map((item) => item.id === id ? reset : item);
+      next = this.#providers.map((item) => item.id === id ? reset : item);
     } else {
-      this.#providers = this.#providers.filter((item) => item.id !== id);
+      next = this.#providers.filter((item) => item.id !== id);
     }
-    this.#flush();
+    this.#commit(next);
+    if (provider.secretRef) this.#discardSecret(provider.secretRef);
   }
 
   async test(id: string): Promise<{ ok: boolean; latencyMs: number; category: string }> {
@@ -290,12 +300,18 @@ export class ProviderRegistry {
   }
 
   private view(provider: ProviderConfig): ProviderView {
-    const { secretRef, ...safe } = provider;
+    const { secretRef, ...safe } = structuredClone(provider);
     return { ...safe, hasSecret: Boolean(secretRef) };
   }
 
-  #flush(): void {
-    this.#persist(this.raw());
+  #commit(providers: ProviderConfig[]): void {
+    this.#persist(structuredClone(providers));
+    this.#providers = structuredClone(providers);
+  }
+
+  #discardSecret(reference: SecretReference): void {
+    try { this.#credentials.delete(reference); }
+    catch { /* A cleanup failure must not undo or misreport a committed config. */ }
   }
 
   #completeTest(
@@ -328,14 +344,17 @@ export class ProviderRegistry {
         auditFailure = true;
       }
     }
-    provider.lastTest = {
+    const current = this.#providers.find((item) => item.id === provider.id);
+    if (!current || current.kind !== provider.kind || current.baseUrl !== provider.baseUrl
+      || current.apiFormat !== provider.apiFormat || current.secretRef !== provider.secretRef
+      || JSON.stringify(current.models) !== JSON.stringify(provider.models)) return result;
+    const updated: ProviderConfig = { ...current, lastTest: {
       ...result,
       testedAt,
       auditStatus,
       ...(auditFailure ? { auditCategory: 'audit_write_failed' as const } : {}),
-    };
-    provider.updatedAt = testedAt;
-    this.#flush();
+    }, updatedAt: testedAt };
+    this.#commit(this.#providers.map((item) => item.id === provider.id ? updated : item));
     return result;
   }
 }

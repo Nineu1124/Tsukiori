@@ -1,6 +1,6 @@
 # 正式桌面命令与服务
 
-基线：2026-10-23，D030–D034。此表描述当前 Main 入口；后续迁移时应同步更新数据源。入口是 [固定 Preload](../../apps/desktop/preload/index.cjs) → [Main 分派](../../apps/desktop/electron-main/main.ts) → [命令合同](../../apps/desktop/electron-main/workspace-command.ts) → [InteractiveWorkspace](../../apps/desktop/electron-main/interactive-workspace.ts)及下列服务。Smoke 分支不作为产品能力证据。
+基线：2026-11-17，D030–D045。此表描述当前 Main 入口；后续迁移时应同步更新数据源。入口是 [固定 Preload](../../apps/desktop/preload/index.cjs) → [Main 分派](../../apps/desktop/electron-main/main.ts) → [命令合同](../../apps/desktop/electron-main/workspace-command.ts) → [InteractiveWorkspace](../../apps/desktop/electron-main/interactive-workspace.ts)及下列服务。Smoke 分支不作为产品能力证据。
 
 命令先验证当前窗口、主 Frame、固定文档 URL、v1 版本与参数。总体 JSON 上限 4 MiB，字段另有限额。Session 存在性、文件 realpath、Worktree 所有权和 Runtime 审批必须在服务层继续检查。调用返回属于原 Electron invoke；这不是 Daemon 请求 ID、连接 epoch 或断线重放协议。
 
@@ -8,19 +8,19 @@
 
 | 命令 | 处理入口 | 当前数据或副作用 | 验证 |
 | --- | --- | --- | --- |
-| `pick_project` | Main dialog → addProject | 用户所选 Git 项目、状态 JSON | 合同、工作区；选择器为系统 UI |
+| `pick_project` | Main dialog → addProject | 用户所选 Git 项目、SQLite 工作区状态 | 合同、工作区；选择器为系统 UI |
 | `remove_project`, `pin_project` | removeProject / pinProject | 项目及会话状态、Worktree 归属 | 工作区、UI 置顶 |
 | `pick_cc_haha_source` | Main dialog | 只选择导入源 | 合同；系统选择器 |
-| `scan_cc_haha_import`, `import_cc_haha` | CcHahaImporter / importCcHaha | 源只读；导入清单、会话、Transcript | cc-haha-importer、工作区 |
+| `scan_cc_haha_import`, `import_cc_haha` | CcHahaImporter / importCcHaha | 源只读；导入清单、会话、SQLite 会话归档 | cc-haha-importer、工作区 |
 | `refresh_runtimes` | refreshRuntimes | 本机 Runtime 发现和认证状态 | 工作区、Adapter 离线合同 |
 | `poll_events` | pollEvents | Main 有界事件缓存及游标 | 工作区、命令合同；非持久化补发 |
 | `create_session` | SessionCreationService.create | Worktree、MCP、会话状态 | session-creation、mcp-worktree |
 | `fork_session` | forkSession | 新 Worktree、原生分支标记与完整历史 | 工作区、history-restart |
-| `search_sessions` | searchSessions | 项目会话元数据及 Transcript | 工作区 |
-| `update_session_options`, `rename_session`, `pin_session`, `archive_session` | 对应会话方法 | 状态 JSON；运行状态约束 | 工作区、命令合同 |
+| `search_sessions` | searchSessions | 项目会话元数据及会话归档 | 工作区 |
+| `update_session_options`, `rename_session`, `pin_session`, `archive_session` | 对应会话方法 | SQLite 工作区状态；运行状态约束 | 工作区、命令合同 |
 | `send_prompt`, `interrupt_turn` | WorkspaceTurnService | Runtime 句柄、完整 API 历史、事件与会话状态 | workspace-turn-service、codex-lifecycle |
 | `permission` | decidePermission | Main 待审批 Map；关联 Runtime 答复 | workspace-command-boundary、工作区 |
-| `update_settings` | updateSettings | 工作区状态 JSON | UI、workspace-state |
+| `update_settings` | updateSettings | SQLite 工作区状态 | UI、workspace-state |
 | `save_provider`, `delete_provider` | ProviderRegistry | 工作区 Provider 引用；系统凭据库保存秘密 | provider-registry、工作区 |
 | `test_provider`, `list_provider_models` | testProvider / listProviderModels | 临时验证、模型目录；独立安全审计文件 | provider-registry、工作区；真实服务另验 |
 | `list_mcp`, `save_mcp`, `delete_mcp` | WorkspaceCapabilities | mcp-servers-v1.json、所有权文件、实际目录 .mcp.json | mcp-config、mcp-worktree、mcp-reload |

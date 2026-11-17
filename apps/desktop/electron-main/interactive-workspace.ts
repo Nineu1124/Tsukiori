@@ -199,7 +199,10 @@ export class InteractiveWorkspace {
       this.#providers = new ProviderRegistry({
         providers: this.#state.providers,
         ...(options.credentials ? { credentials: options.credentials } : {}),
-        persist: (providers) => { this.#state.providers = providers; this.#save(); },
+        persist: (providers) => {
+          this.#save({ ...this.#state, providers });
+          this.#state.providers = providers;
+        },
         audit: (record) => this.#providerAudits.record(record),
       });
       this.#capabilities = new WorkspaceCapabilities(options.userDataPath);
@@ -383,9 +386,9 @@ export class InteractiveWorkspace {
     if (!this.#providers.list().some((provider) => provider.id === next.defaultProviderId)) {
       next.defaultProviderId = 'provider:chatgpt';
     }
+    this.#save({ ...this.#state, settings: next });
     this.#state.settings = next;
-    this.#save();
-    return next;
+    return { ...next };
   }
 
   saveProvider(input: ProviderInput): unknown {
@@ -1969,13 +1972,13 @@ export class InteractiveWorkspace {
     this.#state = normalizeWorkspaceState(value);
   }
 
-  #save(): void {
+  #save(state: PersistedState = this.#state): void {
     const safe: PersistedState = {
-      schemaVersion: 3, projects: this.#state.projects,
-      sessions: this.#state.sessions.map(({ lastError, ...session }) => ({ ...session, ...(lastError ? { lastError: truncate(lastError, 2_000) } : {}) })),
-      settings: this.#state.settings,
-      providers: this.#state.providers,
-      teams: this.#state.teams,
+      schemaVersion: 3, projects: state.projects,
+      sessions: state.sessions.map(({ lastError, ...session }) => ({ ...session, ...(lastError ? { lastError: truncate(lastError, 2_000) } : {}) })),
+      settings: state.settings,
+      providers: state.providers,
+      teams: state.teams,
     };
     this.#stateRepository.save(safe);
   }
