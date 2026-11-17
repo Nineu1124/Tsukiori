@@ -56,6 +56,9 @@ test('cc-haha importer performs read-only discovery, safe conversion, and hash i
   assert.equal(scan.sessions[0].projectRoot.toLowerCase(), realpathSync.native(f.repository).toLowerCase());
   assert.match(scan.sessions[0].transcriptHash, /^sha256:[a-f0-9]{64}$/);
   const converted = importer.convert(scan.sessions[0]);
+  assert.equal(Number.isSafeInteger(scan.sessions[0].createdAt), true);
+  assert.equal(Number.isSafeInteger(scan.sessions[0].updatedAt), true);
+  assert.equal(converted.events.every((event) => Number.isSafeInteger(event.createdAt)), true);
   const serialized = JSON.stringify(converted);
   assert.match(serialized, /hello from cc-haha/);
   assert.match(serialized, /imported assistant answer/);

@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { readStateJSON, readStorageBytes } from './workspace-fixture-store.mjs';
+import { readStateJSON, readStorageBytes, readConversationJSON } from './workspace-fixture-store.mjs';
 
 const root = process.cwd();
 const { InteractiveWorkspace } = await import(
@@ -141,7 +141,7 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
   assert.deepEqual(f.approval(), { decision: 'accept' });
   const state = readStateJSON(f.userData);
   assert.doesNotMatch(state, /prompt must remain/);
-  const transcript = readFileSync(join(f.userData, 'transcripts', (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl'), 'utf8');
+  const transcript = readConversationJSON(f.userData, session.id);
   assert.match(transcript, /prompt must remain memory-only/);
   assert.equal(f.emitted.some((event) => event.type === 'tool.event' && event.payload.tool === 'userMessage'), false);
   assert.equal(f.emitted.some((event) => event.type === 'tool.event' && event.payload.tool === 'reasoning'), false);
@@ -336,7 +336,7 @@ test('Codex Checkpoint rewinds code and transcript through thread/fork without m
   assert.equal(restored.threadId, 'thread-rewound');
   assert.equal(restored.turnCount, 1);
   const transcriptName = (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl';
-  const transcript = readFileSync(join(f.userData, 'transcripts', transcriptName), 'utf8');
+  const transcript = readConversationJSON(f.userData, session.id);
   assert.doesNotMatch(transcript, /future turn must be removed/);
   assert.match(transcript, /checkpoint\.rewound/);
   assert.equal(result.recoveryCheckpoint.kind, 'recovery');
@@ -410,7 +410,7 @@ test('interactive workspace runs a Direct API session with local history and an 
   assert.doesNotMatch(persisted, /fixture-direct-api-secret|memory-only direct API prompt/);
   assert.match(persisted, /secretref:/);
   const transcriptName = (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl';
-  const transcript = readFileSync(join(f.userData, 'transcripts', transcriptName), 'utf8');
+  const transcript = readConversationJSON(f.userData, session.id);
   assert.match(transcript, /memory-only direct API prompt/);
   assert.match(transcript, /Direct API fixture response/);
   assert.doesNotMatch(transcript, /fixture-direct-api-secret/);
@@ -533,7 +533,7 @@ test('Claude native login runs without an API Key and reports the real auth sour
   assert.equal(f.emitted.some((event) => event.type === 'assistant.thinking.delta'), true);
   assert.deepEqual(f.emitted.filter((event) => event.type === 'tool.event').map((event) => event.payload.phase), ['started', 'completed']);
   const transcriptName = (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl';
-  const transcript = readFileSync(join(f.userData, 'transcripts', transcriptName), 'utf8');
+  const transcript = readConversationJSON(f.userData, session.id);
   for (const eventType of ['assistant.message.started', 'assistant.thinking.delta', 'assistant.message.completed', 'tool.event', 'turn.completed']) {
     assert.match(transcript, new RegExp(eventType.replaceAll('.', '\\.')));
   }
@@ -1024,7 +1024,7 @@ test('API failures never expose provider error bodies in workspace output or per
       emitted: f.emitted, polled: f.workspace.pollEvents(0), snapshot: f.workspace.snapshot(), diagnostics: f.workspace.diagnosticSummary(),
     }) + readStateJSON(f.userData)
       + readStorageBytes(f.userData)
-      + readFileSync(join(f.userData, 'transcripts', transcriptName), 'utf8');
+      + readConversationJSON(f.userData, session.id);
     for (const marker of [secret, encodeURIComponent(secret), 'private-provider-response']) assert.equal(output.includes(marker), false, fault);
   }
   assert.equal(f.emitted.filter((event) => event.type === 'runtime.error').length, 5);

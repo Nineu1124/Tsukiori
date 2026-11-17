@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import fs from 'node:fs';
@@ -71,14 +71,17 @@ test('a failed index publish preserves the previous visible log', (t) => {
 
 test('workspace reports write failure and remembers incomplete history across restart', async (t) => {
   const f = await historyFixture(t);
-  const path = join(f.userDataPath, 'transcripts', createHash('sha256').update(f.session.id).digest('hex') + '.jsonl');
-  mkdirSync(`${path}.index.json`);
+  const database = new DatabaseSync(join(f.userDataPath, 'workspace.sqlite'));
+  database.exec("CREATE TRIGGER fixture_reject_history BEFORE INSERT ON workspace_events BEGIN SELECT RAISE(ABORT, 'fixture write failure'); END");
+  database.close();
   await assert.rejects(send(f.workspace, f.session.id, 'unsaved fixture'), /会话记录/);
   assert.equal(f.histories.length, 0);
   assert.equal(f.emitted.some((event) => event.type === 'runtime.warning' && event.payload.category === 'transcript_write_failed'), true);
   assert.equal(f.workspace.snapshot().sessions[0].transcriptIncomplete, true);
   await f.workspace.shutdown();
-  rmSync(`${path}.index.json`, { recursive: true });
+  const repair = new DatabaseSync(join(f.userDataPath, 'workspace.sqlite'));
+  repair.exec('DROP TRIGGER fixture_reject_history');
+  repair.close();
   const restarted = f.open();
   await assert.rejects(send(restarted, f.session.id, 'must not use incomplete history'), /会话记录不完整/);
 });

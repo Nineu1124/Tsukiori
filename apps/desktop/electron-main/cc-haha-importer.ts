@@ -302,8 +302,8 @@ function inspectTranscript(sourceFile: string, projectDirectory: string, content
   let aiTitle = '';
   let firstPrompt = '';
   let model = 'sonnet';
-  let createdAt = Number.isFinite(birthtime) ? birthtime : mtime;
-  let updatedAt = Number.isFinite(mtime) ? mtime : createdAt;
+  let createdAt = Math.max(0, Math.trunc(Number.isFinite(birthtime) ? birthtime : mtime));
+  let updatedAt = Math.max(0, Math.trunc(Number.isFinite(mtime) ? mtime : createdAt));
   for (const entry of entries) {
     const cwd = text(entry.cwd);
     if (cwd && (isAbsolute(cwd) || win32.isAbsolute(cwd))) projectRoot = cwd;

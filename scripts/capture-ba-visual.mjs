@@ -2,6 +2,7 @@
 // State is seeded into a throwaway --user-data-dir so no real project path,
 // session name or credential can reach the screenshots.
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
@@ -51,6 +52,13 @@ writeFileSync(
   }),
   'utf8',
 );
+
+// Seed complete synthetic history so production migration keeps its integrity checks.
+mkdirSync(join(userData, 'transcripts'), { recursive: true });
+for (const sessionId of ['demo-session-1', 'demo-session-2']) {
+  const path = join(userData, 'transcripts', createHash('sha256').update(sessionId).digest('hex') + '.jsonl');
+  writeFileSync(path, JSON.stringify({ id: 'visual-history-' + sessionId, sessionId, type: 'user.message', createdAt: now, payload: { text: 'Sanitized visual fixture' } }) + '\n');
+}
 
 const port = await availablePort();
 const child = spawn(

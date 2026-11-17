@@ -12,3 +12,12 @@ export function readStorageBytes(userDataPath) {
     .filter((name) => existsSync(join(userDataPath, name)))
     .map((name) => readFileSync(join(userDataPath, name)).toString('utf8')).join('');
 }
+
+export function readConversationLines(userDataPath, sessionId) {
+  const store = new WorkspaceSqliteStore(join(userDataPath, 'workspace.sqlite'));
+  try { return store.readEvents(sessionId); } finally { store.close(); }
+}
+
+export function readConversationJSON(userDataPath, sessionId) {
+  return readConversationLines(userDataPath, sessionId).join('\n');
+}

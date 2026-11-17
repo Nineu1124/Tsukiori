@@ -20,7 +20,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { TranscriptStoreError } from './transcript-store.js';
-import { JsonConversationRepository, type ConversationRepository } from './conversation-repository.js';
+import { JsonConversationRepository, SqliteConversationRepository, type ConversationRepository } from './conversation-repository.js';
 import { ModelHistoryRepository } from './model-history-repository.js';
 import { WindowsCredentialBroker } from '@tsukiori/credential-broker';
 import {
@@ -114,6 +114,7 @@ type ApprovalResolver = CodexApprovalResolver | ClaudeApprovalResolver;
 export type InteractiveWorkspaceOptions = {
   userDataPath: string;
   stateRepository?: WorkspaceStateRepository;
+  conversationRepository?: ConversationRepository;
   emit: (event: WorkspaceEvent) => void;
   discoverCodex?: () => CodexLaunch;
   discoverClaude?: () => ClaudeLaunch;
@@ -176,7 +177,9 @@ export class InteractiveWorkspace {
     try {
       this.#worktreeRoot = join(options.userDataPath, 'worktrees');
       this.#transcriptRoot = join(options.userDataPath, 'transcripts');
-      this.#conversation = new JsonConversationRepository(this.#transcriptRoot);
+      this.#conversation = options.conversationRepository ?? (this.#stateRepository instanceof SqliteWorkspaceRepository
+        ? new SqliteConversationRepository(options.userDataPath, this.#stateRepository.store)
+        : new JsonConversationRepository(this.#transcriptRoot));
       this.#checkpoints = new CheckpointService(options.userDataPath, { conversation: this.#conversation });
       this.#ccHahaImporter = new CcHahaImporter(options.userDataPath);
       this.#emitExternal = options.emit;

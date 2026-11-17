@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
-import { appendFileSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
+import { readConversationLines } from './workspace-fixture-store.mjs';
+import { WorkspaceSqliteStore } from '../../apps/desktop/dist/electron-main/workspace-sqlite.js';
 import { join } from 'node:path';
 import test from 'node:test';
-import { readTranscriptLines } from '../../apps/desktop/dist/electron-main/transcript-store.js';
 import { historyFixture, send } from './history-fixture.mjs';
 
 const content = (messages) => messages.map((message) => ({ role: message.role, content: message.content }));
-const transcriptPath = (f) => join(f.userDataPath, 'transcripts', createHash('sha256').update(f.session.id).digest('hex') + '.jsonl');
 
 test('over 1100 deltas and 8 MiB preserve identical API history before and after restart', async (t) => {
   const f = await historyFixture(t);
@@ -16,8 +16,10 @@ test('over 1100 deltas and 8 MiB preserve identical API history before and after
   await send(f.workspace, f.session.id, 'before restart');
   const expected = content(f.histories[1]);
   expected.push({ role: 'assistant', content: [{ type: 'text', text: 'fixture answer' }] });
-  assert.equal(readdirSync(join(f.userDataPath, 'transcripts')).reduce((bytes, name) => bytes + statSync(join(f.userDataPath, 'transcripts', name)).size, 0) > 8 * 1024 * 1024, true);
-  assert.equal([...readTranscriptLines(transcriptPath(f))].filter((line) => JSON.parse(line).type === 'assistant.delta').length, 1_100);
+  const rows = readConversationLines(f.userDataPath, f.session.id);
+  assert.equal(rows.reduce((bytes, row) => bytes + Buffer.byteLength(row), 0) > 8 * 1024 * 1024, true);
+  assert.equal(rows.filter((line) => JSON.parse(line).type === 'assistant.delta').length, 1_100);
+  assert.deepEqual(readdirSync(join(f.userDataPath, 'transcripts')), []);
   assert.throws(() => f.workspace.createCheckpoint(f.session.id, 'too large'), /8 MiB/);
   await f.workspace.shutdown();
   const restarted = f.open();
@@ -49,11 +51,18 @@ test('unsaved messages stay memory-only and corrupt rows block incomplete restar
   await send(restarted, f.session.id, 'new memory-only fixture');
   assert.equal(f.histories.at(-1).length, 1);
   await restarted.shutdown();
-  appendFileSync(transcriptPath(f), '{"partial":');
-  const bytes = readFileSync(transcriptPath(f));
+  const path = join(f.userDataPath, 'workspace.sqlite');
+  const store = new WorkspaceSqliteStore(path);
+  store.appendEvent(f.session.id, JSON.stringify({ id: 'damaged', sessionId: f.session.id, schemaVersion: 1, type: 'user.message', createdAt: 1, payload: { text: 'future record' } }));
+  store.close();
+  const database = new DatabaseSync(path);
+  database.prepare("UPDATE workspace_events SET payload = json_set(payload, '$.schemaVersion', 2) WHERE event_id = 'damaged'").run();
+  const bytes = database.prepare("SELECT payload FROM workspace_events WHERE event_id = 'damaged'").get().payload;
+  database.close();
   const damaged = f.open();
   await assert.rejects(send(damaged, f.session.id, 'must not continue'), /会话记录不完整/);
-  assert.deepEqual(readFileSync(transcriptPath(f)), bytes);
+  const inspection = new DatabaseSync(path);
+  try { assert.equal(inspection.prepare("SELECT payload FROM workspace_events WHERE event_id = 'damaged'").get().payload, bytes); } finally { inspection.close(); }
 });
 
 test('forking after UI eviction preserves full API history through another restart', async (t) => {
