@@ -4,6 +4,7 @@ import { createWorkspaceEvent, restoreWorkspaceEvent, convertCodexNotification, 
 export type { WorkspaceEvent } from './workspace-events.js';
 import { WorkspaceTurnService } from './workspace-turn-service.js';
 import { GitExecutor } from './git-executor.js';
+import { GitWorktreeQueue } from './git-worktree-queue.js';
 import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
 import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -136,6 +137,7 @@ export class InteractiveWorkspace {
   readonly #stateRepository: WorkspaceStateRepository;
   readonly #ownsStateRepository: boolean;
   readonly #gitExecutor: GitExecutor;
+  readonly #gitQueue = new GitWorktreeQueue();
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
   readonly #conversation: ConversationRepository;
@@ -1371,6 +1373,14 @@ export class InteractiveWorkspace {
 
   async rewindCheckpoint(sessionId: string, checkpointId: string): Promise<CheckpointRewindResult> {
     const session = this.#checkpointSession(sessionId);
+    return this.#gitQueue.run(session.worktreePath, () => this.#rewindCheckpoint(sessionId, checkpointId), {
+      preserveErrors: true,
+      onState: (snapshot) => this.#emit({ sessionId, type: 'git.operation', payload: { ...snapshot, action: 'checkpoint_rewind' } }),
+    });
+  }
+
+  async #rewindCheckpoint(sessionId: string, checkpointId: string): Promise<CheckpointRewindResult> {
+    const session = this.#checkpointSession(sessionId);
     this.#assertSessionWritable(session);
     const preview = this.#checkpoints.preview(
       sessionId,
@@ -1430,39 +1440,48 @@ export class InteractiveWorkspace {
 
   async gitStatus(sessionId: string): Promise<Record<string, unknown>> {
     const session = this.#session(sessionId);
-    const output = await this.#gitExecutor.run(session.worktreePath, ['-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all']);
-    const files = output.split(/\r?\n/).filter(Boolean).map((line) => ({ status: line.slice(0, 2), path: line.slice(3).replace(/^"|"$/g, '') }));
-    const diff = await this.#gitExecutor.run(session.worktreePath, ['diff', '--no-ext-diff', '--no-textconv', '--stat']);
-    return { sessionId, branch: session.branch, worktreePath: session.worktreePath, files, diff };
+    return this.#gitQueue.run(session.worktreePath, async (signal) => {
+      const output = await this.#gitExecutor.run(session.worktreePath, ['status', '--porcelain=v1', '--untracked-files=all'], { signal });
+      const files = output.split(/\r?\n/).filter(Boolean).map((line) => ({ status: line.slice(0, 2), path: line.slice(3).replace(/^"|"$/g, '') }));
+      const diff = await this.#gitExecutor.run(session.worktreePath, ['diff', '--no-ext-diff', '--no-textconv', '--stat'], { signal });
+      return { sessionId, branch: session.branch, worktreePath: session.worktreePath, files, diff };
+    }, { mutating: false });
   }
 
   async gitDiff(sessionId: string, path?: string): Promise<string> {
     const session = this.#session(sessionId);
     const args = ['diff', '--no-ext-diff', '--no-textconv'];
     if (path) args.push('--', safeRelativePath(path));
-    return truncate(await this.#gitExecutor.run(session.worktreePath, args), 128_000);
+    return this.#gitQueue.run(session.worktreePath, async (signal) =>
+      truncate(await this.#gitExecutor.run(session.worktreePath, args, { signal }), 128_000), { mutating: false });
   }
 
-  stage(sessionId: string, paths: readonly string[]): void { this.#gitMutation(sessionId, 'add', paths); }
+  stage(sessionId: string, paths: readonly string[], signal?: AbortSignal): Promise<void> {
+    return this.#gitMutation(sessionId, 'add', paths, signal);
+  }
 
-  unstage(sessionId: string, paths: readonly string[]): void {
+  async unstage(sessionId: string, paths: readonly string[], signal?: AbortSignal): Promise<void> {
     const session = this.#session(sessionId);
     this.#assertSessionWritable(session);
     const safe = paths.map(safeRelativePath);
     if (safe.length === 0) throw new Error('请选择文件');
-    this.#git(session.worktreePath, ['restore', '--staged', '--', ...safe]);
-    this.#emit({ sessionId, type: 'git.changed', payload: { action: 'unstage' } });
+    await this.#runGitMutation(sessionId, 'unstage', async (abort) => {
+      await this.#gitExecutor.run(session.worktreePath, ['restore', '--staged', '--', ...safe], { signal: abort });
+      this.#emit({ sessionId, type: 'git.changed', payload: { action: 'unstage' } });
+    }, signal);
   }
 
-  commit(sessionId: string, subject: string): string {
+  async commit(sessionId: string, subject: string, signal?: AbortSignal): Promise<string> {
     const session = this.#session(sessionId);
     this.#assertSessionWritable(session);
     const cleanSubject = subject.trim();
     if (!cleanSubject || cleanSubject.length > 200 || /[\r\n\0]/.test(cleanSubject)) throw new Error('Commit Subject 必须为单行且不超过 200 字符');
-    this.#git(session.worktreePath, ['commit', '-m', cleanSubject]);
-    const sha = this.#git(session.worktreePath, ['rev-parse', 'HEAD']).trim();
-    this.#emit({ sessionId, type: 'git.committed', payload: { sha, subject: cleanSubject } });
-    return sha;
+    return this.#runGitMutation(sessionId, 'commit', async (abort) => {
+      await this.#gitExecutor.run(session.worktreePath, ['commit', '-m', cleanSubject], { signal: abort });
+      const sha = (await this.#gitExecutor.run(session.worktreePath, ['rev-parse', 'HEAD'], { signal: abort })).trim();
+      this.#emit({ sessionId, type: 'git.committed', payload: { sha, subject: cleanSubject } });
+      return sha;
+    }, signal);
   }
 
   integrationTarget(sessionId: string): { targetRef: string; targetCommit: string; clean: boolean } {
@@ -1482,6 +1501,7 @@ export class InteractiveWorkspace {
     targetRef?: string,
   ): InteractiveIntegration {
     const session = this.#session(sessionId);
+    this.#gitQueue.assertIdle(session.worktreePath);
     this.#assertSessionWritable(session);
     const project = this.#project(session.projectId);
     const integration = this.#integrations.prepare({
@@ -1504,6 +1524,7 @@ export class InteractiveWorkspace {
 
   continueIntegration(sessionId: string, integrationId: string): InteractiveIntegration {
     const session = this.#session(sessionId);
+    this.#gitQueue.assertIdle(session.worktreePath);
     this.#assertSessionWritable(session);
     const project = this.#project(session.projectId);
     const record = this.#integrations.list(sessionId).find((item) => item.id === integrationId);
@@ -1517,6 +1538,7 @@ export class InteractiveWorkspace {
 
   promoteIntegration(sessionId: string, integrationId: string): InteractiveIntegration {
     const session = this.#session(sessionId);
+    this.#gitQueue.assertIdle(session.worktreePath);
     this.#assertSessionWritable(session);
     const project = this.#project(session.projectId);
     const record = this.#integrations.list(sessionId).find((item) => item.id === integrationId);
@@ -1533,6 +1555,7 @@ export class InteractiveWorkspace {
 
   discardIntegration(sessionId: string, integrationId: string): InteractiveIntegration {
     const session = this.#session(sessionId);
+    this.#gitQueue.assertIdle(session.worktreePath);
     this.#assertSessionWritable(session);
     const project = this.#project(session.projectId);
     const record = this.#integrations.list(sessionId).find((item) => item.id === integrationId);
@@ -1558,6 +1581,7 @@ export class InteractiveWorkspace {
     }
     this.#approvals.clear();
     await Promise.allSettled([
+      this.#gitQueue.shutdown(),
       this.#gitExecutor.shutdown(),
       ...[...this.#clients.values()].map((client) => client.stop()),
       this.#claudeClient?.stop() ?? Promise.resolve(),
@@ -1735,6 +1759,7 @@ export class InteractiveWorkspace {
 
   #checkpointSession(sessionId: string): SessionState {
     const session = this.#session(sessionId);
+    this.#gitQueue.assertIdle(session.worktreePath);
     if (!this.#state.settings.persistConversation) {
       throw new Error('创建或回退 Checkpoint 前必须启用本地对话持久化');
     }
@@ -1953,16 +1978,30 @@ export class InteractiveWorkspace {
     if (changed) this.#save();
   }
 
-  #gitMutation(sessionId: string, action: 'add', paths: readonly string[]): void {
+  async #gitMutation(sessionId: string, action: 'add', paths: readonly string[], signal?: AbortSignal): Promise<void> {
     const session = this.#session(sessionId);
     this.#assertSessionWritable(session);
     const safe = paths.map(safeRelativePath);
     if (safe.length === 0) throw new Error('请选择文件');
-    this.#git(session.worktreePath, [action, '--', ...safe]);
-    this.#emit({ sessionId, type: 'git.changed', payload: { action: 'stage' } });
+    await this.#runGitMutation(sessionId, 'stage', async (abort) => {
+      await this.#gitExecutor.run(session.worktreePath, [action, '--', ...safe], { signal: abort });
+      this.#emit({ sessionId, type: 'git.changed', payload: { action: 'stage' } });
+    }, signal);
+  }
+
+  #runGitMutation<T>(sessionId: string, action: string, execute: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    const session = this.#session(sessionId);
+    return this.#gitQueue.run(session.worktreePath, (abort) => {
+      this.#assertSessionWritable(this.#session(sessionId));
+      return execute(abort);
+    }, {
+      ...(signal ? { signal } : {}),
+      onState: (snapshot) => this.#emit({ sessionId, type: 'git.operation', payload: { ...snapshot, action } }),
+    });
   }
 
   #git(cwd: string, args: readonly string[]): string {
+    this.#gitQueue.assertIdle(cwd);
     const result = spawnSync('git.exe', ['-C', cwd, ...args], {
       encoding: 'utf8', windowsHide: true, shell: false, timeout: 30_000,
       maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],

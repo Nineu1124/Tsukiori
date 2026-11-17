@@ -1,14 +1,21 @@
 import { spawn } from 'node:child_process';
 
 export type GitRunOptions = { signal?: AbortSignal; timeoutMs?: number; maxOutputBytes?: number };
-export type GitErrorCode = 'failed' | 'timeout' | 'output_limit' | 'cancelled' | 'unavailable';
+export type GitErrorCode = 'failed' | 'timeout' | 'output_limit' | 'cancelled' | 'unavailable' | 'busy' | 'queue_full';
+export type GitOperationOutcome = 'not_started' | 'known' | 'unknown';
 
 export class GitCommandError extends Error {
-  constructor(readonly code: GitErrorCode) {
+  readonly operationId?: string;
+  readonly outcome?: GitOperationOutcome;
+  constructor(readonly code: GitErrorCode, details: { operationId?: string; outcome?: GitOperationOutcome } = {}) {
     super({ failed: 'Git 操作失败，请检查仓库状态。', timeout: 'Git 操作超时。',
       output_limit: 'Git 输出超过容量限制，请缩小操作范围。', cancelled: 'Git 操作已取消。',
-      unavailable: '无法启动 Git，请检查安装和工作目录。' }[code]);
+      unavailable: '无法启动 Git，请检查安装和工作目录。', busy: '该工作目录有待处理的 Git 操作，请等待后重试。',
+      queue_full: '该工作目录的 Git 队列已满，请稍后重试。' }[code]
+      + (details.outcome === 'unknown' ? '执行结果尚未确认，请先检查 Git 状态，避免直接重复操作。' : ''));
     this.name = 'GitCommandError';
+    if (details.operationId) this.operationId = details.operationId;
+    if (details.outcome) this.outcome = details.outcome;
   }
 }
 

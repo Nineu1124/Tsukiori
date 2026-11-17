@@ -4,6 +4,7 @@ import { runInNewContext } from 'node:vm';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { createWorkspaceCommandHandler } from '../../apps/desktop/dist/electron-main/workspace-command.js';
+import { GitCommandError } from '../../apps/desktop/dist/electron-main/git-executor.js';
 
 // Evaluate the registered production IPC callback, replacing Electron objects.
 // This exercises Main's actual dispatch without starting Electron or a Provider.
@@ -19,7 +20,7 @@ export function commandHarness(workspace = {}, dependencies = {}) {
   const event = { sender, senderFrame: sender.mainFrame };
   let handler;
   const context = {
-    createWorkspaceCommandHandler, pathToFileURL, rendererEntry,
+    createWorkspaceCommandHandler, GitCommandError, pathToFileURL, rendererEntry,
     mainWindow: { isDestroyed: () => false, webContents: sender },
     smokeMode: false, interactiveWorkspace: workspace,
     ipcMain: { handle(channel, value) { assert.equal(channel, 'workspace:command'); handler = value; } },

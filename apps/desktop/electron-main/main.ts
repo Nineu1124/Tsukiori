@@ -10,6 +10,7 @@ import { openWorkspaceWithRecovery, workspaceStartupFailure } from './workspace-
 import { TerminalManager } from './terminal-manager.js';
 import { ComputerUseManager, type ComputerUseAction } from './computer-use-manager.js';
 import { createWorkspaceCommandHandler } from './workspace-command.js';
+import { GitCommandError } from './git-executor.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const daemonEntry = app.isPackaged
@@ -788,15 +789,20 @@ ipcMain.handle('workspace:command', createWorkspaceCommandHandler<Electron.IpcMa
     }
     if (command.type === 'stage' || command.type === 'unstage') {
       const paths = Array.isArray(command.paths) ? command.paths.map(String) : [];
-      if (command.type === 'stage') workspace.stage(String(command.sessionId ?? ''), paths);
-      else workspace.unstage(String(command.sessionId ?? ''), paths);
+      if (command.type === 'stage') await workspace.stage(String(command.sessionId ?? ''), paths);
+      else await workspace.unstage(String(command.sessionId ?? ''), paths);
       return { ok: true };
     }
     if (command.type === 'commit') {
-      return { ok: true, sha: workspace.commit(String(command.sessionId ?? ''), String(command.subject ?? '')) };
+      return { ok: true, sha: await workspace.commit(String(command.sessionId ?? ''), String(command.subject ?? '')) };
     }
     return { ok: false, code: 'unsupported_command', message: '该操作尚未接入真实 Workspace' };
   } catch (error) {
+    if (error instanceof GitCommandError) return {
+      ok: false, code: 'git_' + error.code, message: error.message,
+      ...(error.operationId ? { operationId: error.operationId } : {}),
+      ...(error.outcome ? { outcome: error.outcome } : {}),
+    };
     return { ok: false, code: 'command_failed', message: error instanceof Error ? error.message : String(error) };
   }
 }));

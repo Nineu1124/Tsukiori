@@ -763,8 +763,8 @@ test('interactive Git review stages and commits only selected Worktree paths', a
   writeFileSync(join(session.worktreePath, 'agent-result.txt'), 'reviewed\n');
   const status = await f.workspace.gitStatus(session.id);
   assert.deepEqual(status.files, [{ status: '??', path: 'agent-result.txt' }]);
-  f.workspace.stage(session.id, ['agent-result.txt']);
-  const sha = f.workspace.commit(session.id, 'test: commit reviewed agent result');
+  await f.workspace.stage(session.id, ['agent-result.txt']);
+  const sha = await f.workspace.commit(session.id, 'test: commit reviewed agent result');
   assert.match(sha, /^[a-f0-9]{40}$/);
   assert.equal(git(session.worktreePath, ['status', '--porcelain']), '');
   assert.equal(existsSync(join(f.repository, 'agent-result.txt')), false);
