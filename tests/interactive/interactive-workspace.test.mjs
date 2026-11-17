@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { readStateJSON, readStorageBytes } from './workspace-fixture-store.mjs';
 
 const root = process.cwd();
 const { InteractiveWorkspace } = await import(
@@ -138,7 +139,7 @@ test('interactive workspace creates an isolated Worktree and runs a permission-a
   assert.equal(polled.events.some((event) => event.type === 'assistant.delta'), true);
   assert.equal(polled.events.some((event) => event.type === 'turn.completed'), true);
   assert.deepEqual(f.approval(), { decision: 'accept' });
-  const state = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
+  const state = readStateJSON(f.userData);
   assert.doesNotMatch(state, /prompt must remain/);
   const transcript = readFileSync(join(f.userData, 'transcripts', (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl'), 'utf8');
   assert.match(transcript, /prompt must remain memory-only/);
@@ -405,7 +406,7 @@ test('interactive workspace runs a Direct API session with local history and an 
   assert.equal(f.emitted.some((event) => event.type === 'assistant.delta' && event.payload.text === 'Direct API fixture response'), true);
   assert.equal(f.workspace.snapshot().sessions.find((item) => item.id === session.id).status, 'ready');
   assert.equal(f.workspace.snapshot().usage.apiTokenCount, 7);
-  const persisted = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
+  const persisted = readStateJSON(f.userData);
   assert.doesNotMatch(persisted, /fixture-direct-api-secret|memory-only direct API prompt/);
   assert.match(persisted, /secretref:/);
   const transcriptName = (await import('node:crypto')).createHash('sha256').update(session.id).digest('hex') + '.jsonl';
@@ -464,7 +465,7 @@ test('interactive workspace stores provider secrets outside state and runs a Cla
   await workspace.sendPrompt(session.id, 'memory-only claude prompt');
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(emitted.some((event) => event.type === 'assistant.delta'), true);
-  const persisted = readFileSync(join(userData, 'workspace-state-v3.json'), 'utf8');
+  const persisted = readStateJSON(userData);
   assert.doesNotMatch(persisted, /fixture-secret-value|memory-only claude prompt/);
   assert.match(persisted, /secretref:/);
   const snapshotText = JSON.stringify(workspace.snapshot());
@@ -536,7 +537,7 @@ test('Claude native login runs without an API Key and reports the real auth sour
   for (const eventType of ['assistant.message.started', 'assistant.thinking.delta', 'assistant.message.completed', 'tool.event', 'turn.completed']) {
     assert.match(transcript, new RegExp(eventType.replaceAll('.', '\\.')));
   }
-  assert.doesNotMatch(readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8'), /native auth prompt|oauth_token/);
+  assert.doesNotMatch(readStateJSON(f.userData), /native auth prompt|oauth_token/);
 
   writeFileSync(join(session.worktreePath, 'checkpoint.txt'), 'claude checkpoint\n');
   const checkpoint = f.workspace.createCheckpoint(session.id, 'Stable Claude state');
@@ -800,7 +801,7 @@ test('Codex custom OpenAI-compatible Provider is bound to app-server without per
   assert.equal(f.clientOptions().environment.OPENAI_API_KEY, 'custom-provider-fixture-secret');
   assert.deepEqual(f.clientOptions().configArgs.slice(0, 2), ['-c', 'model_provider="tsukiori"']);
   assert.match(f.clientOptions().configArgs.join(' '), /responses\.example\.invalid/);
-  const state = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
+  const state = readStateJSON(f.userData);
   assert.doesNotMatch(state, /custom-provider-fixture-secret|memory-only custom provider prompt/);
 });
 
@@ -841,7 +842,7 @@ test('session lifecycle, persisted transcript, files, attachments, and native ca
   assert.equal(archived.pinned, true);
   assert.equal(typeof archived.archivedAt, 'number');
   assert.equal(existsSync(session.worktreePath), true);
-  assert.doesNotMatch(readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8'), /attachment body/);
+  assert.doesNotMatch(readStateJSON(f.userData), /attachment body/);
 });
 
 test('Agent Team runs 2-4 isolated members, follow-up, synthesis, failure recovery, and stop', async (t) => {
@@ -945,10 +946,10 @@ test('resizable work panel, terminal shell, and diagnostics persist without prom
   assert.equal(diagnostic.containsCredentials, false);
   assert.equal(diagnostic.containsPrompts, false);
   assert.equal(diagnostic.containsUserSource, false);
-  const persisted = readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8');
-  assert.match(persisted, /"workPanelWidth": 720/);
-  assert.match(persisted, /"terminalHeight": 560/);
-  assert.match(persisted, /"terminalShell": "pwsh"/);
+  const persisted = readStateJSON(f.userData);
+  assert.equal(JSON.parse(persisted).settings.workPanelWidth, 720);
+  assert.equal(JSON.parse(persisted).settings.terminalHeight, 560);
+  assert.equal(JSON.parse(persisted).settings.terminalShell, 'pwsh');
   assert.doesNotMatch(JSON.stringify(diagnostic), new RegExp(session.worktreePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
@@ -1021,8 +1022,8 @@ test('API failures never expose provider error bodies in workspace output or per
     assert.equal(f.workspace.snapshot().sessions.find((item) => item.id === session.id).status, 'error');
     const output = JSON.stringify({
       emitted: f.emitted, polled: f.workspace.pollEvents(0), snapshot: f.workspace.snapshot(), diagnostics: f.workspace.diagnosticSummary(),
-    }) + readFileSync(join(f.userData, 'workspace-state-v3.json'), 'utf8')
-      + readFileSync(join(f.userData, 'workspace-state-v3.json.bak'), 'utf8')
+    }) + readStateJSON(f.userData)
+      + readStorageBytes(f.userData)
       + readFileSync(join(f.userData, 'transcripts', transcriptName), 'utf8');
     for (const marker of [secret, encodeURIComponent(secret), 'private-provider-response']) assert.equal(output.includes(marker), false, fault);
   }

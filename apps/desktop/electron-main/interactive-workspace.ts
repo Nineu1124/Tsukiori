@@ -1,4 +1,4 @@
-import { JsonWorkspaceRepository, type WorkspaceStateRepository } from './workspace-state-repository.js';
+import { SqliteWorkspaceRepository, type WorkspaceStateRepository } from './workspace-state-repository.js';
 import { normalizeWorkspaceState } from './workspace-state-normalize.js';
 import { createWorkspaceEvent, restoreWorkspaceEvent, convertCodexNotification, normalizeRuntimeEvent, type WorkspaceEventInput, type WorkspaceEvent } from './workspace-events.js';
 export type { WorkspaceEvent } from './workspace-events.js';
@@ -131,6 +131,7 @@ export class InteractiveWorkspace {
   readonly #turnService: WorkspaceTurnService;
   readonly #sessionCreation: SessionCreationService;
   readonly #stateRepository: WorkspaceStateRepository;
+  readonly #ownsStateRepository: boolean;
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
   readonly #conversation: ConversationRepository;
@@ -170,61 +171,67 @@ export class InteractiveWorkspace {
   #stateRecovery: WorkspaceStateRecovery | undefined;
 
   constructor(options: InteractiveWorkspaceOptions) {
-    this.#stateRepository = options.stateRepository ?? new JsonWorkspaceRepository(options.userDataPath);
-    this.#worktreeRoot = join(options.userDataPath, 'worktrees');
-    this.#transcriptRoot = join(options.userDataPath, 'transcripts');
-    this.#conversation = new JsonConversationRepository(this.#transcriptRoot);
-    this.#checkpoints = new CheckpointService(options.userDataPath, { conversation: this.#conversation });
-    this.#ccHahaImporter = new CcHahaImporter(options.userDataPath);
-    this.#emitExternal = options.emit;
-    this.#discoverCodex = options.discoverCodex ?? discoverCodexLaunch;
-    this.#discoverClaude = options.discoverClaude ?? discoverClaudeLaunch;
-    this.#probeClaudeAuth = options.probeClaudeAuth ?? probeClaudeNativeAuth;
-    this.#createClient = options.createClient;
-    this.#createClaudeClient = options.createClaudeClient;
-    this.#apiRuntime = options.apiRuntime ?? new ApiRuntimeClient();
-    mkdirSync(options.userDataPath, { recursive: true });
-    mkdirSync(this.#worktreeRoot, { recursive: true });
-    mkdirSync(this.#transcriptRoot, { recursive: true });
-    this.#load();
-    this.#integrations = new InteractiveIntegrationManager(options.userDataPath);
-    this.#subagents = new SubagentProjectionStore(options.userDataPath);
-    this.#providerAudits = options.providerAuditStore ?? new ProviderVerificationAuditStore(options.userDataPath);
-    this.#providers = new ProviderRegistry({
-      providers: this.#state.providers,
-      ...(options.credentials ? { credentials: options.credentials } : {}),
-      persist: (providers) => { this.#state.providers = providers; this.#save(); },
-      audit: (record) => this.#providerAudits.record(record),
-    });
-    this.#capabilities = new WorkspaceCapabilities(options.userDataPath);
-    this.#sessionCreation = new SessionCreationService({
-      worktreeRoot: this.#worktreeRoot,
-      project: (id) => this.#project(id), settings: () => this.#state.settings,
-      provider: (id) => this.#providers.get(id), runtime: (type) => this.#runtimes.find((item) => item.type === type),
-      thinkingControl: (type, providerId) => this.#thinkingControl(type, providerId),
-      sessions: () => this.#state.sessions, git: (cwd, args) => this.#git(cwd, args),
-      bindMcp: (project, path, branch, runtime) => this.#bindWorktreeMcp(project, path, branch, runtime),
-      save: () => this.#save(), emit: (event) => this.#emit(event),
-    });
-    this.#turnService = new WorkspaceTurnService({
-      session: (id) => this.#session(id), assertWritable: (session) => this.#assertSessionWritable(session),
-      ensureCodexClient: (id) => this.#ensureCodexClient(id),
-      codexClients: this.#clients, claudeClient: () => this.#claudeClient,
-      providers: this.#providers, apiRuntime: this.#apiRuntime,
-      apiHistory: this.#apiHistory, activeTurns: this.#activeTurns, apiAborts: this.#apiAborts,
-      emit: (event) => this.#emit(event), runtimeEvent: (id, type, payload) => this.#runtimeEvent(id, type, payload),
-      refreshTeams: (id) => this.#refreshTeamsForSession(id), save: () => this.#save(),
-    });
-    this.#state.providers = this.#providers.raw();
-    this.#loadTranscripts();
-    this.#subagents.reconcile(this.#eventLog.flatMap((event) => {
-      if (event.type !== 'subagent.event' || !event.sessionId) return [];
-      const session = this.#state.sessions.find((item) => item.id === event.sessionId);
-      return session ? [subagentProjectionEvent(event, session.runtimeType)] : [];
-    }));
-    this.refreshRuntimes();
-    this.#save();
-    this.#schedulerTimer = setInterval(() => { void this.#runScheduledTasks(); }, 15_000);
+    this.#ownsStateRepository = !options.stateRepository;
+    this.#stateRepository = options.stateRepository ?? new SqliteWorkspaceRepository(options.userDataPath);
+    try {
+      this.#worktreeRoot = join(options.userDataPath, 'worktrees');
+      this.#transcriptRoot = join(options.userDataPath, 'transcripts');
+      this.#conversation = new JsonConversationRepository(this.#transcriptRoot);
+      this.#checkpoints = new CheckpointService(options.userDataPath, { conversation: this.#conversation });
+      this.#ccHahaImporter = new CcHahaImporter(options.userDataPath);
+      this.#emitExternal = options.emit;
+      this.#discoverCodex = options.discoverCodex ?? discoverCodexLaunch;
+      this.#discoverClaude = options.discoverClaude ?? discoverClaudeLaunch;
+      this.#probeClaudeAuth = options.probeClaudeAuth ?? probeClaudeNativeAuth;
+      this.#createClient = options.createClient;
+      this.#createClaudeClient = options.createClaudeClient;
+      this.#apiRuntime = options.apiRuntime ?? new ApiRuntimeClient();
+      mkdirSync(options.userDataPath, { recursive: true });
+      mkdirSync(this.#worktreeRoot, { recursive: true });
+      mkdirSync(this.#transcriptRoot, { recursive: true });
+      this.#load();
+      this.#integrations = new InteractiveIntegrationManager(options.userDataPath);
+      this.#subagents = new SubagentProjectionStore(options.userDataPath);
+      this.#providerAudits = options.providerAuditStore ?? new ProviderVerificationAuditStore(options.userDataPath);
+      this.#providers = new ProviderRegistry({
+        providers: this.#state.providers,
+        ...(options.credentials ? { credentials: options.credentials } : {}),
+        persist: (providers) => { this.#state.providers = providers; this.#save(); },
+        audit: (record) => this.#providerAudits.record(record),
+      });
+      this.#capabilities = new WorkspaceCapabilities(options.userDataPath);
+      this.#sessionCreation = new SessionCreationService({
+        worktreeRoot: this.#worktreeRoot,
+        project: (id) => this.#project(id), settings: () => this.#state.settings,
+        provider: (id) => this.#providers.get(id), runtime: (type) => this.#runtimes.find((item) => item.type === type),
+        thinkingControl: (type, providerId) => this.#thinkingControl(type, providerId),
+        sessions: () => this.#state.sessions, git: (cwd, args) => this.#git(cwd, args),
+        bindMcp: (project, path, branch, runtime) => this.#bindWorktreeMcp(project, path, branch, runtime),
+        save: () => this.#save(), emit: (event) => this.#emit(event),
+      });
+      this.#turnService = new WorkspaceTurnService({
+        session: (id) => this.#session(id), assertWritable: (session) => this.#assertSessionWritable(session),
+        ensureCodexClient: (id) => this.#ensureCodexClient(id),
+        codexClients: this.#clients, claudeClient: () => this.#claudeClient,
+        providers: this.#providers, apiRuntime: this.#apiRuntime,
+        apiHistory: this.#apiHistory, activeTurns: this.#activeTurns, apiAborts: this.#apiAborts,
+        emit: (event) => this.#emit(event), runtimeEvent: (id, type, payload) => this.#runtimeEvent(id, type, payload),
+        refreshTeams: (id) => this.#refreshTeamsForSession(id), save: () => this.#save(),
+      });
+      this.#state.providers = this.#providers.raw();
+      this.#loadTranscripts();
+      this.#subagents.reconcile(this.#eventLog.flatMap((event) => {
+        if (event.type !== 'subagent.event' || !event.sessionId) return [];
+        const session = this.#state.sessions.find((item) => item.id === event.sessionId);
+        return session ? [subagentProjectionEvent(event, session.runtimeType)] : [];
+      }));
+      this.refreshRuntimes();
+      this.#save();
+      this.#schedulerTimer = setInterval(() => { void this.#runScheduledTasks(); }, 15_000);
+    } catch (error) {
+      if (this.#ownsStateRepository) this.#stateRepository.close?.();
+      throw error;
+    }
   }
 
   snapshot(): Record<string, unknown> {
@@ -1546,6 +1553,7 @@ export class InteractiveWorkspace {
     ]);
     this.#clients.clear();
     this.#clientMcpRevisions.clear();
+    if (this.#ownsStateRepository) this.#stateRepository.close?.();
   }
 
   async #runScheduledTasks(): Promise<void> {

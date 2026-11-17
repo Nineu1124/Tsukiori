@@ -18,6 +18,9 @@ spike-results/raw/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 
 .env
 .env.*

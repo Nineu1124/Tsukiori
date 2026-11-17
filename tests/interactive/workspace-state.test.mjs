@@ -8,10 +8,13 @@ import test from 'node:test';
 
 const workspaceModule = new URL('../../apps/desktop/dist/electron-main/interactive-workspace.js', import.meta.url);
 const { InteractiveWorkspace } = await import(workspaceModule);
+const repositoryModule = new URL('../../apps/desktop/dist/electron-main/workspace-state-repository.js', import.meta.url);
+const { JsonWorkspaceRepository } = await import(repositoryModule);
 
 function openWorkspace(userDataPath) {
   return new InteractiveWorkspace({
     userDataPath,
+    stateRepository: new JsonWorkspaceRepository(userDataPath),
     emit: () => {},
     discoverCodex: () => { throw new Error('offline fixture'); },
     discoverClaude: () => { throw new Error('offline fixture'); },
@@ -176,6 +179,7 @@ test('a process exit before replacement preserves state and does not block later
     import fs from 'node:fs';
     import { syncBuiltinESMExports } from 'node:module';
     const { InteractiveWorkspace } = await import(${JSON.stringify(workspaceModule.href)});
+    const { JsonWorkspaceRepository } = await import(${JSON.stringify(repositoryModule.href)});
     const openWorkspace = ${openWorkspace.toString()};
     const workspace = openWorkspace(process.argv[1]);
     const rename = fs.renameSync;
