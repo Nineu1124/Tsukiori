@@ -1,6 +1,6 @@
 # 正式桌面命令与服务
 
-基线：2026-11-17，D030–D045。此表描述当前 Main 入口；后续迁移时应同步更新数据源。入口是 [固定 Preload](../../apps/desktop/preload/index.cjs) → [Main 分派](../../apps/desktop/electron-main/main.ts) → [命令合同](../../apps/desktop/electron-main/workspace-command.ts) → [InteractiveWorkspace](../../apps/desktop/electron-main/interactive-workspace.ts)及下列服务。Smoke 分支不作为产品能力证据。
+基线：2026-11-17，D030–D047。此表描述当前 Main 入口；后续迁移时应同步更新数据源。入口是 [固定 Preload](../../apps/desktop/preload/index.cjs) → [Main 分派](../../apps/desktop/electron-main/main.ts) → [命令合同](../../apps/desktop/electron-main/workspace-command.ts) → [InteractiveWorkspace](../../apps/desktop/electron-main/interactive-workspace.ts)及下列服务。Smoke 分支不作为产品能力证据。
 
 命令先验证当前窗口、主 Frame、固定文档 URL、v1 版本与参数。总体 JSON 上限 4 MiB，字段另有限额。Session 存在性、文件 realpath、Worktree 所有权和 Runtime 审批必须在服务层继续检查。调用返回属于原 Electron invoke；这不是 Daemon 请求 ID、连接 epoch 或断线重放协议。
 
@@ -39,7 +39,7 @@
 | `computer_use_status`, `computer_use_foreground`, `computer_use_acquire`, `computer_use_release`, `computer_use_request`, `computer_use_approve` | MainComputerUseManager | 设备锁、单次审批、受控设备操作 | tests/computer-use、工作区；非后台设备控制承诺 |
 | `copy_text`, `open_url` | Main clipboard / shell | 受限文本及无内嵌认证的 HTTP(S) URL | 命令合同、工作区 |
 | `list_checkpoints`, `create_checkpoint`, `preview_checkpoint`, `rewind_checkpoint` | CheckpointService / 工作区 Runtime 协调 | Git 快照、检查点清单与对话备份 | checkpoint-service、工作区 |
-| `git_status`, `git_diff` | 工作区 Git 读取 | 当前会话 Worktree | 工作区 Git 回归；此基线仍同步 |
+| `git_status`, `git_diff` | GitExecutor 异步读取 | 当前会话 Worktree；30 秒/4 MiB 上限 | git-executor、工作区 Git 回归 |
 | `stage`, `unstage`, `commit` | 工作区 Git 写操作 | 显式路径与提交主题 | 工作区 Git 回归 |
 | `integration_target`, `list_integrations`, `prepare_integration`, `continue_interactive_integration`, `promote_integration`, `discard_integration`, `open_integration` | InteractiveIntegrationManager | 独立集成 Worktree、integration-state-v1.json；显式 Promotion | integration-workspace、工作区 |
 | `recover_operation` | Main 明确返回 recovery_manager_not_connected | 正式 Recovery 尚未装配 | 合同；不把 Smoke 恢复夹具当作正式能力 |

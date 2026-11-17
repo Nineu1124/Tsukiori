@@ -3,6 +3,7 @@ import { normalizeWorkspaceState } from './workspace-state-normalize.js';
 import { createWorkspaceEvent, restoreWorkspaceEvent, convertCodexNotification, normalizeRuntimeEvent, type WorkspaceEventInput, type WorkspaceEvent } from './workspace-events.js';
 export type { WorkspaceEvent } from './workspace-events.js';
 import { WorkspaceTurnService } from './workspace-turn-service.js';
+import { GitExecutor } from './git-executor.js';
 import { SessionCreationService, type SessionSelection } from './session-creation-service.js';
 import { assertProviderCompatibility, compatibleDefaultProvider, defaultPermission, permissionMode, providerNeedsSecret, safeModel } from './session-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -115,6 +116,7 @@ export type InteractiveWorkspaceOptions = {
   userDataPath: string;
   stateRepository?: WorkspaceStateRepository;
   conversationRepository?: ConversationRepository;
+  gitExecutor?: GitExecutor;
   emit: (event: WorkspaceEvent) => void;
   discoverCodex?: () => CodexLaunch;
   discoverClaude?: () => ClaudeLaunch;
@@ -133,6 +135,7 @@ export class InteractiveWorkspace {
   readonly #sessionCreation: SessionCreationService;
   readonly #stateRepository: WorkspaceStateRepository;
   readonly #ownsStateRepository: boolean;
+  readonly #gitExecutor: GitExecutor;
   readonly #worktreeRoot: string;
   readonly #transcriptRoot: string;
   readonly #conversation: ConversationRepository;
@@ -180,6 +183,7 @@ export class InteractiveWorkspace {
       this.#conversation = options.conversationRepository ?? (this.#stateRepository instanceof SqliteWorkspaceRepository
         ? new SqliteConversationRepository(options.userDataPath, this.#stateRepository.store)
         : new JsonConversationRepository(this.#transcriptRoot));
+      this.#gitExecutor = options.gitExecutor ?? new GitExecutor();
       this.#checkpoints = new CheckpointService(options.userDataPath, { conversation: this.#conversation });
       this.#ccHahaImporter = new CcHahaImporter(options.userDataPath);
       this.#emitExternal = options.emit;
@@ -1424,19 +1428,19 @@ export class InteractiveWorkspace {
     return result;
   }
 
-  gitStatus(sessionId: string): Record<string, unknown> {
+  async gitStatus(sessionId: string): Promise<Record<string, unknown>> {
     const session = this.#session(sessionId);
-    const output = this.#git(session.worktreePath, ['status', '--porcelain=v1', '--untracked-files=all']);
+    const output = await this.#gitExecutor.run(session.worktreePath, ['-c', 'core.fsmonitor=false', 'status', '--porcelain=v1', '--untracked-files=all']);
     const files = output.split(/\r?\n/).filter(Boolean).map((line) => ({ status: line.slice(0, 2), path: line.slice(3).replace(/^"|"$/g, '') }));
-    const diff = this.#git(session.worktreePath, ['diff', '--no-ext-diff', '--stat']);
+    const diff = await this.#gitExecutor.run(session.worktreePath, ['diff', '--no-ext-diff', '--no-textconv', '--stat']);
     return { sessionId, branch: session.branch, worktreePath: session.worktreePath, files, diff };
   }
 
-  gitDiff(sessionId: string, path?: string): string {
+  async gitDiff(sessionId: string, path?: string): Promise<string> {
     const session = this.#session(sessionId);
-    const args = ['diff', '--no-ext-diff'];
+    const args = ['diff', '--no-ext-diff', '--no-textconv'];
     if (path) args.push('--', safeRelativePath(path));
-    return truncate(this.#git(session.worktreePath, args), 128_000);
+    return truncate(await this.#gitExecutor.run(session.worktreePath, args), 128_000);
   }
 
   stage(sessionId: string, paths: readonly string[]): void { this.#gitMutation(sessionId, 'add', paths); }
@@ -1554,6 +1558,7 @@ export class InteractiveWorkspace {
     }
     this.#approvals.clear();
     await Promise.allSettled([
+      this.#gitExecutor.shutdown(),
       ...[...this.#clients.values()].map((client) => client.stop()),
       this.#claudeClient?.stop() ?? Promise.resolve(),
     ]);

@@ -736,10 +736,10 @@ ipcMain.handle('workspace:command', createWorkspaceCommandHandler<Electron.IpcMa
       await terminalManager.stop(sessionId);
       return { ok: true, result: await workspace.rewindCheckpoint(sessionId, String(command.checkpointId ?? '')) };
     }
-    if (command.type === 'git_status') return { ok: true, git: workspace.gitStatus(String(command.sessionId ?? '')) };
+    if (command.type === 'git_status') return { ok: true, git: await workspace.gitStatus(String(command.sessionId ?? '')) };
     if (command.type === 'git_diff') return {
       ok: true,
-      diff: workspace.gitDiff(
+      diff: await workspace.gitDiff(
         String(command.sessionId ?? ''),
         typeof command.path === 'string' ? command.path : undefined,
       ),

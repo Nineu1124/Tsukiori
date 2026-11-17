@@ -761,7 +761,7 @@ test('interactive Git review stages and commits only selected Worktree paths', a
   const project = f.workspace.addProject(f.repository);
   const session = await f.workspace.createSession(project.id);
   writeFileSync(join(session.worktreePath, 'agent-result.txt'), 'reviewed\n');
-  const status = f.workspace.gitStatus(session.id);
+  const status = await f.workspace.gitStatus(session.id);
   assert.deepEqual(status.files, [{ status: '??', path: 'agent-result.txt' }]);
   f.workspace.stage(session.id, ['agent-result.txt']);
   const sha = f.workspace.commit(session.id, 'test: commit reviewed agent result');
